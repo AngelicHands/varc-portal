@@ -29,6 +29,7 @@ type Props = {
   defaultLayouts: Record<string, TemplateLayout>;
   articleOptions?: Option[];
   categoryOptions?: Option[];
+  formOptions?: Option[];
 };
 
 const emptyLocale = {
@@ -45,6 +46,7 @@ export function PageEditor({
   defaultLayouts,
   articleOptions = [],
   categoryOptions = [],
+  formOptions = [],
 }: Props) {
   const router = useRouter();
   const { ask, modal } = useConfirm();
@@ -232,6 +234,7 @@ export function PageEditor({
             }
             articleOptions={articleOptions}
             categoryOptions={categoryOptions}
+            formOptions={formOptions}
           />
         ) : null}
 

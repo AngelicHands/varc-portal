@@ -6,6 +6,7 @@ export const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
   heading: "Heading",
   image: "Image",
   gallery: "Gallery",
+  formEmbed: "Form",
   articleList: "Article list",
   articleCard: "Article card",
   categoryList: "Category list",
@@ -34,6 +35,12 @@ export const BLOCK_PALETTE: BlockPaletteItem[] = [
   { id: "html", type: "html", label: "HTML" },
   { id: "image", type: "image", label: "Image" },
   { id: "gallery", type: "gallery", label: "Gallery" },
+  {
+    id: "formEmbed",
+    type: "formEmbed",
+    label: "Form",
+    description: "Embed a published CMS form",
+  },
   {
     id: "featuredSlider",
     type: "featuredSlider",

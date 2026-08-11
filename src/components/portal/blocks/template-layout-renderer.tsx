@@ -4,6 +4,7 @@ import { HomeFeaturedSlider } from "@/components/portal/home-featured-slider";
 import { HomeLatestSpotlight } from "@/components/portal/home-latest-spotlight";
 import { HtmlContent } from "@/components/portal/html-content";
 import { MenuBlockNav } from "@/components/portal/menu-block-nav";
+import { PublicFormBlock } from "@/components/portal/public-form-block";
 import { Link } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import type { ResolvedBlockData } from "@/lib/blocks/resolve";
@@ -181,6 +182,8 @@ function BlockView({
         </div>
       );
     }
+    case "formEmbed":
+      return data.form ? <PublicFormBlock form={data.form} /> : null;
     case "featuredSlider":
       if (!data.articles?.length) return null;
       return (

@@ -16,6 +16,7 @@ import {
   listCategories,
 } from "@/lib/cms";
 import { normalizeEditorHtml } from "@/lib/html";
+import { listFormOptions } from "@/lib/forms";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +28,14 @@ export default async function EditPagePage({ params }: Props) {
   await requireSitePage();
 
   const { id } = await params;
-  const [page, templateOptions, templateDocs, articles, categories] =
+  const [page, templateOptions, templateDocs, articles, categories, forms] =
     await Promise.all([
       getPageById(id),
       listPageTemplateOptions(),
       listPageTemplatesAdmin(),
       listAllArticles(),
       listCategories(),
+      listFormOptions(),
     ]);
   if (!page || page.deletedAt) notFound();
 
@@ -69,6 +71,13 @@ export default async function EditPagePage({ params }: Props) {
             String(article._id),
         }))}
         categoryOptions={categorySelectOptions(categories, "vi")}
+        formOptions={forms.map((form) => ({
+          id: form.id,
+          label:
+            form.status === "published"
+              ? `${form.label}`
+              : `${form.label} (draft)`,
+        }))}
         initial={{
           ...emptyPageForm,
           status: page.status === "published" ? "published" : "draft",

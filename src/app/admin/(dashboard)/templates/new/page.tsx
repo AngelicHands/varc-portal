@@ -3,12 +3,14 @@ import { requireSitePage } from "@/lib/admin-access";
 import { emptyLayout } from "@/lib/blocks/types";
 import { listAllArticles, getLocaleContent } from "@/lib/articles";
 import { listCategories, categorySelectOptions } from "@/lib/cms";
+import { listFormOptions } from "@/lib/forms";
 
 export default async function NewTemplatePage() {
   await requireSitePage();
-  const [articles, categories] = await Promise.all([
+  const [articles, categories, forms] = await Promise.all([
     listAllArticles(),
     listCategories(),
+    listFormOptions(),
   ]);
 
   return (
@@ -30,6 +32,13 @@ export default async function NewTemplatePage() {
             String(article._id),
         }))}
         categoryOptions={categorySelectOptions(categories, "vi")}
+        formOptions={forms.map((form) => ({
+          id: form.id,
+          label:
+            form.status === "published"
+              ? `${form.label}`
+              : `${form.label} (draft)`,
+        }))}
       />
     </div>
   );

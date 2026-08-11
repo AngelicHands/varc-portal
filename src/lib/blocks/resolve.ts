@@ -15,6 +15,10 @@ import {
   listPublicMenuLinks,
   type PublicMenuLink,
 } from "@/lib/cms";
+import {
+  getPublishedFormById,
+  type PublicFormDefinition,
+} from "@/lib/forms";
 import { excerptFromHtml, extractFirstImageUrl, sanitizeHtml } from "@/lib/html";
 import { notDeletedFilter } from "@/lib/soft-delete";
 import type { AppLocale } from "@/i18n/routing";
@@ -48,6 +52,7 @@ export type ResolvedBlockData = {
   imageUrl?: string;
   imageAlt?: string;
   galleryItems?: Array<{ id: string; url: string; alt: string }>;
+  form?: PublicFormDefinition | null;
   articles?: PublicArticleCard[];
   article?: PublicArticleCard | null;
   categories?: ResolvedCategoryCard[];
@@ -256,6 +261,14 @@ export async function resolveBlock(
             url: String(item.url),
             alt: String(item.alt || item.originalName || ""),
           })),
+      };
+    }
+    case "formEmbed": {
+      if (!source.formId || !mongoose.isValidObjectId(source.formId)) {
+        return { form: null };
+      }
+      return {
+        form: await getPublishedFormById(source.formId),
       };
     }
     case "articleList": {

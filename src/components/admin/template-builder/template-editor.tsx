@@ -28,6 +28,7 @@ type Props = {
   };
   articleOptions: Option[];
   categoryOptions: Option[];
+  formOptions: Option[];
 };
 
 export function TemplateEditor({
@@ -35,6 +36,7 @@ export function TemplateEditor({
   initial,
   articleOptions,
   categoryOptions,
+  formOptions,
 }: Props) {
   const router = useRouter();
   const { ask, modal } = useConfirm();
@@ -143,6 +145,7 @@ export function TemplateEditor({
           onChange={setLayout}
           articleOptions={articleOptions}
           categoryOptions={categoryOptions}
+          formOptions={formOptions}
         />
 
         {templateId && !initial.isSystem ? (

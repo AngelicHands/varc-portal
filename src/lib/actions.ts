@@ -36,6 +36,10 @@ import {
   siteSettingsFormSchema,
 } from "@/lib/validations/article";
 import {
+  FORM_SUBMISSION_STATUSES,
+  formDefinitionFormSchema,
+} from "@/lib/validations/forms";
+import {
   pageTemplateFormSchema,
   templateLayoutSchema,
 } from "@/lib/blocks/types";
@@ -57,10 +61,13 @@ import { Category } from "@/models/Category";
 import { Media } from "@/models/Media";
 import { MenuItem } from "@/models/MenuItem";
 import { Page } from "@/models/Page";
+import { FormDefinition } from "@/models/FormDefinition";
+import { FormSubmission } from "@/models/FormSubmission";
 import { SITE_SETTINGS_KEY, SiteSettings } from "@/models/SiteSettings";
 import { User } from "@/models/User";
 import { deleteObject } from "@/lib/media/storage";
 import { failAction, logServerError } from "@/lib/safe-error";
+import { createUniqueFormKey } from "@/lib/forms";
 import {
   CmsCacheKeys,
   CmsCacheTags,
@@ -156,6 +163,7 @@ async function refreshPortal(...extraTags: CmsCacheTag[]) {
     CmsCacheTags.pages,
     CmsCacheTags.articles,
     CmsCacheTags.categories,
+    CmsCacheTags.forms,
     CmsCacheTags.templates,
     ...extraTags,
   );
@@ -170,6 +178,7 @@ async function refreshPortal(...extraTags: CmsCacheTag[]) {
   revalidatePath("/admin/menu");
   revalidatePath("/admin/settings");
   revalidatePath("/admin/media");
+  revalidatePath("/admin/forms");
 }
 
 function revalidateArticlePaths(...slugs: Array<string | null | undefined>) {
@@ -1032,6 +1041,163 @@ export async function emptyPagesTrashAction(): Promise<
     return { ok: true, deleted: result.deletedCount };
   } catch (error) {
     return failAction(error, "Failed to empty trash");
+  }
+}
+
+export async function saveFormDefinitionAction(
+  id: string | null,
+  raw: unknown,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    await requireSiteManager();
+    const parsed = formDefinitionFormSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
+    }
+
+    const data = parsed.data;
+    await connectDb();
+    const fields = data.fields.map((field) => ({
+      id: field.id,
+      type: field.type,
+      name: field.name.trim(),
+      label: field.label.trim(),
+      required: field.required,
+      placeholder: field.placeholder.trim(),
+      helpText: field.helpText.trim(),
+      width: field.width,
+      options: field.options.map((option) => ({
+        label: option.label.trim(),
+        value: option.value.trim(),
+      })),
+    }));
+
+    if (id) {
+      const existing = await FormDefinition.findById(id);
+      if (!existing) return { ok: false, error: "Form not found" };
+      existing.name = data.name.trim();
+      existing.description = data.description.trim();
+      existing.status = data.status;
+      existing.submitLabel = data.submitLabel.trim();
+      existing.successMessage = data.successMessage.trim();
+      existing.set("fields", fields);
+      if (!existing.key?.trim()) {
+        existing.key = await createUniqueFormKey(existing.name, id);
+      }
+      await existing.save();
+      await refreshPortal(CmsCacheTags.form(String(existing._id)));
+      return { ok: true, id: String(existing._id) };
+    }
+
+    const created = await FormDefinition.create({
+      key: await createUniqueFormKey(data.name),
+      name: data.name.trim(),
+      description: data.description.trim(),
+      status: data.status,
+      submitLabel: data.submitLabel.trim(),
+      successMessage: data.successMessage.trim(),
+      fields,
+    });
+    await refreshPortal(CmsCacheTags.form(String(created._id)));
+    return { ok: true, id: String(created._id) };
+  } catch (error) {
+    return failAction(error, "Failed to save form");
+  }
+}
+
+export async function deleteFormDefinitionAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await requireSiteManager();
+    await connectDb();
+    const existing = await FormDefinition.findOne({ _id: id, ...notDeletedFilter });
+    if (!existing) return { ok: false, error: "Form not found" };
+    existing.deletedAt = new Date();
+    await existing.save();
+    await refreshPortal(CmsCacheTags.form(String(existing._id)));
+    return { ok: true };
+  } catch (error) {
+    return failAction(error, "Failed to delete form");
+  }
+}
+
+export async function restoreFormDefinitionAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await requireSiteManager();
+    await connectDb();
+    const existing = await FormDefinition.findById(id);
+    if (!existing?.deletedAt) {
+      return { ok: false, error: "Deleted form not found" };
+    }
+    existing.deletedAt = null;
+    await existing.save();
+    await refreshPortal(CmsCacheTags.form(String(existing._id)));
+    return { ok: true };
+  } catch (error) {
+    return failAction(error, "Failed to restore form");
+  }
+}
+
+export async function permanentlyDeleteFormDefinitionAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await requireSiteManager();
+    await connectDb();
+    const existing = await FormDefinition.findOne({ _id: id, ...deletedFilter });
+    if (!existing) {
+      return { ok: false, error: "Trashed form not found" };
+    }
+    await FormDefinition.findByIdAndDelete(id);
+    await FormSubmission.deleteMany({ formId: id });
+    await refreshPortal(CmsCacheTags.form(String(existing._id)));
+    return { ok: true };
+  } catch (error) {
+    return failAction(error, "Failed to delete form permanently");
+  }
+}
+
+export async function emptyFormsTrashAction(): Promise<
+  { ok: true; deleted: number } | { ok: false; error: string }
+> {
+  try {
+    await requireSiteManager();
+    await connectDb();
+    const trashed = await FormDefinition.find({ ...deletedFilter })
+      .select("_id")
+      .lean<Array<{ _id: mongoose.Types.ObjectId }>>();
+    const ids = trashed.map((item) => item._id);
+    const result = await FormDefinition.deleteMany({ ...deletedFilter });
+    if (ids.length > 0) {
+      await FormSubmission.deleteMany({ formId: { $in: ids } });
+    }
+    await refreshPortal();
+    return { ok: true, deleted: result.deletedCount };
+  } catch (error) {
+    return failAction(error, "Failed to empty trash");
+  }
+}
+
+export async function updateFormSubmissionStatusAction(
+  id: string,
+  status: (typeof FORM_SUBMISSION_STATUSES)[number],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await requireSiteManager();
+    await connectDb();
+    if (!FORM_SUBMISSION_STATUSES.includes(status)) {
+      return { ok: false, error: "Invalid submission status" };
+    }
+    const existing = await FormSubmission.findById(id);
+    if (!existing) return { ok: false, error: "Submission not found" };
+    existing.status = status;
+    await existing.save();
+    return { ok: true };
+  } catch (error) {
+    return failAction(error, "Failed to update submission");
   }
 }
 

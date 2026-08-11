@@ -8,15 +8,17 @@ import {
 } from "@/lib/blocks/templates";
 import { emptyLayout, type TemplateLayout } from "@/lib/blocks/types";
 import { categorySelectOptions, listCategories } from "@/lib/cms";
+import { listFormOptions } from "@/lib/forms";
 
 export default async function NewPagePage() {
   await requireSitePage();
-  const [templateOptions, templateDocs, articles, categories] =
+  const [templateOptions, templateDocs, articles, categories, forms] =
     await Promise.all([
       listPageTemplateOptions(),
       listPageTemplatesAdmin(),
       listAllArticles(),
       listCategories(),
+      listFormOptions(),
     ]);
 
   const defaultLayouts: Record<string, TemplateLayout> = {};
@@ -39,6 +41,13 @@ export default async function NewPagePage() {
             String(article._id),
         }))}
         categoryOptions={categorySelectOptions(categories, "vi")}
+        formOptions={forms.map((form) => ({
+          id: form.id,
+          label:
+            form.status === "published"
+              ? `${form.label}`
+              : `${form.label} (draft)`,
+        }))}
       />
     </div>
   );

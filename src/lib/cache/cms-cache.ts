@@ -16,9 +16,11 @@ export const CmsCacheTags = {
   pages: "pages",
   articles: "articles",
   categories: "categories",
+  forms: "forms",
   templates: "templates",
   page: (id: string) => `page:${id}`,
   article: (id: string) => `article:${id}`,
+  form: (id: string) => `form:${id}`,
 } as const;
 
 export type CmsCacheTag = string;

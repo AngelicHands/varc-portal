@@ -43,6 +43,9 @@ function blockPreviewLabel(block: TemplateBlock): string {
     const plain = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
     return plain ? plain.slice(0, 48) : BLOCK_TYPE_LABELS[block.type];
   }
+  if (block.type === "formEmbed") {
+    return block.source.formId ? "Selected form" : "Choose a form";
+  }
   return BLOCK_TYPE_LABELS[block.type];
 }
 
@@ -51,6 +54,7 @@ type Props = {
   onChange: (layout: TemplateLayout) => void;
   articleOptions?: Option[];
   categoryOptions?: Option[];
+  formOptions?: Option[];
 };
 
 type DragPayload =
@@ -126,6 +130,7 @@ export function TemplateLayoutBuilder({
   onChange,
   articleOptions = [],
   categoryOptions = [],
+  formOptions = [],
 }: Props) {
   const [selected, setSelected] = useState<{
     sectionId: string;
@@ -538,6 +543,7 @@ export function TemplateLayoutBuilder({
             block={selectedBlock.block}
             articleOptions={articleOptions}
             categoryOptions={categoryOptions}
+            formOptions={formOptions}
             onChange={(block) => patchSelected(() => block)}
             onPickImage={() => setMediaOpen(true)}
             onRemove={() => {
@@ -582,6 +588,7 @@ function BlockInspector({
   onRemove,
   articleOptions,
   categoryOptions,
+  formOptions,
 }: {
   block: TemplateBlock;
   onChange: (block: TemplateBlock) => void;
@@ -589,6 +596,7 @@ function BlockInspector({
   onRemove: () => void;
   articleOptions: Option[];
   categoryOptions: Option[];
+  formOptions: Option[];
 }) {
   const [localeTab, setLocaleTab] = useState<BlockContentLocale>("vi");
 
@@ -836,6 +844,32 @@ function BlockInspector({
             />
           ) : null}
         </>
+      ) : null}
+
+      {block.type === "formEmbed" ? (
+        <label className="block">
+          <span className="mb-1 block text-xs text-gray-500">Form</span>
+          <select
+            value={block.source.formId ?? ""}
+            onChange={(e) =>
+              onChange({
+                ...block,
+                source: { ...block.source, formId: e.target.value || undefined },
+              })
+            }
+            className="w-full rounded border border-gray-300 px-2 py-1.5"
+          >
+            <option value="">Select…</option>
+            {formOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            Only published forms render publicly.
+          </p>
+        </label>
       ) : null}
 
       {block.type === "articleList" || block.type === "featuredSlider" ? (

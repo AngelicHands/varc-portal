@@ -5,6 +5,7 @@ import { getPageTemplateById, parseLayout } from "@/lib/blocks/templates";
 import { emptyLayout } from "@/lib/blocks/types";
 import { listAllArticles, getLocaleContent } from "@/lib/articles";
 import { listCategories, categorySelectOptions } from "@/lib/cms";
+import { listFormOptions } from "@/lib/forms";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +16,11 @@ type Props = {
 export default async function EditTemplatePage({ params }: Props) {
   await requireSitePage();
   const { id } = await params;
-  const [template, articles, categories] = await Promise.all([
+  const [template, articles, categories, forms] = await Promise.all([
     getPageTemplateById(id),
     listAllArticles(),
     listCategories(),
+    listFormOptions(),
   ]);
   if (!template || template.deletedAt) notFound();
 
@@ -42,6 +44,13 @@ export default async function EditTemplatePage({ params }: Props) {
             String(article._id),
         }))}
         categoryOptions={categorySelectOptions(categories, "vi")}
+        formOptions={forms.map((form) => ({
+          id: form.id,
+          label:
+            form.status === "published"
+              ? `${form.label}`
+              : `${form.label} (draft)`,
+        }))}
       />
     </div>
   );
