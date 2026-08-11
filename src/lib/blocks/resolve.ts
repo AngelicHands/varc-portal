@@ -268,7 +268,7 @@ export async function resolveBlock(
         return { form: null };
       }
       return {
-        form: await getPublishedFormById(source.formId),
+        form: await getPublishedFormById(source.formId, locale),
       };
     }
     case "articleList": {

@@ -215,6 +215,7 @@ type FieldRenderContext = {
   >;
   tokensByIndex: Map<number, FormMarkdownToken>;
   renderedSelects: Set<string>;
+  hintShownFor: Set<string>;
   fieldErrors: Record<string, string>;
   clearFieldError: (name: string) => void;
   toggleCheckboxGroup: (
@@ -315,6 +316,8 @@ function renderFormFieldToken(
         item.value === token.optionOrLabel,
     );
     if (!option) return null;
+    const showHint = !ctx.hintShownFor.has(field.name);
+    if (showHint) ctx.hintShownFor.add(field.name);
     return withSuggestion(
       field,
       <label
@@ -323,8 +326,6 @@ function renderFormFieldToken(
         <input
           type="radio"
           name={field.name}
-          aria-required={field.required}
-          aria-invalid={invalid}
           checked={value === option.value}
           onChange={() => {
             ctx.clearFieldError(field.name);
@@ -333,10 +334,11 @@ function renderFormFieldToken(
               [field.name]: option.value,
             }));
           }}
+          className="form-choice-input"
         />
         <span>{option.label}</span>
       </label>,
-      { showMeta: false },
+      { showMeta: showHint },
     );
   }
 
@@ -348,6 +350,8 @@ function renderFormFieldToken(
     );
     if (!option) return null;
     const selected = Array.isArray(value) ? value.includes(option.value) : false;
+    const showHint = !ctx.hintShownFor.has(field.name);
+    if (showHint) ctx.hintShownFor.add(field.name);
     return withSuggestion(
       field,
       <label
@@ -361,10 +365,11 @@ function renderFormFieldToken(
             ctx.clearFieldError(field.name);
             ctx.toggleCheckboxGroup(field.name, option.value, e.target.checked);
           }}
+          className="form-choice-input"
         />
         <span>{option.label}</span>
       </label>,
-      { showMeta: false },
+      { showMeta: showHint },
     );
   }
 
@@ -386,6 +391,7 @@ function renderFormFieldToken(
               [field.name]: e.target.checked,
             }));
           }}
+          className="form-choice-input"
         />
         <span>{field.placeholder || field.label}</span>
       </label>,
@@ -393,12 +399,59 @@ function renderFormFieldToken(
   }
 
   if (field.type === "textarea") {
+    const length = typeof value === "string" ? value.length : 0;
     return withSuggestion(
       field,
-      <textarea
-        rows={5}
+      <span className="my-2 block w-full">
+        <textarea
+          rows={5}
+          aria-required={field.required}
+          aria-invalid={invalid}
+          maxLength={field.maxLength > 0 ? field.maxLength : undefined}
+          value={typeof value === "string" ? value : ""}
+          placeholder={field.placeholder}
+          onChange={(e) => {
+            ctx.clearFieldError(field.name);
+            ctx.setValues((prev) => ({
+              ...prev,
+              [field.name]: e.target.value,
+            }));
+          }}
+          className={`${inputClass} block w-full`}
+        />
+        {field.maxLength > 0 ? (
+          <span className="mt-1 block text-xs text-muted">
+            {length}/{field.maxLength}
+          </span>
+        ) : null}
+      </span>,
+      { inline: false },
+    );
+  }
+
+  const length = typeof value === "string" ? value.length : 0;
+  return withSuggestion(
+    field,
+    <span className="inline-flex flex-col align-baseline">
+      <input
+        type={
+          field.type === "email"
+            ? "email"
+            : field.type === "phone"
+              ? "tel"
+              : field.type === "date"
+                ? "date"
+                : field.type === "date_time"
+                  ? "datetime-local"
+                  : "text"
+        }
         aria-required={field.required}
         aria-invalid={invalid}
+        maxLength={
+          field.type === "text" && field.maxLength > 0
+            ? field.maxLength
+            : undefined
+        }
         value={typeof value === "string" ? value : ""}
         placeholder={field.placeholder}
         onChange={(e) => {
@@ -408,37 +461,14 @@ function renderFormFieldToken(
             [field.name]: e.target.value,
           }));
         }}
-        className={`${inputClass} my-2 block w-full`}
-      />,
-      { inline: false },
-    );
-  }
-
-  return withSuggestion(
-    field,
-    <input
-      type={
-        field.type === "email"
-          ? "email"
-          : field.type === "phone"
-            ? "tel"
-            : field.type === "date"
-              ? "date"
-              : "text"
-      }
-      aria-required={field.required}
-      aria-invalid={invalid}
-      value={typeof value === "string" ? value : ""}
-      placeholder={field.placeholder}
-      onChange={(e) => {
-        ctx.clearFieldError(field.name);
-        ctx.setValues((prev) => ({
-          ...prev,
-          [field.name]: e.target.value,
-        }));
-      }}
-      className={`${inputClass} mx-0.5 inline-block min-w-32 align-baseline`}
-    />,
+        className={`${inputClass} mx-0.5 inline-block min-w-32 align-baseline`}
+      />
+      {field.type === "text" && field.maxLength > 0 ? (
+        <span className="mt-0.5 text-xs text-muted">
+          {length}/{field.maxLength}
+        </span>
+      ) : null}
+    </span>,
   );
 }
 
@@ -479,8 +509,9 @@ function FormMarkdownLayout({
     () => new Map(tokens.map((token) => [token.tokenIndex, token])),
     [tokens],
   );
-  const renderedSelectsRef = useRef(new Set<string>());
-  renderedSelectsRef.current = new Set<string>();
+  // Ephemeral per-render tracking while markdown tokens are walked once.
+  const renderedSelects = new Set<string>();
+  const hintShownFor = new Set<string>();
 
   const ctx: FieldRenderContext = {
     formId,
@@ -488,7 +519,8 @@ function FormMarkdownLayout({
     values,
     setValues,
     tokensByIndex,
-    renderedSelects: renderedSelectsRef.current,
+    renderedSelects,
+    hintShownFor,
     fieldErrors,
     clearFieldError,
     toggleCheckboxGroup,
@@ -529,6 +561,7 @@ function FormMarkdownLayout({
                   checked={Boolean(checked)}
                   disabled
                   readOnly
+                  className="form-choice-input"
                   {...props}
                 />
               );
@@ -634,7 +667,10 @@ export function PublicFormBlock({ form }: Props) {
       }
       setState({
         type: "success",
-        message: json.message || form.successMessage,
+        message:
+          form.successMessage ||
+          json.message ||
+          "Thank you. Your submission has been received.",
       });
       setStepIndex(0);
       setFieldErrors({});
@@ -804,21 +840,32 @@ export function PublicFormBlock({ form }: Props) {
                       ) : null}
 
                       {field.type === "textarea" ? (
-                        <textarea
-                          rows={5}
-                          aria-required={field.required}
-                          aria-invalid={invalid}
-                          value={typeof value === "string" ? value : ""}
-                          placeholder={field.placeholder}
-                          onChange={(e) => {
-                            clearFieldError(field.name);
-                            setValues((prev) => ({
-                              ...prev,
-                              [field.name]: e.target.value,
-                            }));
-                          }}
-                          className={commonTextClass}
-                        />
+                        <div>
+                          <textarea
+                            rows={5}
+                            aria-required={field.required}
+                            aria-invalid={invalid}
+                            maxLength={
+                              field.maxLength > 0 ? field.maxLength : undefined
+                            }
+                            value={typeof value === "string" ? value : ""}
+                            placeholder={field.placeholder}
+                            onChange={(e) => {
+                              clearFieldError(field.name);
+                              setValues((prev) => ({
+                                ...prev,
+                                [field.name]: e.target.value,
+                              }));
+                            }}
+                            className={commonTextClass}
+                          />
+                          {field.maxLength > 0 ? (
+                            <p className="mt-1 text-xs text-muted">
+                              {(typeof value === "string" ? value.length : 0)}/
+                              {field.maxLength}
+                            </p>
+                          ) : null}
+                        </div>
                       ) : null}
 
                       {field.type === "select" ? (
@@ -846,6 +893,9 @@ export function PublicFormBlock({ form }: Props) {
 
                       {field.type === "radio" ? (
                         <div
+                          role="radiogroup"
+                          aria-required={field.required || undefined}
+                          aria-invalid={invalid || undefined}
                           className={`space-y-2 rounded-lg border border-gray-200 p-3${invalid ? " border-red-500 ring-2 ring-red-400" : ""}`}
                         >
                           {field.options.map((option) => (
@@ -856,8 +906,6 @@ export function PublicFormBlock({ form }: Props) {
                               <input
                                 type="radio"
                                 name={field.name}
-                                aria-required={field.required}
-                                aria-invalid={invalid}
                                 checked={value === option.value}
                                 onChange={() => {
                                   clearFieldError(field.name);
@@ -866,6 +914,7 @@ export function PublicFormBlock({ form }: Props) {
                                     [field.name]: option.value,
                                   }));
                                 }}
+                                className="form-choice-input"
                               />
                               <span>{option.label}</span>
                             </label>
@@ -915,6 +964,7 @@ export function PublicFormBlock({ form }: Props) {
                                         };
                                       });
                                     }}
+                                    className="form-choice-input"
                                   />
                                   <span>{option.label}</span>
                                 </label>
@@ -937,6 +987,7 @@ export function PublicFormBlock({ form }: Props) {
                                   [field.name]: e.target.checked,
                                 }));
                               }}
+                              className="form-choice-input"
                             />
                             <span className="text-sm leading-6 text-foreground">
                               {field.placeholder || field.label}
@@ -968,29 +1019,44 @@ export function PublicFormBlock({ form }: Props) {
                       field.type !== "checkbox" &&
                       field.type !== "image" &&
                       field.type !== "file" ? (
-                        <input
-                          type={
-                            field.type === "email"
-                              ? "email"
-                              : field.type === "phone"
-                                ? "tel"
-                                : field.type === "date"
-                                  ? "date"
-                                  : "text"
-                          }
-                          aria-required={field.required}
-                          aria-invalid={invalid}
-                          value={typeof value === "string" ? value : ""}
-                          placeholder={field.placeholder}
-                          onChange={(e) => {
-                            clearFieldError(field.name);
-                            setValues((prev) => ({
-                              ...prev,
-                              [field.name]: e.target.value,
-                            }));
-                          }}
-                          className={commonTextClass}
-                        />
+                        <div>
+                          <input
+                            type={
+                              field.type === "email"
+                                ? "email"
+                                : field.type === "phone"
+                                  ? "tel"
+                                  : field.type === "date"
+                                    ? "date"
+                                    : field.type === "date_time"
+                                      ? "datetime-local"
+                                      : "text"
+                            }
+                            aria-required={field.required}
+                            aria-invalid={invalid}
+                            maxLength={
+                              field.type === "text" && field.maxLength > 0
+                                ? field.maxLength
+                                : undefined
+                            }
+                            value={typeof value === "string" ? value : ""}
+                            placeholder={field.placeholder}
+                            onChange={(e) => {
+                              clearFieldError(field.name);
+                              setValues((prev) => ({
+                                ...prev,
+                                [field.name]: e.target.value,
+                              }));
+                            }}
+                            className={commonTextClass}
+                          />
+                          {field.type === "text" && field.maxLength > 0 ? (
+                            <p className="mt-1 text-xs text-muted">
+                              {(typeof value === "string" ? value.length : 0)}/
+                              {field.maxLength}
+                            </p>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
                   </div>

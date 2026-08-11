@@ -13,7 +13,20 @@ export default async function NewFormPage() {
       <FormDefinitionEditor
         initial={{
           ...emptyFormDefinitionForm,
-          fields: (emptyFormDefinitionForm.fields ?? []).map((field) => ({ ...field })),
+          locales: {
+            vi: {
+              ...emptyFormDefinitionForm.locales.vi,
+              fields: (emptyFormDefinitionForm.locales.vi.fields ?? []).map(
+                (field) => ({ ...field }),
+              ),
+            },
+            en: {
+              ...emptyFormDefinitionForm.locales.en,
+              fields: (emptyFormDefinitionForm.locales.en.fields ?? []).map(
+                (field) => ({ ...field }),
+              ),
+            },
+          },
         }}
       />
     </div>

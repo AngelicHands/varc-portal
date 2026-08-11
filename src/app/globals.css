@@ -353,3 +353,24 @@ button:disabled,
     transition: none;
   }
 }
+
+/* Portal form radios/checkboxes — brand accent instead of browser blue */
+.form-choice-input {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.form-choice-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.form-choice-input[aria-invalid="true"] {
+  accent-color: #b91c1c;
+  outline-color: #b91c1c;
+}

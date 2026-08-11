@@ -32,7 +32,16 @@ export function notifyAction<T extends Record<string, unknown>>(
     toast.success(successMessage);
     return true;
   }
-  toast.error(result.error || "Something went wrong");
+  const message = result.error || "Something went wrong";
+  const [title, ...rest] = message.split("\n");
+  if (rest.length > 0) {
+    toast.error(title || "Something went wrong", {
+      description: rest.join("\n"),
+      duration: 8000,
+    });
+  } else {
+    toast.error(message);
+  }
   return false;
 }
 

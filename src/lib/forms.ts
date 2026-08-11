@@ -2,6 +2,7 @@ import { cacheAside, CmsCacheTags } from "@/lib/cache/cms-cache";
 import { connectDb } from "@/lib/db";
 import { makeSlug, uniqueSlugFromTitle } from "@/lib/slug";
 import { notDeletedFilter } from "@/lib/soft-delete";
+import type { AppLocale } from "@/i18n/routing";
 import {
   FormDefinition,
   type FormDefinitionDocument,
@@ -11,7 +12,9 @@ import {
   type FormSubmissionDocument,
 } from "@/models/FormSubmission";
 import type {
+  FormDefinitionFormValues,
   FormFieldDefinition,
+  FormLocaleValues,
   FormSubmissionValue,
   FormSubmissionStatus,
 } from "@/lib/validations/forms";
@@ -62,42 +65,193 @@ export type AdminFormSubmissionItem = {
   pagePath: string;
 };
 
-function toPublicForm(doc: FormDefinitionDocument): PublicFormDefinition {
+type StoredFormLocale = {
+  name?: string | null;
+  description?: string | null;
+  submitLabel?: string | null;
+  successMessage?: string | null;
+  schemaMarkdown?: string | null;
+  fields?: FormFieldDefinition[] | null;
+};
+
+function mapFields(
+  fields: Array<Partial<FormFieldDefinition>> | null | undefined,
+): FormFieldDefinition[] {
+  return (fields ?? []).map((field) => ({
+    id: String(field.id ?? ""),
+    type: field.type as FormFieldDefinition["type"],
+    name: String(field.name ?? ""),
+    label: String(field.label ?? ""),
+    required: Boolean(field.required),
+    placeholder: field.placeholder ?? "",
+    helpText: field.helpText ?? "",
+    maxLength: field.maxLength ?? 0,
+    width: field.width ?? "full",
+    style: field.style ?? "default",
+    options: (field.options ?? []).map((option) => ({
+      label: option.label,
+      value: option.value,
+    })),
+  }));
+}
+
+function emptyLocale(): FormLocaleValues {
   return {
-    id: String(doc._id),
-    key: doc.key,
-    name: doc.name,
+    name: "",
+    description: "",
+    submitLabel: "",
+    successMessage: "",
+    schemaMarkdown: "",
+    fields: [],
+  };
+}
+
+function fromStoredLocale(
+  locale: StoredFormLocale | null | undefined,
+  fallback?: FormLocaleValues,
+): FormLocaleValues {
+  const base = fallback ?? emptyLocale();
+  if (!locale) return { ...base, fields: [...(base.fields ?? [])] };
+  return {
+    name: locale.name?.trim() || base.name || "",
+    description: locale.description ?? base.description ?? "",
+    submitLabel: locale.submitLabel?.trim() || base.submitLabel || "",
+    successMessage:
+      locale.successMessage?.trim() || base.successMessage || "",
+    schemaMarkdown: locale.schemaMarkdown ?? base.schemaMarkdown ?? "",
+    fields:
+      locale.fields && locale.fields.length > 0
+        ? mapFields(locale.fields)
+        : mapFields(base.fields),
+  };
+}
+
+/** Normalize document locales with legacy flat-field fallback. */
+export function getFormLocales(doc: FormDefinitionDocument): {
+  vi: FormLocaleValues;
+  en: FormLocaleValues;
+} {
+  const legacy: FormLocaleValues = {
+    name: doc.name ?? "",
     description: doc.description ?? "",
-    schemaMarkdown: doc.schemaMarkdown ?? "",
     submitLabel: doc.submitLabel ?? "Send",
     successMessage:
       doc.successMessage ?? "Thank you. Your submission has been received.",
-    fields: (doc.fields ?? []).map((field) => ({
-      id: field.id,
-      type: field.type,
-      name: field.name,
-      label: field.label,
-      required: Boolean(field.required),
-      placeholder: field.placeholder ?? "",
-      helpText: field.helpText ?? "",
-      width: field.width ?? "full",
-      style: field.style ?? "default",
-      options: (field.options ?? []).map((option) => ({
-        label: option.label,
-        value: option.value,
-      })),
-    })),
+    schemaMarkdown: doc.schemaMarkdown ?? "",
+    fields: mapFields(doc.fields),
+  };
+
+  const stored = doc.locales as
+    | { vi?: StoredFormLocale; en?: StoredFormLocale }
+    | null
+    | undefined;
+
+  if (!stored?.vi && !stored?.en) {
+    return {
+      vi: legacy,
+      en: emptyLocale(),
+    };
+  }
+
+  return {
+    vi: fromStoredLocale(stored.vi, legacy),
+    en: fromStoredLocale(stored.en, emptyLocale()),
+  };
+}
+
+function localeHasFormBody(locale: FormLocaleValues) {
+  return (
+    (locale.schemaMarkdown ?? "").trim().length > 0 ||
+    (locale.fields?.length ?? 0) > 0
+  );
+}
+
+export function resolveFormLocale(
+  doc: FormDefinitionDocument,
+  locale: AppLocale,
+): FormLocaleValues {
+  const locales = getFormLocales(doc);
+  const preferred = locale === "en" ? locales.en : locales.vi;
+  const fallback = locales.vi;
+
+  return {
+    name: (preferred.name ?? "").trim() || fallback.name || "",
+    description:
+      (preferred.description ?? "").trim() || fallback.description || "",
+    submitLabel:
+      (preferred.submitLabel ?? "").trim() ||
+      fallback.submitLabel ||
+      "Send",
+    successMessage:
+      (preferred.successMessage ?? "").trim() ||
+      fallback.successMessage ||
+      "Thank you. Your submission has been received.",
+    schemaMarkdown: localeHasFormBody(preferred)
+      ? preferred.schemaMarkdown || ""
+      : fallback.schemaMarkdown || "",
+    fields: localeHasFormBody(preferred)
+      ? mapFields(preferred.fields)
+      : mapFields(fallback.fields),
+  };
+}
+
+export function inferFormDefinitionMode(
+  doc: FormDefinitionDocument,
+): "fields" | "markdown" {
+  const stored = (doc as { definitionMode?: string }).definitionMode;
+  if (stored === "markdown" || stored === "fields") return stored;
+  const locales = getFormLocales(doc);
+  return (locales.vi.schemaMarkdown ?? "").trim() ? "markdown" : "fields";
+}
+
+export function toAdminFormValues(
+  doc: FormDefinitionDocument,
+): FormDefinitionFormValues {
+  const locales = getFormLocales(doc);
+  return {
+    status: doc.status,
+    definitionMode: inferFormDefinitionMode(doc),
+    locales: {
+      vi: {
+        ...locales.vi,
+        fields: mapFields(locales.vi.fields),
+      },
+      en: {
+        ...locales.en,
+        fields: mapFields(locales.en.fields),
+      },
+    },
+  };
+}
+
+function toPublicForm(
+  doc: FormDefinitionDocument,
+  locale: AppLocale = "vi",
+): PublicFormDefinition {
+  const resolved = resolveFormLocale(doc, locale);
+  return {
+    id: String(doc._id),
+    key: doc.key,
+    name: resolved.name || "",
+    description: resolved.description ?? "",
+    schemaMarkdown: resolved.schemaMarkdown ?? "",
+    submitLabel: resolved.submitLabel || "Send",
+    successMessage:
+      resolved.successMessage ||
+      "Thank you. Your submission has been received.",
+    fields: mapFields(resolved.fields),
   };
 }
 
 function toAdminFormListItem(doc: FormDefinitionDocument): AdminFormListItem {
+  const locales = getFormLocales(doc);
   return {
     id: String(doc._id),
     key: doc.key,
-    name: doc.name,
-    description: doc.description ?? "",
+    name: locales.vi.name || doc.name,
+    description: locales.vi.description || doc.description || "",
     status: doc.status,
-    fieldCount: doc.fields?.length ?? 0,
+    fieldCount: locales.vi.fields?.length || doc.fields?.length || 0,
     deletedAt: doc.deletedAt ? new Date(doc.deletedAt).toISOString() : null,
     updatedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null,
   };
@@ -129,12 +283,15 @@ export async function listFormOptions(): Promise<AdminFormOption[]> {
   const docs = await FormDefinition.find(notDeletedFilter)
     .sort({ name: 1, updatedAt: -1 })
     .lean<FormDefinitionDocument[]>();
-  return docs.map((doc) => ({
-    id: String(doc._id),
-    label: doc.name,
-    key: doc.key,
-    status: doc.status,
-  }));
+  return docs.map((doc) => {
+    const locales = getFormLocales(doc);
+    return {
+      id: String(doc._id),
+      label: locales.vi.name || doc.name,
+      key: doc.key,
+      status: doc.status,
+    };
+  });
 }
 
 export async function getFormById(id: string) {
@@ -142,9 +299,13 @@ export async function getFormById(id: string) {
   return FormDefinition.findById(id).lean<FormDefinitionDocument | null>();
 }
 
-export async function getPublishedFormById(id: string) {
+export async function getPublishedFormById(
+  id: string,
+  locale: AppLocale = "vi",
+) {
+  const localeKey = locale === "en" ? "en" : "vi";
   return cacheAside(
-    `cms:form:id:${id}`,
+    `cms:form:id:${id}:${localeKey}`,
     [CmsCacheTags.forms],
     async () => {
       await connectDb();
@@ -153,7 +314,7 @@ export async function getPublishedFormById(id: string) {
         ...notDeletedFilter,
         status: "published",
       }).lean<FormDefinitionDocument | null>();
-      return doc ? toPublicForm(doc) : null;
+      return doc ? toPublicForm(doc, localeKey) : null;
     },
     {
       tagsFromValue: (form) =>

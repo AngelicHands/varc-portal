@@ -1,5 +1,19 @@
 import { z } from "zod";
 
+export function formatZodIssues(
+  error: z.ZodError,
+  limit = 12,
+): string {
+  const lines = error.issues.slice(0, limit).map((issue) => {
+    const path = issue.path.length > 0 ? issue.path.join(".") : "form";
+    return `${path}: ${issue.message}`;
+  });
+  if (error.issues.length > limit) {
+    lines.push(`…and ${error.issues.length - limit} more issue(s)`);
+  }
+  return lines.join("\n") || "Invalid data";
+}
+
 const MAX_TEXT = 5_000;
 const MAX_MARKDOWN = 50_000;
 
@@ -12,6 +26,7 @@ export const FORM_FIELD_TYPES = [
   "checkbox",
   "radio",
   "date",
+  "date_time",
   "image",
   "file",
 ] as const;
@@ -95,11 +110,23 @@ export const formFieldSchema = z
     required: z.boolean(),
     placeholder: z.string().trim().max(500).default(""),
     helpText: z.string().trim().max(MAX_TEXT).default(""),
+    maxLength: z.number().int().min(0).max(MAX_TEXT).default(0),
     width: z.enum(FORM_FIELD_WIDTHS).default("full"),
     style: z.enum(FORM_FIELD_STYLES).default("default"),
     options: z.array(formFieldOptionSchema).max(100).default([]),
   })
   .superRefine((field, ctx) => {
+    if (
+      field.maxLength > 0 &&
+      field.type !== "text" &&
+      field.type !== "textarea"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Max length is only supported for text and textarea fields",
+        path: ["maxLength"],
+      });
+    }
     if (
       field.type === "select" ||
       field.type === "radio" ||
@@ -125,88 +152,271 @@ export const formFieldSchema = z
 
 export type FormFieldDefinition = z.infer<typeof formFieldSchema>;
 
-export const formDefinitionFormSchema = z
-  .object({
-    name: z.string().trim().min(1, "Name is required").max(200),
-    description: z.string().trim().max(MAX_TEXT).default(""),
-    status: z.enum(["draft", "published"]),
-    submitLabel: z.string().trim().min(1, "Submit label is required").max(120),
-    successMessage: z
-      .string()
-      .trim()
-      .min(1, "Success message is required")
-      .max(MAX_TEXT),
-    schemaMarkdown: z.string().max(MAX_MARKDOWN).default(""),
-    fields: z.array(formFieldSchema).max(100).default([]),
-  })
-  .superRefine((data, ctx) => {
-    const hasMarkdown = data.schemaMarkdown.trim().length > 0;
-    const hasFields = data.fields.length > 0;
+export const FORM_DEFINITION_MODES = ["fields", "markdown"] as const;
+export type FormDefinitionMode = (typeof FORM_DEFINITION_MODES)[number];
 
-    if (!hasMarkdown && !hasFields) {
+export const formLocaleSchema = z.object({
+  name: z.string().trim().max(200).default(""),
+  description: z.string().trim().max(MAX_TEXT).default(""),
+  submitLabel: z.string().trim().max(120).default(""),
+  successMessage: z.string().trim().max(MAX_TEXT).default(""),
+  schemaMarkdown: z.string().max(MAX_MARKDOWN).default(""),
+  fields: z.array(formFieldSchema).max(100).default([]),
+});
+
+export type FormLocaleValues = z.infer<typeof formLocaleSchema>;
+export type FormLocaleInput = z.input<typeof formLocaleSchema>;
+
+function fieldStructureKey(fields: FormFieldDefinition[]) {
+  return fields
+    .map(
+      (field) =>
+        `${field.name}:${field.type}:${field.options.map((option) => option.value).join(",")}`,
+    )
+    .join("|");
+}
+
+function refineFormLocale(
+  locale: z.infer<typeof formLocaleSchema>,
+  ctx: z.RefinementCtx,
+  path: Array<string | number>,
+  options: { requireContent: boolean; requireChrome: boolean },
+) {
+  const hasMarkdown = locale.schemaMarkdown.trim().length > 0;
+  const hasFields = locale.fields.length > 0;
+
+  if (options.requireChrome) {
+    if (!locale.name.trim()) {
       ctx.addIssue({
         code: "custom",
-        message: "Provide either markdown schema or at least one field",
-        path: ["schemaMarkdown"],
+        message: "Name is required",
+        path: [...path, "name"],
       });
-      return;
     }
+    if (!locale.submitLabel.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Submit label is required",
+        path: [...path, "submitLabel"],
+      });
+    }
+    if (!locale.successMessage.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Success message is required",
+        path: [...path, "successMessage"],
+      });
+    }
+  }
 
-    if (hasMarkdown) {
-      const parsed = parseFormSchemaMarkdown(data.schemaMarkdown);
-      if (!parsed.ok) {
+  if (options.requireContent && !hasMarkdown && !hasFields) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Provide either markdown schema or at least one field",
+      path: [...path, "schemaMarkdown"],
+    });
+  }
+
+  if (hasMarkdown) {
+    const parsed = parseFormSchemaMarkdown(locale.schemaMarkdown);
+    if (!parsed.ok) {
+      ctx.addIssue({
+        code: "custom",
+        message: parsed.error,
+        path: [...path, "schemaMarkdown"],
+      });
+    }
+  }
+
+  const names = new Set<string>();
+  for (const [index, field] of locale.fields.entries()) {
+    if (names.has(field.name)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Field keys must be unique",
+        path: [...path, "fields", index, "name"],
+      });
+    }
+    names.add(field.name);
+  }
+}
+
+function normalizeFormLocale(locale: z.infer<typeof formLocaleSchema>) {
+  const markdown = locale.schemaMarkdown.trim();
+  if (!markdown) {
+    return {
+      ...locale,
+      name: locale.name.trim(),
+      description: locale.description.trim(),
+      submitLabel: locale.submitLabel.trim(),
+      successMessage: locale.successMessage.trim(),
+      schemaMarkdown: "",
+    };
+  }
+  const parsed = parseFormSchemaMarkdown(markdown);
+  if (!parsed.ok) {
+    return {
+      ...locale,
+      name: locale.name.trim(),
+      description: locale.description.trim(),
+      submitLabel: locale.submitLabel.trim(),
+      successMessage: locale.successMessage.trim(),
+      schemaMarkdown: markdown,
+    };
+  }
+  return {
+    ...locale,
+    name: locale.name.trim(),
+    description: locale.description.trim(),
+    submitLabel: locale.submitLabel.trim(),
+    successMessage: locale.successMessage.trim(),
+    schemaMarkdown: markdown,
+    fields: parsed.fields,
+  };
+}
+
+export const formDefinitionFormSchema = z
+  .object({
+    status: z.enum(["draft", "published"]),
+    definitionMode: z.enum(FORM_DEFINITION_MODES),
+    locales: z.object({
+      vi: formLocaleSchema,
+      en: formLocaleSchema,
+    }),
+  })
+  .superRefine((data, ctx) => {
+    const mode = data.definitionMode;
+    const vi = data.locales.vi;
+
+    refineFormLocale(vi, ctx, ["locales", "vi"], {
+      requireContent: false,
+      requireChrome: true,
+    });
+
+    if (mode === "markdown") {
+      if (!vi.schemaMarkdown.trim()) {
         ctx.addIssue({
           code: "custom",
-          message: parsed.error,
-          path: ["schemaMarkdown"],
+          message: "Markdown layout is required",
+          path: ["locales", "vi", "schemaMarkdown"],
         });
+      } else {
+        const parsed = parseFormSchemaMarkdown(vi.schemaMarkdown);
+        if (!parsed.ok) {
+          ctx.addIssue({
+            code: "custom",
+            message: parsed.error,
+            path: ["locales", "vi", "schemaMarkdown"],
+          });
+        }
       }
+    } else if (vi.fields.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Add at least one field",
+        path: ["locales", "vi", "fields"],
+      });
     }
 
     const names = new Set<string>();
-    for (const [index, field] of data.fields.entries()) {
-      if (names.has(field.name)) {
+    for (const [index, field] of vi.fields.entries()) {
+      if (mode === "fields" && names.has(field.name)) {
         ctx.addIssue({
           code: "custom",
           message: "Field keys must be unique",
-          path: ["fields", index, "name"],
+          path: ["locales", "vi", "fields", index, "name"],
         });
       }
       names.add(field.name);
     }
 
-    if (data.status === "published" && !hasMarkdown && data.fields.length === 0) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Published forms need at least one field",
-        path: ["fields"],
+    const en = data.locales.en;
+    const enHasContent =
+      Boolean(en.name.trim()) ||
+      Boolean(en.schemaMarkdown.trim()) ||
+      en.fields.length > 0 ||
+      Boolean(en.description.trim());
+
+    if (enHasContent) {
+      refineFormLocale(en, ctx, ["locales", "en"], {
+        requireContent: false,
+        requireChrome: true,
       });
+    }
+
+    if (mode === "markdown") {
+      const viMarkdown = vi.schemaMarkdown.trim();
+      const enMarkdown = en.schemaMarkdown.trim();
+      if (viMarkdown && enMarkdown) {
+        const viParsed = parseFormSchemaMarkdown(viMarkdown);
+        const enParsed = parseFormSchemaMarkdown(enMarkdown);
+        if (
+          viParsed.ok &&
+          enParsed.ok &&
+          fieldStructureKey(viParsed.fields) !==
+            fieldStructureKey(enParsed.fields)
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message:
+              "English markdown must define the same field keys, types, and option values as Vietnamese",
+            path: ["locales", "en", "schemaMarkdown"],
+          });
+        }
+      }
     }
   })
   .transform((data) => {
-    const markdown = data.schemaMarkdown.trim();
-    if (!markdown) {
+    if (data.definitionMode === "fields") {
       return {
-        ...data,
-        schemaMarkdown: "",
+        status: data.status,
+        definitionMode: "fields" as const,
+        locales: {
+          vi: {
+            ...normalizeFormLocale({
+              ...data.locales.vi,
+              schemaMarkdown: "",
+            }),
+            schemaMarkdown: "",
+            fields: data.locales.vi.fields,
+          },
+          en: {
+            ...normalizeFormLocale({
+              ...data.locales.en,
+              schemaMarkdown: "",
+              fields: [],
+            }),
+            schemaMarkdown: "",
+            fields: [],
+          },
+        },
       };
     }
-    const parsed = parseFormSchemaMarkdown(markdown);
-    if (!parsed.ok) return data;
+
     return {
-      ...data,
-      schemaMarkdown: markdown,
-      fields: parsed.fields,
+      status: data.status,
+      definitionMode: "markdown" as const,
+      locales: {
+        vi: normalizeFormLocale(data.locales.vi),
+        en: normalizeFormLocale({
+          ...data.locales.en,
+          // Keep EN fields only when markdown is present; otherwise fall back to VI.
+          fields: data.locales.en.schemaMarkdown.trim()
+            ? data.locales.en.fields
+            : [],
+        }),
+      },
     };
   });
 
 export type FormDefinitionFormValues = z.input<typeof formDefinitionFormSchema>;
+export type FormDefinitionFormData = z.infer<typeof formDefinitionFormSchema>;
 
 export const FORM_SUBMISSION_STATUSES = ["new", "reviewed", "archived"] as const;
 export type FormSubmissionStatus = (typeof FORM_SUBMISSION_STATUSES)[number];
 
 const FIELD_TYPE_PATTERN =
-  "text|textarea|email|phone|select|checkbox|radio|date|image|file";
+  "text|textarea|email|phone|select|checkbox|radio|date_time|date|image|file";
 
 export const MARKDOWN_FIELD_TOKEN_RE = new RegExp(
   `#!\\[(${FIELD_TYPE_PATTERN}):\\{([a-z][a-z0-9_]*)\\}([^\\]]*)\\]`,
@@ -221,6 +431,7 @@ export type ParsedMarkdownFieldToken = {
   style: FormFieldStyle;
   required: boolean;
   helpText: string;
+  maxLength: number;
 };
 
 export function parseAttrBlock(raw: string): Record<string, string> {
@@ -297,6 +508,7 @@ export function parseMarkdownFieldToken(
   let style: FormFieldStyle = "default";
   let required = false;
   let helpText = "";
+  let maxLength = 0;
 
   if (rest.startsWith("-")) {
     const nextPlaceholder = rest.indexOf(':"');
@@ -326,6 +538,11 @@ export function parseMarkdownFieldToken(
     }
     required = parseBooleanAttr(attrs.required);
     helpText = (attrs.suggestion ?? attrs.help ?? "").trim();
+    const rawMax = attrs.maxLength ?? attrs.max ?? "";
+    const parsedMax = Number.parseInt(rawMax, 10);
+    if (Number.isFinite(parsedMax) && parsedMax > 0) {
+      maxLength = Math.min(parsedMax, MAX_TEXT);
+    }
   }
 
   return {
@@ -336,6 +553,7 @@ export function parseMarkdownFieldToken(
     style,
     required,
     helpText,
+    maxLength,
   };
 }
 
@@ -354,6 +572,7 @@ export function emptyFormField(
     required: false,
     placeholder: "",
     helpText: "",
+    maxLength: 0,
     width: "full",
     style: "default",
     options:
@@ -417,6 +636,7 @@ export function parseFormSchemaMarkdown(markdown: string): {
     const style = parsedLine.style;
     const required = parsedLine.required;
     const helpText = parsedLine.helpText;
+    const maxLength = parsedLine.maxLength;
     const key = `${rawType}:${name}`;
 
     const existing = grouped.get(key);
@@ -431,6 +651,8 @@ export function parseFormSchemaMarkdown(markdown: string): {
           placeholder ||
           (rawType === "checkbox" && optionOrLabel ? optionOrLabel : ""),
         helpText,
+        maxLength:
+          rawType === "text" || rawType === "textarea" ? maxLength : 0,
         width: "full",
         style,
         options:
@@ -612,6 +834,18 @@ export function validateSubmissionPayload(
       continue;
     }
 
+    if (
+      (field.type === "text" || field.type === "textarea") &&
+      field.maxLength > 0 &&
+      value.length > field.maxLength
+    ) {
+      return {
+        ok: false,
+        error: `${field.label} must be at most ${field.maxLength} characters`,
+        fieldName: field.name,
+      };
+    }
+
     if (field.type === "email") {
       const parsed = z.string().email().safeParse(value);
       if (!parsed.success) {
@@ -648,6 +882,20 @@ export function validateSubmissionPayload(
       }
     }
 
+    if (field.type === "date_time") {
+      const parsed = z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/)
+        .safeParse(value);
+      if (!parsed.success || Number.isNaN(Date.parse(value))) {
+        return {
+          ok: false,
+          error: `${field.label} must be a valid date and time`,
+          fieldName: field.name,
+        };
+      }
+    }
+
     if (field.type === "select" || field.type === "radio") {
       if (!allowedOptions(field).has(value)) {
         return {
@@ -679,12 +927,34 @@ export function collectSubmissionFieldErrors(
   return errors;
 }
 
-export const emptyFormDefinitionForm: FormDefinitionFormValues = {
+export const emptyFormLocale: FormLocaleValues = {
   name: "",
   description: "",
-  status: "draft",
-  submitLabel: "Send",
-  successMessage: "Thank you. Your submission has been received.",
+  submitLabel: "",
+  successMessage: "",
   schemaMarkdown: "",
   fields: [],
+};
+
+export const emptyFormDefinitionForm: FormDefinitionFormValues = {
+  status: "draft",
+  definitionMode: "fields",
+  locales: {
+    vi: {
+      name: "",
+      description: "",
+      submitLabel: "Gửi",
+      successMessage: "Cảm ơn bạn. Chúng tôi đã nhận được thông tin.",
+      schemaMarkdown: "",
+      fields: [],
+    },
+    en: {
+      name: "",
+      description: "",
+      submitLabel: "Send",
+      successMessage: "Thank you. Your submission has been received.",
+      schemaMarkdown: "",
+      fields: [],
+    },
+  },
 };

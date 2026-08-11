@@ -38,6 +38,7 @@ import {
 import {
   FORM_SUBMISSION_STATUSES,
   formDefinitionFormSchema,
+  formatZodIssues,
 } from "@/lib/validations/forms";
 import {
   pageTemplateFormSchema,
@@ -1052,37 +1053,85 @@ export async function saveFormDefinitionAction(
     await requireSiteManager();
     const parsed = formDefinitionFormSchema.safeParse(raw);
     if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
+      return {
+        ok: false,
+        error: `Unable to save form:\n${formatZodIssues(parsed.error)}`,
+      };
     }
 
     const data = parsed.data;
     await connectDb();
-    const fields = data.fields.map((field) => ({
-      id: field.id,
-      type: field.type,
-      name: field.name.trim(),
-      label: field.label.trim(),
-      required: field.required,
-      placeholder: field.placeholder.trim(),
-      helpText: field.helpText.trim(),
-      width: field.width,
-      style: field.style,
-      options: field.options.map((option) => ({
-        label: option.label.trim(),
-        value: option.value.trim(),
-      })),
-    }));
+
+    function mapLocaleFields(
+      fields: (typeof data.locales.vi.fields),
+    ) {
+      return fields.map((field) => ({
+        id: field.id,
+        type: field.type,
+        name: field.name.trim(),
+        label: field.label.trim(),
+        required: field.required,
+        placeholder: field.placeholder.trim(),
+        helpText: field.helpText.trim(),
+        maxLength: field.maxLength ?? 0,
+        width: field.width,
+        style: field.style,
+        options: field.options.map((option) => ({
+          label: option.label.trim(),
+          value: option.value.trim(),
+        })),
+      }));
+    }
+
+    const vi = data.locales.vi;
+    const enRaw = data.locales.en;
+    const enHasContent =
+      Boolean(enRaw.name.trim()) ||
+      Boolean(enRaw.schemaMarkdown.trim()) ||
+      enRaw.fields.length > 0 ||
+      Boolean(enRaw.description.trim());
+    const en = enHasContent
+      ? enRaw
+      : {
+          name: "",
+          description: "",
+          submitLabel: "",
+          successMessage: "",
+          schemaMarkdown: "",
+          fields: [] as typeof enRaw.fields,
+        };
+    const locales = {
+      vi: {
+        name: vi.name.trim(),
+        description: vi.description.trim(),
+        submitLabel: vi.submitLabel.trim(),
+        successMessage: vi.successMessage.trim(),
+        schemaMarkdown: vi.schemaMarkdown.trim(),
+        fields: mapLocaleFields(vi.fields),
+      },
+      en: {
+        name: en.name.trim(),
+        description: en.description.trim(),
+        submitLabel: en.submitLabel.trim(),
+        successMessage: en.successMessage.trim(),
+        schemaMarkdown: en.schemaMarkdown.trim(),
+        fields: mapLocaleFields(en.fields),
+      },
+    };
+    const fields = locales.vi.fields;
 
     if (id) {
       const existing = await FormDefinition.findById(id);
       if (!existing) return { ok: false, error: "Form not found" };
-      existing.name = data.name.trim();
-      existing.description = data.description.trim();
+      existing.name = locales.vi.name;
+      existing.description = locales.vi.description;
       existing.status = data.status;
-      existing.schemaMarkdown = data.schemaMarkdown.trim();
-      existing.submitLabel = data.submitLabel.trim();
-      existing.successMessage = data.successMessage.trim();
+      existing.set("definitionMode", data.definitionMode);
+      existing.schemaMarkdown = locales.vi.schemaMarkdown;
+      existing.submitLabel = locales.vi.submitLabel;
+      existing.successMessage = locales.vi.successMessage;
       existing.set("fields", fields);
+      existing.set("locales", locales);
       if (!existing.key?.trim()) {
         existing.key = await createUniqueFormKey(existing.name, id);
       }
@@ -1092,18 +1141,48 @@ export async function saveFormDefinitionAction(
     }
 
     const created = await FormDefinition.create({
-      key: await createUniqueFormKey(data.name),
-      name: data.name.trim(),
-      description: data.description.trim(),
+      key: await createUniqueFormKey(locales.vi.name),
+      name: locales.vi.name,
+      description: locales.vi.description,
       status: data.status,
-      schemaMarkdown: data.schemaMarkdown.trim(),
-      submitLabel: data.submitLabel.trim(),
-      successMessage: data.successMessage.trim(),
+      definitionMode: data.definitionMode,
+      schemaMarkdown: locales.vi.schemaMarkdown,
+      submitLabel: locales.vi.submitLabel,
+      successMessage: locales.vi.successMessage,
       fields,
+      locales,
     });
     await refreshPortal(CmsCacheTags.form(String(created._id)));
     return { ok: true, id: String(created._id) };
   } catch (error) {
+    if (
+      error instanceof mongoose.Error.ValidationError &&
+      error.errors &&
+      Object.keys(error.errors).length > 0
+    ) {
+      const details = Object.values(error.errors)
+        .slice(0, 12)
+        .map((item) => item.message)
+        .filter(Boolean)
+        .join("\n");
+      return {
+        ok: false,
+        error: details
+          ? `Unable to save form:\n${details}`
+          : "Unable to save form due to validation errors",
+      };
+    }
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: number }).code === 11000
+    ) {
+      return {
+        ok: false,
+        error: "Unable to save form: a form with this key already exists",
+      };
+    }
     return failAction(error, "Failed to save form");
   }
 }

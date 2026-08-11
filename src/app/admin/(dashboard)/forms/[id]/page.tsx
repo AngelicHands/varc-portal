@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { FormDefinitionEditor } from "@/components/admin/form-definition-editor";
 import { requireSitePage } from "@/lib/admin-access";
-import { getFormById, countNewFormSubmissions } from "@/lib/forms";
+import { getFormById, countNewFormSubmissions, toAdminFormValues } from "@/lib/forms";
 
 export const dynamic = "force-dynamic";
 
@@ -40,28 +40,7 @@ export default async function EditFormPage({ params }: Props) {
         formId={id}
         initial={{
           key: form.key,
-          name: form.name,
-          description: form.description ?? "",
-          status: form.status,
-          schemaMarkdown: form.schemaMarkdown ?? "",
-          submitLabel: form.submitLabel ?? "Send",
-          successMessage:
-            form.successMessage ?? "Thank you. Your submission has been received.",
-          fields: (form.fields ?? []).map((field) => ({
-            id: field.id,
-            type: field.type,
-            name: field.name,
-            label: field.label,
-            required: Boolean(field.required),
-            placeholder: field.placeholder ?? "",
-            helpText: field.helpText ?? "",
-            width: field.width ?? "full",
-            style: field.style ?? "default",
-            options: (field.options ?? []).map((option) => ({
-              label: option.label,
-              value: option.value,
-            })),
-          })),
+          ...toAdminFormValues(form),
         }}
       />
     </div>

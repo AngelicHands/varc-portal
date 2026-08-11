@@ -22,6 +22,7 @@ const FormFieldSchema = new Schema(
     required: { type: Boolean, default: false },
     placeholder: { type: String, default: "" },
     helpText: { type: String, default: "" },
+    maxLength: { type: Number, default: 0 },
     width: {
       type: String,
       enum: FORM_FIELD_WIDTHS,
@@ -37,6 +38,18 @@ const FormFieldSchema = new Schema(
   { _id: false },
 );
 
+const FormLocaleSchema = new Schema(
+  {
+    name: { type: String, default: "" },
+    description: { type: String, default: "" },
+    submitLabel: { type: String, default: "" },
+    successMessage: { type: String, default: "" },
+    schemaMarkdown: { type: String, default: "" },
+    fields: { type: [FormFieldSchema], default: [] },
+  },
+  { _id: false },
+);
+
 const FormDefinitionSchema = new Schema(
   {
     key: {
@@ -45,6 +58,7 @@ const FormDefinitionSchema = new Schema(
       trim: true,
       index: true,
     },
+    /** Denormalized from locales.vi for list sorting / legacy reads. */
     name: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
     status: {
@@ -53,13 +67,25 @@ const FormDefinitionSchema = new Schema(
       default: "draft",
       index: true,
     },
+    /** fields = visual field schema; markdown = markdown layout. */
+    definitionMode: {
+      type: String,
+      enum: ["fields", "markdown"],
+      default: "fields",
+      index: true,
+    },
     schemaMarkdown: { type: String, default: "" },
     submitLabel: { type: String, default: "Send" },
     successMessage: {
       type: String,
       default: "Thank you. Your submission has been received.",
     },
+    /** Canonical field structure (from Vietnamese). */
     fields: { type: [FormFieldSchema], default: [] },
+    locales: {
+      vi: { type: FormLocaleSchema, required: true },
+      en: { type: FormLocaleSchema, required: true },
+    },
     deletedAt: { type: Date, default: null, index: true },
   },
   { timestamps: true },
@@ -80,9 +106,10 @@ export type FormDefinitionDocument = InferSchemaType<typeof FormDefinitionSchema
   _id: mongoose.Types.ObjectId;
 };
 
+// Recompile on HMR so enum changes (e.g. new field types) take effect in dev.
+if (mongoose.models.FormDefinition) {
+  delete mongoose.models.FormDefinition;
+}
+
 export const FormDefinition: Model<FormDefinitionDocument> =
-  (mongoose.models.FormDefinition as Model<FormDefinitionDocument> | undefined) ??
-  mongoose.model<FormDefinitionDocument>(
-    "FormDefinition",
-    FormDefinitionSchema,
-  );
+  mongoose.model<FormDefinitionDocument>("FormDefinition", FormDefinitionSchema);
