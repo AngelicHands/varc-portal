@@ -1,6 +1,7 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 import {
   FORM_FIELD_TYPES,
+  FORM_FIELD_STYLES,
   FORM_FIELD_WIDTHS,
 } from "@/lib/validations/forms";
 
@@ -26,6 +27,11 @@ const FormFieldSchema = new Schema(
       enum: FORM_FIELD_WIDTHS,
       default: "full",
     },
+    style: {
+      type: String,
+      enum: FORM_FIELD_STYLES,
+      default: "default",
+    },
     options: { type: [FormFieldOptionSchema], default: [] },
   },
   { _id: false },
@@ -47,6 +53,7 @@ const FormDefinitionSchema = new Schema(
       default: "draft",
       index: true,
     },
+    schemaMarkdown: { type: String, default: "" },
     submitLabel: { type: String, default: "Send" },
     successMessage: {
       type: String,

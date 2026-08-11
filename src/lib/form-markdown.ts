@@ -1,0 +1,196 @@
+import type { CSSProperties } from "react";
+import {
+  MARKDOWN_FIELD_TOKEN_RE,
+  parseAttrBlock,
+  parseMarkdownFieldToken,
+  type ParsedMarkdownFieldToken,
+} from "@/lib/validations/forms";
+
+export const FORM_FIELD_LINK_PREFIX = "form-field:";
+
+export const FORM_STEP_TOKEN_RE =
+  /!#!\[step:"((?:\\.|[^"\\])*)"(?::\{([^}]*)\})?\]/gi;
+
+export const FORM_STEP_FONT_PRESETS = [
+  "default",
+  "sans",
+  "serif",
+  "display",
+  "mono",
+] as const;
+
+export type FormStepFontPreset = (typeof FORM_STEP_FONT_PRESETS)[number];
+
+export type FormMarkdownToken = ParsedMarkdownFieldToken & {
+  tokenIndex: number;
+  raw: string;
+};
+
+export type FormMarkdownStep = {
+  title: string;
+  font: string;
+  markdown: string;
+  fieldNames: string[];
+};
+
+export type FormMarkdownLayout = {
+  /** Markdown shown above every tab (content before the first step marker). */
+  sharedMarkdown: string;
+  sharedFieldNames: string[];
+  steps: FormMarkdownStep[];
+};
+
+export function extractFormMarkdownTokens(markdown: string): FormMarkdownToken[] {
+  const tokens: FormMarkdownToken[] = [];
+  const re = new RegExp(MARKDOWN_FIELD_TOKEN_RE.source, "gi");
+  let match: RegExpExecArray | null;
+  let tokenIndex = 0;
+
+  while ((match = re.exec(markdown)) !== null) {
+    const raw = match[0] ?? "";
+    const parsed = parseMarkdownFieldToken(raw);
+    if (!parsed) continue;
+    tokens.push({
+      ...parsed,
+      tokenIndex,
+      raw,
+    });
+    tokenIndex += 1;
+  }
+
+  return tokens;
+}
+
+export function parseFormStepToken(token: string): {
+  title: string;
+  font: string;
+} | null {
+  const match = token.match(
+    /^!#!\[step:"((?:\\.|[^"\\])*)"(?::\{([^}]*)\})?\]$/i,
+  );
+  if (!match) return null;
+  const title = (match[1] ?? "")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\")
+    .trim();
+  const attrs = parseAttrBlock(match[2] ?? "");
+  const font = (attrs.font ?? attrs.fontFamily ?? "default").trim() || "default";
+  return { title, font };
+}
+
+function fieldNamesInMarkdown(markdown: string): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const re = new RegExp(MARKDOWN_FIELD_TOKEN_RE.source, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(markdown)) !== null) {
+    const parsed = parseMarkdownFieldToken(match[0] ?? "");
+    if (!parsed || seen.has(parsed.name)) continue;
+    seen.add(parsed.name);
+    names.push(parsed.name);
+  }
+  return names;
+}
+
+export function splitFormMarkdownSteps(markdown: string): FormMarkdownLayout {
+  const source = markdown.replace(/\r\n/g, "\n");
+  const re = new RegExp(FORM_STEP_TOKEN_RE.source, "gi");
+  const markers: Array<{
+    index: number;
+    length: number;
+    title: string;
+    font: string;
+  }> = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(source)) !== null) {
+    const parsed = parseFormStepToken(match[0] ?? "");
+    if (!parsed) continue;
+    markers.push({
+      index: match.index,
+      length: match[0].length,
+      title: parsed.title,
+      font: parsed.font,
+    });
+  }
+
+  if (markers.length === 0) {
+    const content = source.trim();
+    return {
+      sharedMarkdown: "",
+      sharedFieldNames: [],
+      steps: [
+        {
+          title: "",
+          font: "default",
+          markdown: content,
+          fieldNames: fieldNamesInMarkdown(content),
+        },
+      ],
+    };
+  }
+
+  const sharedMarkdown = source.slice(0, markers[0]!.index).trim();
+  const steps: FormMarkdownStep[] = [];
+
+  for (const [i, marker] of markers.entries()) {
+    const start = marker.index + marker.length;
+    const end = markers[i + 1]?.index ?? source.length;
+    const content = source.slice(start, end).trim();
+    steps.push({
+      title: marker.title,
+      font: marker.font,
+      markdown: content,
+      fieldNames: fieldNamesInMarkdown(content),
+    });
+  }
+
+  return {
+    sharedMarkdown,
+    sharedFieldNames: fieldNamesInMarkdown(sharedMarkdown),
+    steps: steps.filter((step) => step.markdown.length > 0 || step.title.length > 0),
+  };
+}
+
+export function formStepFontStyle(font: string): CSSProperties {
+  const normalized = font.trim().toLowerCase();
+  if (!normalized || normalized === "default") return {};
+  if (normalized === "sans") {
+    return { fontFamily: "var(--font-sans), system-ui, sans-serif" };
+  }
+  if (normalized === "serif" || normalized === "display") {
+    return { fontFamily: "var(--font-display), Georgia, serif" };
+  }
+  if (normalized === "mono") {
+    return {
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    };
+  }
+  return { fontFamily: font.trim() };
+}
+
+export function preprocessFormSchemaMarkdown(markdown: string): {
+  markdown: string;
+  tokens: FormMarkdownToken[];
+} {
+  const tokens: FormMarkdownToken[] = [];
+  let tokenIndex = 0;
+
+  const processed = markdown.replace(
+    new RegExp(MARKDOWN_FIELD_TOKEN_RE.source, "gi"),
+    (raw) => {
+      const parsed = parseMarkdownFieldToken(raw);
+      if (!parsed) return raw;
+      tokens.push({
+        ...parsed,
+        tokenIndex,
+        raw,
+      });
+      const replacement = `![](${FORM_FIELD_LINK_PREFIX}${tokenIndex})`;
+      tokenIndex += 1;
+      return replacement;
+    },
+  );
+
+  return { markdown: processed, tokens };
+}

@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { cacheAside, CmsCacheTags } from "@/lib/cache/cms-cache";
 import { connectDb } from "@/lib/db";
 import { makeSlug, uniqueSlugFromTitle } from "@/lib/slug";
@@ -13,10 +12,14 @@ import {
 } from "@/models/FormSubmission";
 import type {
   FormFieldDefinition,
+  FormSubmissionValue,
   FormSubmissionStatus,
 } from "@/lib/validations/forms";
+import { validateSubmissionPayload } from "@/lib/validations/forms";
 import { getValkey } from "@/lib/cache/valkey";
 import { logServerError } from "@/lib/safe-error";
+
+export { validateSubmissionPayload };
 
 export type PublicFormField = FormFieldDefinition;
 
@@ -25,6 +28,7 @@ export type PublicFormDefinition = {
   key: string;
   name: string;
   description: string;
+  schemaMarkdown: string;
   submitLabel: string;
   successMessage: string;
   fields: PublicFormField[];
@@ -53,7 +57,7 @@ export type AdminFormSubmissionItem = {
   formId: string;
   formNameSnapshot: string;
   status: FormSubmissionStatus;
-  payload: Record<string, string | boolean>;
+  payload: Record<string, FormSubmissionValue>;
   createdAt: string | null;
   pagePath: string;
 };
@@ -64,6 +68,7 @@ function toPublicForm(doc: FormDefinitionDocument): PublicFormDefinition {
     key: doc.key,
     name: doc.name,
     description: doc.description ?? "",
+    schemaMarkdown: doc.schemaMarkdown ?? "",
     submitLabel: doc.submitLabel ?? "Send",
     successMessage:
       doc.successMessage ?? "Thank you. Your submission has been received.",
@@ -76,6 +81,7 @@ function toPublicForm(doc: FormDefinitionDocument): PublicFormDefinition {
       placeholder: field.placeholder ?? "",
       helpText: field.helpText ?? "",
       width: field.width ?? "full",
+      style: field.style ?? "default",
       options: (field.options ?? []).map((option) => ({
         label: option.label,
         value: option.value,
@@ -103,7 +109,7 @@ function toSubmissionItem(doc: FormSubmissionDocument): AdminFormSubmissionItem 
     formId: String(doc.formId),
     formNameSnapshot: doc.formNameSnapshot,
     status: doc.status,
-    payload: (doc.payload ?? {}) as Record<string, string | boolean>,
+    payload: (doc.payload ?? {}) as Record<string, FormSubmissionValue>,
     createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : null,
     pagePath: doc.pagePath ?? "",
   };
@@ -190,94 +196,9 @@ export async function createUniqueFormKey(
   });
 }
 
-function allowedOptions(field: FormFieldDefinition): Set<string> {
-  return new Set((field.options ?? []).map((option) => option.value));
-}
-
-export function validateSubmissionPayload(
-  fields: FormFieldDefinition[],
-  input: Record<string, unknown>,
-): {
-  ok: true;
-  data: Record<string, string | boolean>;
-} | {
-  ok: false;
-  error: string;
-} {
-  const payload: Record<string, string | boolean> = {};
-
-  for (const field of fields) {
-    const raw = input[field.name];
-
-    if (field.type === "checkbox") {
-      const checked =
-        raw === true ||
-        raw === "true" ||
-        raw === "on" ||
-        raw === "1" ||
-        raw === 1;
-      if (field.required && !checked) {
-        return { ok: false, error: `${field.label} is required` };
-      }
-      payload[field.name] = checked;
-      continue;
-    }
-
-    const value =
-      typeof raw === "string"
-        ? raw.trim()
-        : raw == null
-          ? ""
-          : String(raw).trim();
-
-    if (field.required && !value) {
-      return { ok: false, error: `${field.label} is required` };
-    }
-
-    if (!value) {
-      payload[field.name] = "";
-      continue;
-    }
-
-    if (field.type === "email") {
-      const parsed = z.string().email().safeParse(value);
-      if (!parsed.success) {
-        return { ok: false, error: `${field.label} must be a valid email` };
-      }
-    }
-
-    if (field.type === "phone") {
-      const parsed = z
-        .string()
-        .regex(/^[+\d()[\]\s.-]{6,30}$/)
-        .safeParse(value);
-      if (!parsed.success) {
-        return { ok: false, error: `${field.label} must be a valid phone number` };
-      }
-    }
-
-    if (field.type === "date") {
-      const parsed = z.string().date().safeParse(value);
-      if (!parsed.success) {
-        return { ok: false, error: `${field.label} must be a valid date` };
-      }
-    }
-
-    if (field.type === "select" || field.type === "radio") {
-      if (!allowedOptions(field).has(value)) {
-        return { ok: false, error: `${field.label} has an invalid selection` };
-      }
-    }
-
-    payload[field.name] = value;
-  }
-
-  return { ok: true, data: payload };
-}
-
 export async function createFormSubmission(params: {
   form: PublicFormDefinition;
-  payload: Record<string, string | boolean>;
+  payload: Record<string, FormSubmissionValue>;
   pagePath?: string;
   ipHash?: string;
   userAgent?: string;

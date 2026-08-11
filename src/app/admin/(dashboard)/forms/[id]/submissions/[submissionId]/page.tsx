@@ -7,6 +7,7 @@ import {
   getFormSubmissionById,
 } from "@/lib/forms";
 import { PORTAL_TIMEZONE } from "@/lib/datetime-local";
+import { isFormUploadValue } from "@/lib/validations/forms";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,44 @@ function formatAdminDate(value: string | null | undefined) {
   return new Date(value).toLocaleString("vi-VN", {
     timeZone: PORTAL_TIMEZONE,
   });
+}
+
+function formatAnswer(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.length ? value.join(", ") : "—";
+  }
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  if (isFormUploadValue(value)) {
+    return (
+      <span className="inline-flex flex-wrap items-center gap-3">
+        {value.contentType.startsWith("image/") ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={value.url}
+            alt={value.originalName}
+            className="h-20 w-20 rounded border border-gray-200 object-cover"
+          />
+        ) : null}
+        <a
+          href={value.url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-blue-700 underline"
+        >
+          {value.originalName}
+        </a>
+        <span className="text-xs text-gray-500">
+          {Math.max(1, Math.round(value.size / 1024))} KB
+        </span>
+      </span>
+    );
+  }
+  if (typeof value === "string") {
+    return value || "—";
+  }
+  return "—";
 }
 
 export default async function FormSubmissionDetailPage({ params }: Props) {
@@ -88,9 +127,7 @@ export default async function FormSubmissionDetailPage({ params }: Props) {
               <dt className="text-sm font-medium text-gray-700">
                 {fieldsByName.get(key) || key}
               </dt>
-              <dd className="text-sm text-gray-900">
-                {typeof value === "boolean" ? (value ? "Yes" : "No") : value || "—"}
-              </dd>
+              <dd className="text-sm text-gray-900">{formatAnswer(value)}</dd>
             </div>
           ))}
         </dl>

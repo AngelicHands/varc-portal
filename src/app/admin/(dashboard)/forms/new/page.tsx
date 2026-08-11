@@ -13,7 +13,7 @@ export default async function NewFormPage() {
       <FormDefinitionEditor
         initial={{
           ...emptyFormDefinitionForm,
-          fields: emptyFormDefinitionForm.fields.map((field) => ({ ...field })),
+          fields: (emptyFormDefinitionForm.fields ?? []).map((field) => ({ ...field })),
         }}
       />
     </div>

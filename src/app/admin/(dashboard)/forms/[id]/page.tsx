@@ -43,6 +43,7 @@ export default async function EditFormPage({ params }: Props) {
           name: form.name,
           description: form.description ?? "",
           status: form.status,
+          schemaMarkdown: form.schemaMarkdown ?? "",
           submitLabel: form.submitLabel ?? "Send",
           successMessage:
             form.successMessage ?? "Thank you. Your submission has been received.",
@@ -55,6 +56,7 @@ export default async function EditFormPage({ params }: Props) {
             placeholder: field.placeholder ?? "",
             helpText: field.helpText ?? "",
             width: field.width ?? "full",
+            style: field.style ?? "default",
             options: (field.options ?? []).map((option) => ({
               label: option.label,
               value: option.value,

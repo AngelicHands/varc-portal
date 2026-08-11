@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   deleteFormDefinitionAction,
@@ -8,6 +8,7 @@ import {
 } from "@/lib/actions";
 import {
   emptyFormField,
+  parseFormSchemaMarkdown,
   type FormDefinitionFormValues,
   type FormFieldDefinition,
   type FormFieldType,
@@ -25,7 +26,133 @@ const FIELD_TYPES: Array<{ value: FormFieldType; label: string }> = [
   { value: "checkbox", label: "Checkbox" },
   { value: "radio", label: "Radio" },
   { value: "date", label: "Date" },
+  { value: "image", label: "Image upload" },
+  { value: "file", label: "File upload" },
 ];
+
+function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
+  const titleId = useId();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h2 id={titleId} className="text-xl font-semibold text-gray-900">
+            Markdown form syntax
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded border border-gray-300 px-2 py-1 text-sm hover:bg-gray-50"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-5 text-sm leading-6 text-gray-700">
+          <section className="space-y-2">
+            <h3 className="font-semibold text-gray-900">Overview</h3>
+            <p>
+              Write normal markdown for the layout. Insert inputs only where
+              needed with <code>#![…]</code> placeholders. If the markdown box
+              is filled, it becomes the source of truth for fields.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="font-semibold text-gray-900">Input types</h3>
+            <p>
+              <code>text</code>, <code>textarea</code>, <code>email</code>,{" "}
+              <code>phone</code>, <code>select</code>, <code>checkbox</code>,{" "}
+              <code>radio</code>, <code>date</code>, <code>image</code>,{" "}
+              <code>file</code>
+            </p>
+            <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
+{`Your name: #![text:{full_name}:"Your name":{style:underline,required:true,suggestion:"Enter your legal name"}]
+Email: #![email:{email}:"name@example.com":{required:true}]
+ID photo: #![image:{id_photo}:{required:true,suggestion:"JPEG or PNG"}]
+Resume: #![file:{resume}:{suggestion:"PDF preferred"}]
+- #![checkbox:{topics}-DX]
+- #![checkbox:{topics}-Emergency comms]
+Choose region: #![select:{region}-North]
+#![select:{region}-South]`}
+            </pre>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="font-semibold text-gray-900">Attributes</h3>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                <code>required:true</code> — required field
+              </li>
+              <li>
+                <code>suggestion:&quot;…&quot;</code> or{" "}
+                <code>help:&quot;…&quot;</code> — shown under an (i) icon on the
+                public form
+              </li>
+              <li>
+                <code>style:default|borderless|underline|dotted_underline</code>
+              </li>
+              <li>
+                <code>:&quot;placeholder text&quot;</code> — input placeholder
+              </li>
+            </ul>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="font-semibold text-gray-900">Multi-stage tabs</h3>
+            <p>
+              Content before the first step marker is shared heading text on
+              every tab. Tabs are defined by:
+            </p>
+            <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
+{`## Application title
+
+Shared intro text for all stages.
+
+!#![step:"Personal info":{font:serif}]
+
+Name: #![text:{full_name}:{required:true}]
+
+!#![step:"Documents":{font:sans}]
+
+Photo: #![image:{id_photo}:{required:true}]`}
+            </pre>
+            <p>
+              Font presets: <code>default</code>, <code>sans</code>,{" "}
+              <code>serif</code>, <code>display</code>, <code>mono</code>, or a
+              custom CSS family like{" "}
+              <code>{`{font:"Georgia, serif"}`}</code>.
+            </p>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type Props = {
   formId?: string;
@@ -67,9 +194,12 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
   const { ask, modal } = useConfirm();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [markdownSchema, setMarkdownSchema] = useState(initial.schemaMarkdown ?? "");
+  const [markdownError, setMarkdownError] = useState<string | null>(null);
   const [form, setForm] = useState<FormEditorState>({
     ...initial,
-    fields: initial.fields.map((field) => ({
+    fields: (initial.fields ?? []).map((field) => ({
       id: field.id,
       type: field.type,
       name: field.name,
@@ -78,6 +208,7 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
       placeholder: field.placeholder ?? "",
       helpText: field.helpText ?? "",
       width: field.width ?? "full",
+      style: field.style ?? "default",
       options: field.options ?? [],
     })),
   });
@@ -128,10 +259,35 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
 
   function onSave(status: "draft" | "published") {
     setError(null);
+    if (markdownSchema.trim()) {
+      const parsed = parseFormSchemaMarkdown(markdownSchema);
+      if (!parsed.ok) {
+        setMarkdownError(parsed.error);
+        return;
+      }
+      setMarkdownError(null);
+      const nextForm = {
+        ...form,
+        status,
+        schemaMarkdown: markdownSchema,
+        fields: parsed.fields,
+      };
+      startTransition(async () => {
+        const result = await saveFormDefinitionAction(formId ?? null, nextForm);
+        if (!notifyAction(result, status === "published" ? "Form published" : "Form saved")) {
+          setError(result.error);
+          return;
+        }
+        router.push(`/admin/forms/${result.id}`);
+        router.refresh();
+      });
+      return;
+    }
     startTransition(async () => {
       const result = await saveFormDefinitionAction(formId ?? null, {
         ...form,
         status,
+        schemaMarkdown: "",
       });
       if (!notifyAction(result, status === "published" ? "Form published" : "Form saved")) {
         setError(result.error);
@@ -249,11 +405,45 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
         </div>
 
         <div className="rounded-lg border border-gray-200 bg-white p-5">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold">Markdown layout</h2>
+                <button
+                  type="button"
+                  onClick={() => setHelpOpen(true)}
+                  aria-label="Markdown syntax help"
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-400 text-[11px] font-semibold leading-none text-gray-600 hover:border-gray-700 hover:text-gray-900"
+                >
+                  i
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Optional markdown layout. When filled, it becomes the source of
+                truth for this form.
+              </p>
+            </div>
+          </div>
+          <textarea
+            rows={8}
+            value={markdownSchema}
+            onChange={(e) => {
+              setMarkdownSchema(e.target.value);
+              setMarkdownError(null);
+            }}
+            className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
+          />
+          {markdownError ? (
+            <p className="mt-2 text-sm text-red-700">{markdownError}</p>
+          ) : null}
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Fields</h2>
+              <h2 className="text-lg font-semibold">Field schema</h2>
               <p className="text-sm text-gray-500">
-                Supported: text, textarea, email, phone, select, checkbox, radio, date.
+                Use this when you do not want a markdown layout.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -317,7 +507,9 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                           ...current,
                           type: nextType,
                           options:
-                            nextType === "select" || nextType === "radio"
+                            nextType === "select" ||
+                            nextType === "radio" ||
+                            nextType === "checkbox"
                               ? current.options.length
                                 ? current.options
                                 : [{ label: "Option 1", value: "option-1" }]
@@ -348,6 +540,29 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                     >
                       <option value="full">Full width</option>
                       <option value="half">Half width</option>
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1 block text-sm font-medium">Input style</span>
+                    <select
+                      value={field.style}
+                      onChange={(e) =>
+                        setField(field.id, (current) => ({
+                          ...current,
+                          style: e.target.value as
+                            | "default"
+                            | "borderless"
+                            | "underline"
+                            | "dotted_underline",
+                        }))
+                      }
+                      className="w-full rounded border border-gray-300 px-3 py-2"
+                    >
+                      <option value="default">Default</option>
+                      <option value="borderless">Borderless</option>
+                      <option value="underline">Underline</option>
+                      <option value="dotted_underline">Dotted underline</option>
                     </select>
                   </label>
 
@@ -415,7 +630,9 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                   </label>
 
                   <label className="block md:col-span-2">
-                    <span className="mb-1 block text-sm font-medium">Help text</span>
+                    <span className="mb-1 block text-sm font-medium">
+                      Suggestion (shown under an (i) icon)
+                    </span>
                     <textarea
                       rows={2}
                       value={field.helpText}
@@ -426,10 +643,13 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                         }))
                       }
                       className="w-full rounded border border-gray-300 px-3 py-2"
+                      placeholder="Hint shown when visitors hover the (i) icon"
                     />
                   </label>
 
-                  {field.type === "select" || field.type === "radio" ? (
+                  {field.type === "select" ||
+                  field.type === "radio" ||
+                  field.type === "checkbox" ? (
                     <label className="block md:col-span-2">
                       <span className="mb-1 block text-sm font-medium">
                         Options
@@ -447,7 +667,7 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                         placeholder={"Option label|option_value"}
                       />
                       <p className="mt-1 text-xs text-gray-500">
-                        One option per line. Use `label|value`.
+                        One option per line. Use `label|value`. Leave empty for a single yes/no checkbox.
                       </p>
                     </label>
                   ) : null}
@@ -470,6 +690,7 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
           </div>
         ) : null}
       </div>
+      {helpOpen ? <MarkdownHelpModal onClose={() => setHelpOpen(false)} /> : null}
       {modal}
     </>
   );

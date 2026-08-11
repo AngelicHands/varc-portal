@@ -1066,6 +1066,7 @@ export async function saveFormDefinitionAction(
       placeholder: field.placeholder.trim(),
       helpText: field.helpText.trim(),
       width: field.width,
+      style: field.style,
       options: field.options.map((option) => ({
         label: option.label.trim(),
         value: option.value.trim(),
@@ -1078,6 +1079,7 @@ export async function saveFormDefinitionAction(
       existing.name = data.name.trim();
       existing.description = data.description.trim();
       existing.status = data.status;
+      existing.schemaMarkdown = data.schemaMarkdown.trim();
       existing.submitLabel = data.submitLabel.trim();
       existing.successMessage = data.successMessage.trim();
       existing.set("fields", fields);
@@ -1094,6 +1096,7 @@ export async function saveFormDefinitionAction(
       name: data.name.trim(),
       description: data.description.trim(),
       status: data.status,
+      schemaMarkdown: data.schemaMarkdown.trim(),
       submitLabel: data.submitLabel.trim(),
       successMessage: data.successMessage.trim(),
       fields,

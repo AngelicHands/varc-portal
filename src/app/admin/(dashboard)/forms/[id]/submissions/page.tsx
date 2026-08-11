@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireSitePage } from "@/lib/admin-access";
 import { getFormById, listFormSubmissions } from "@/lib/forms";
 import { PORTAL_TIMEZONE } from "@/lib/datetime-local";
+import { isFormUploadValue } from "@/lib/validations/forms";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,14 @@ function formatAdminDate(value: string | null | undefined) {
   return new Date(value).toLocaleString("vi-VN", {
     timeZone: PORTAL_TIMEZONE,
   });
+}
+
+function previewValue(value: unknown) {
+  if (Array.isArray(value)) return value.join(", ");
+  if (isFormUploadValue(value)) return value.originalName;
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return value;
+  return String(value ?? "");
 }
 
 export default async function FormSubmissionsPage({ params }: Props) {
@@ -80,7 +89,7 @@ export default async function FormSubmissionsPage({ params }: Props) {
                   <td className="px-4 py-3 text-gray-600">
                     {Object.entries(submission.payload)
                       .slice(0, 2)
-                      .map(([key, value]) => `${key}: ${String(value)}`)
+                      .map(([key, value]) => `${key}: ${previewValue(value)}`)
                       .join(" · ") || "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
