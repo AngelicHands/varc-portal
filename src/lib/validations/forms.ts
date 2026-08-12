@@ -508,6 +508,10 @@ export const formFieldSchema = z
       .default([]),
     typingAlignment: z.enum(FORM_FIELD_TYPING_ALIGNMENTS).default("left"),
     allowedExtensions: z.array(z.string().trim().min(2).max(20)).default([]),
+    /** Custom “Choose file” button text for image/file fields. */
+    buttonLabel: z.string().trim().max(200).default(""),
+    /** Custom empty-state text (e.g. “No file selected”) for image/file fields. */
+    emptyFileLabel: z.string().trim().max(200).default(""),
     dateFormat: formDateFormatSchema.default("yyyy-mm-dd"),
     timeFormat: formTimeFormatSchema.default("HH:mm"),
     /** Default checked for a single yes/no checkbox (no options). */
@@ -564,6 +568,17 @@ export const formFieldSchema = z
         message:
           "allowedExtensions is only supported for image and file upload fields",
         path: ["allowedExtensions"],
+      });
+    }
+    if (
+      (field.buttonLabel || field.emptyFileLabel) &&
+      !supportsFormFieldAllowedExtensions(field.type)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "buttonLabel and emptyFileLabel are only supported for image and file upload fields",
+        path: field.buttonLabel ? ["buttonLabel"] : ["emptyFileLabel"],
       });
     }
     if (
@@ -925,6 +940,8 @@ export type ParsedMarkdownFieldToken = {
   typingStyle: FormFieldTypingStyle[];
   typingAlignment: FormFieldTypingAlignment;
   allowedExtensions: string[];
+  buttonLabel: string;
+  emptyFileLabel: string;
   width: FormFieldWidth;
   dateFormat: FormDateFormat;
   timeFormat: FormTimeFormat;
@@ -1320,6 +1337,8 @@ export function parseMarkdownFieldToken(
   let typingStyle: FormFieldTypingStyle[] = [];
   let typingAlignment: FormFieldTypingAlignment = "left";
   let allowedExtensions: string[] = [];
+  let buttonLabel = "";
+  let emptyFileLabel = "";
   /** Unset size keeps fill-the-line behavior for existing markdown layouts. */
   let width: FormFieldWidth = "full-width";
   let dateFormat: FormDateFormat = "yyyy-mm-dd";
@@ -1357,6 +1376,22 @@ export function parseMarkdownFieldToken(
   allowedExtensions = normalizeFormFieldAllowedExtensions(
     attrs.allowed_extensions ?? attrs.allowedExtensions,
   );
+  buttonLabel = (
+    attrs.button_label ??
+    attrs.buttonLabel ??
+    attrs.choose_file ??
+    attrs.chooseFile ??
+    ""
+  ).trim();
+  emptyFileLabel = (
+    attrs.empty_label ??
+    attrs.emptyLabel ??
+    attrs.no_file_selected ??
+    attrs.noFileSelected ??
+    attrs.no_file_label ??
+    attrs.noFileLabel ??
+    ""
+  ).trim();
   const rawSize = attrs.size ?? attrs.width;
   if (rawSize) {
     width = normalizeFormFieldWidth(rawSize);
@@ -1404,6 +1439,8 @@ export function parseMarkdownFieldToken(
     typingStyle,
     typingAlignment,
     allowedExtensions,
+    buttonLabel,
+    emptyFileLabel,
     width,
     dateFormat,
     timeFormat,
@@ -1435,6 +1472,8 @@ export function emptyFormField(
     typingStyle: [],
     typingAlignment: "left",
     allowedExtensions: [],
+    buttonLabel: "",
+    emptyFileLabel: "",
     dateFormat: "yyyy-mm-dd",
     timeFormat: "HH:mm",
     checked: false,
@@ -1515,6 +1554,12 @@ export function parseFormSchemaMarkdown(markdown: string): {
       typingStyle: parsedLine.typingStyle,
       typingAlignment: parsedLine.typingAlignment,
       allowedExtensions: parsedLine.allowedExtensions,
+      buttonLabel: supportsFormFieldAllowedExtensions(rawType)
+        ? parsedLine.buttonLabel
+        : "",
+      emptyFileLabel: supportsFormFieldAllowedExtensions(rawType)
+        ? parsedLine.emptyFileLabel
+        : "",
       dateFormat: parsedLine.dateFormat,
       timeFormat: parsedLine.timeFormat,
       checked: parsedLine.checked,

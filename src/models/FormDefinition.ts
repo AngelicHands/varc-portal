@@ -52,6 +52,8 @@ const FormFieldSchema = new Schema(
       type: [String],
       default: [],
     },
+    buttonLabel: { type: String, default: "" },
+    emptyFileLabel: { type: String, default: "" },
     dateFormat: {
       type: String,
       enum: FORM_DATE_FORMATS,

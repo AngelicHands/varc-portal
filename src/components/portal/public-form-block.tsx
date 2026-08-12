@@ -262,8 +262,39 @@ function FormUploadControl({
           disabled={uploading}
           aria-invalid={invalid}
           onChange={(e) => onFileSelected(e.target.files?.[0] ?? null)}
-          className="max-w-full text-sm file:mr-2 file:rounded file:border-0 file:bg-gray-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+          className="sr-only"
         />
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+          className="rounded bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-black disabled:opacity-60"
+        >
+          {field.buttonLabel.trim() || t("chooseFile")}
+        </button>
+        {upload ? (
+          <>
+            <a
+              href={upload.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm underline"
+            >
+              {upload.originalName}
+            </a>
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="text-xs text-red-600 underline"
+            >
+              {t("remove")}
+            </button>
+          </>
+        ) : (
+          <span className="text-sm text-muted">
+            {field.emptyFileLabel.trim() || t("noFileSelected")}
+          </span>
+        )}
         <FieldSuggestionIcon text={showSuggestion ? field.helpText : ""} />
         {field.required && compact ? (
           <span className="text-xs text-red-600">*</span>
@@ -273,32 +304,13 @@ function FormUploadControl({
         <span className="text-xs text-muted">{t("uploading")}</span>
       ) : null}
       {error ? <span className="text-xs text-red-600">{error}</span> : null}
-      {upload ? (
-        <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          {field.type === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={upload.url}
-              alt={upload.originalName}
-              className="h-16 w-16 rounded border border-gray-200 object-cover"
-            />
-          ) : null}
-          <a
-            href={upload.url}
-            target="_blank"
-            rel="noreferrer"
-            className="underline"
-          >
-            {upload.originalName}
-          </a>
-          <button
-            type="button"
-            onClick={() => onChange("")}
-            className="text-red-600 underline"
-          >
-            {t("remove")}
-          </button>
-        </span>
+      {upload && field.type === "image" ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={upload.url}
+          alt={upload.originalName}
+          className="h-16 w-16 rounded border border-gray-200 object-cover"
+        />
       ) : null}
     </span>
   );
@@ -1114,7 +1126,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                   <div
                     role="tablist"
                     aria-label={t("stepsAriaLabel")}
-                    className="flex flex-wrap gap-2 border-b border-border pb-2"
+                    className="flex flex-wrap gap-2.5 border-b border-border pb-3"
                   >
                     {steps.map((step, index) => {
                       const selected = index === stepIndex;
@@ -1130,8 +1142,8 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                           onClick={() => goToStep(index)}
                           className={
                             selected
-                              ? `rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white${hasError ? " ring-2 ring-red-400" : ""}`
-                              : `rounded-md px-3 py-1.5 text-sm font-medium text-muted hover:bg-gray-100 hover:text-foreground${hasError ? " text-red-700 ring-1 ring-red-300" : ""}`
+                              ? `rounded-md bg-gray-900 px-4 py-2.5 text-base font-medium text-white${hasError ? " ring-2 ring-red-400" : ""}`
+                              : `rounded-md px-4 py-2.5 text-base font-medium text-muted hover:bg-gray-100 hover:text-foreground${hasError ? " text-red-700 ring-1 ring-red-300" : ""}`
                           }
                         >
                           {step.title ||
@@ -1140,7 +1152,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                       );
                     })}
                   </div>
-                  <p className="text-xs text-muted">
+                  <p className="text-sm text-muted">
                     {t("stepOf", {
                       current: stepIndex + 1,
                       total: steps.length,

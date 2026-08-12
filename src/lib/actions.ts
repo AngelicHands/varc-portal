@@ -1079,6 +1079,8 @@ export async function saveFormDefinitionAction(
         allowedExtensions: normalizeFormFieldAllowedExtensions(
           field.allowedExtensions,
         ),
+        buttonLabel: field.buttonLabel.trim(),
+        emptyFileLabel: field.emptyFileLabel.trim(),
         typingStyle: normalizeFormFieldTypingStyles(field.typingStyle),
         typingAlignment: normalizeFormFieldTypingAlignment(
           field.typingAlignment,

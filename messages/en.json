@@ -58,6 +58,8 @@
     "selectPlaceholder": "Select…",
     "sending": "Sending…",
     "remove": "Remove",
+    "chooseFile": "Choose file",
+    "noFileSelected": "No file selected",
     "uploading": "Uploading…",
     "uploadFailed": "Upload failed",
     "fileTooLarge": "File must be under {mb}MB",

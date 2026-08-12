@@ -186,6 +186,8 @@ function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
   typing_alignment:center;
   typing_style:bold;
   allowed_extensions:.pdf,.doc,.docx;
+  button_label:"…";
+  empty_label:"…";
   suggestion:"…"
 }]`}
             </pre>
@@ -206,7 +208,7 @@ Topics:
 #![checkbox:{topics}:{options:[{value:"dx",label:"DX",checked:true},{value:"comms",label:"Emergency comms"}]; suggestion:"Select all that apply"}]
 Agree: #![checkbox:{agree}:{checked:true; placeholder:"I agree to the terms"}]
 ID photo: #![image:{id_photo}:{required:true; suggestion:"JPEG or PNG"}]
-Resume: #![file:{resume}:{suggestion:"PDF preferred"; allowed_extensions:.pdf,.doc,.docx}]
+Resume: #![file:{resume}:{suggestion:"PDF preferred"; allowed_extensions:.pdf,.doc,.docx; button_label:"Chọn tệp"; empty_label:"Chưa chọn tệp"}]
 Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}]; size:medium}]`}
             </pre>
             <p>
@@ -265,6 +267,16 @@ Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value
               <li>
                 <code>allowed_extensions:.pdf,.docx,.xlsx</code> — limit upload
                 fields to specific file extensions
+              </li>
+              <li>
+                <code>button_label:&quot;…&quot;</code> — custom choose-file
+                button text for <code>image</code> / <code>file</code> (falls
+                back to locale default)
+              </li>
+              <li>
+                <code>empty_label:&quot;…&quot;</code> — custom “no file
+                selected” text for <code>image</code> / <code>file</code> (
+                <code>no_file_selected</code> also accepted)
               </li>
               <li>
                 <code>checked:true</code> — default on for a single yes/no
@@ -365,6 +377,8 @@ function mapLocaleFields(
         width?: string | null;
         style?: FormFieldDefinition["style"];
         allowedExtensions?: FormFieldDefinition["allowedExtensions"] | null;
+        buttonLabel?: string | null;
+        emptyFileLabel?: string | null;
         typingStyle?: FormFieldDefinition["typingStyle"] | null;
         typingAlignment?: FormFieldDefinition["typingAlignment"] | null;
         dateFormat?: string | null;
@@ -392,6 +406,8 @@ function mapLocaleFields(
     allowedExtensions: normalizeFormFieldAllowedExtensions(
       field.allowedExtensions,
     ),
+    buttonLabel: field.buttonLabel ?? "",
+    emptyFileLabel: field.emptyFileLabel ?? "",
     typingStyle: normalizeFormFieldTypingStyles(field.typingStyle),
     typingAlignment: normalizeFormFieldTypingAlignment(field.typingAlignment),
     dateFormat: normalizeFormDateFormat(field.dateFormat),
@@ -1105,6 +1121,16 @@ export function FormDefinitionEditor({
                             )
                               ? current.allowedExtensions
                               : [],
+                            buttonLabel: supportsFormFieldAllowedExtensions(
+                              nextType,
+                            )
+                              ? current.buttonLabel
+                              : "",
+                            emptyFileLabel: supportsFormFieldAllowedExtensions(
+                              nextType,
+                            )
+                              ? current.emptyFileLabel
+                              : "",
                             checked:
                               nextType === "checkbox" ? current.checked : false,
                             options:
@@ -1244,29 +1270,63 @@ export function FormDefinitionEditor({
                     ) : null}
 
                     {supportsFormFieldAllowedExtensions(field.type) ? (
-                      <label className="block md:col-span-2">
-                        <span className="mb-1 block text-sm font-medium">
-                          Allowed file extensions
-                        </span>
-                        <input
-                          value={field.allowedExtensions.join(", ")}
-                          onChange={(e) =>
-                            setField(field.id, (current) => ({
-                              ...current,
-                              allowedExtensions:
-                                normalizeFormFieldAllowedExtensions(
-                                  e.target.value,
-                                ),
-                            }))
-                          }
-                          placeholder=".pdf, .docx, .xlsx"
-                          className="w-full rounded border border-gray-300 px-3 py-2"
-                        />
-                        <p className="mt-1 text-xs text-muted">
-                          Optional. Leave empty to allow any supported upload
-                          type for this field.
-                        </p>
-                      </label>
+                      <>
+                        <label className="block md:col-span-2">
+                          <span className="mb-1 block text-sm font-medium">
+                            Allowed file extensions
+                          </span>
+                          <input
+                            value={field.allowedExtensions.join(", ")}
+                            onChange={(e) =>
+                              setField(field.id, (current) => ({
+                                ...current,
+                                allowedExtensions:
+                                  normalizeFormFieldAllowedExtensions(
+                                    e.target.value,
+                                  ),
+                              }))
+                            }
+                            placeholder=".pdf, .docx, .xlsx"
+                            className="w-full rounded border border-gray-300 px-3 py-2"
+                          />
+                          <p className="mt-1 text-xs text-muted">
+                            Optional. Leave empty to allow any supported upload
+                            type for this field.
+                          </p>
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-sm font-medium">
+                            Choose-file button label
+                          </span>
+                          <input
+                            value={field.buttonLabel}
+                            onChange={(e) =>
+                              setField(field.id, (current) => ({
+                                ...current,
+                                buttonLabel: e.target.value,
+                              }))
+                            }
+                            placeholder="Leave empty for locale default"
+                            className="w-full rounded border border-gray-300 px-3 py-2"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-sm font-medium">
+                            Empty-file label
+                          </span>
+                          <input
+                            value={field.emptyFileLabel}
+                            onChange={(e) =>
+                              setField(field.id, (current) => ({
+                                ...current,
+                                emptyFileLabel: e.target.value,
+                              }))
+                            }
+                            placeholder="Leave empty for locale default"
+                            className="w-full rounded border border-gray-300 px-3 py-2"
+                          />
+                        </label>
+                      </>
                     ) : null}
 
                     {field.type === "date" || field.type === "date_time" ? (

@@ -102,6 +102,8 @@ function mapFields(
     allowedExtensions: normalizeFormFieldAllowedExtensions(
       field.allowedExtensions,
     ),
+    buttonLabel: field.buttonLabel ?? "",
+    emptyFileLabel: field.emptyFileLabel ?? "",
     dateFormat: normalizeFormDateFormat(field.dateFormat),
     timeFormat: normalizeFormTimeFormat(field.timeFormat),
     checked: Boolean(field.checked),

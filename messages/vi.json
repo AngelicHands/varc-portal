@@ -58,6 +58,8 @@
     "selectPlaceholder": "Chọn…",
     "sending": "Đang gửi…",
     "remove": "Xóa",
+    "chooseFile": "Chọn tệp",
+    "noFileSelected": "Chưa chọn tệp",
     "uploading": "Đang tải lên…",
     "uploadFailed": "Tải lên thất bại",
     "fileTooLarge": "Tệp phải nhỏ hơn {mb}MB",
