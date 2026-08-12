@@ -138,6 +138,8 @@ export async function sendFormSubmissionCopyToRequestor(params: {
   form: PublicFormDefinition;
   payload: Record<string, FormSubmissionValue>;
   submissionId?: string | null;
+  /** Client IP (or similar) for per-connection rate limits. */
+  clientKey?: string;
 }): Promise<void> {
   try {
     const to = findRequestorEmail(params.form.fields, params.payload);
@@ -145,7 +147,10 @@ export async function sendFormSubmissionCopyToRequestor(params: {
     if (!isCloudflareMailConfigured()) return;
 
     const message = buildFormSubmissionCopyEmail(params);
-    const result = await sendCloudflareMail({ to, ...message });
+    const result = await sendCloudflareMail(
+      { to, ...message },
+      { clientKey: params.clientKey },
+    );
 
     await recordMailMessage({
       to,

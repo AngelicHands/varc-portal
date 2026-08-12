@@ -90,7 +90,15 @@ CF_MAIL_ACCOUNT_ID=your-cloudflare-account-id
 CF_MAIL_FROM=noreply@yourdomain.com          # domain must be onboarded for Email Sending
 ```
 
-Uses the Cloudflare Email Sending REST API (`POST /accounts/{account_id}/email/sending/send`). If any variable is unset, submissions still succeed and no mail is sent. Add the same keys to the Kubernetes secret (see `deploy/docs/secret.example.yaml`).
+Optional rate limits (require `VALKEY_URL`):
+
+```bash
+CF_MAIL_MAX=500                  # max sends per rolling 24h for the whole app
+CF_MAIL_RATE_LIMIT=5             # max sends per client IP per window
+CF_MAIL_RATE_LIMIT_WINDOW=1h     # window: 30s, 5m, 1h, 1d, etc.
+```
+
+Uses the Cloudflare Email Sending REST API (`POST /accounts/{account_id}/email/sending/send`). If any mail variable is unset, submissions still succeed and no mail is sent. Add secrets to the Kubernetes secret (see `deploy/docs/secret.example.yaml`); rate-limit keys can go in the ConfigMap.
 
 ## Docker Compose (app + Mongo)
 

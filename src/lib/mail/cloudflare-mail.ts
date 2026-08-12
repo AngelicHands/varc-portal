@@ -1,10 +1,16 @@
 import { logServerError } from "@/lib/safe-error";
+import { allowMailSend } from "@/lib/mail/rate-limit";
 
 export type SendMailInput = {
   to: string;
   subject: string;
   text: string;
   html?: string;
+};
+
+export type SendMailOptions = {
+  /** Rate-limit bucket key — typically client IP from the triggering request. */
+  clientKey?: string;
 };
 
 type CloudflareSendResult = {
@@ -36,6 +42,7 @@ export function isCloudflareMailConfigured() {
  */
 export async function sendCloudflareMail(
   input: SendMailInput,
+  options: SendMailOptions = {},
 ): Promise<{ ok: true; from: string } | { ok: false; error: string; from: string }> {
   const { apiToken, accountId, from } = getCloudflareMailConfig();
   if (!apiToken || !accountId || !from) {
@@ -45,6 +52,11 @@ export async function sendCloudflareMail(
   const to = input.to.trim();
   if (!to) {
     return { ok: false, error: "Missing recipient", from };
+  }
+
+  const rateLimit = await allowMailSend(options.clientKey ?? "");
+  if (!rateLimit.allowed) {
+    return { ok: false, error: rateLimit.reason, from };
   }
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/email/sending/send`;
