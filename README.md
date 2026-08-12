@@ -78,7 +78,19 @@ Production should use `STORAGE_DRIVER=s3` (see `deploy/k8s/configmap.yaml` + S3 
 
 ## Google login
 
-Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. New Google users get role `user`. A `system_admin` grants `administrator` under **Admin → Users**. Role changes apply on the next sign-in.
+Optional. Set both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (or Auth.js aliases `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`). The Google button appears on `/admin/login` when configured. New Google users get role `user`. A `system_admin` grants `administrator` under **Admin → Users**. Role changes apply on the next sign-in.
+
+## Form confirmation email (Cloudflare)
+
+When a public form is submitted, the portal can email a thank-you note plus a copy of the answers to the requestor (first field with type `email`).
+
+```bash
+CF_MAIL_API_TOKEN=your-cloudflare-api-token   # Email Sending: Edit
+CF_MAIL_ACCOUNT_ID=your-cloudflare-account-id
+CF_MAIL_FROM=noreply@yourdomain.com          # domain must be onboarded for Email Sending
+```
+
+Uses the Cloudflare Email Sending REST API (`POST /accounts/{account_id}/email/sending/send`). If any variable is unset, submissions still succeed and no mail is sent. Add the same keys to the Kubernetes secret (see `deploy/docs/secret.example.yaml`).
 
 ## Docker Compose (app + Mongo)
 

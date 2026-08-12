@@ -7,6 +7,7 @@ import {
   getPublishedFormById,
   validateSubmissionPayload,
 } from "@/lib/forms";
+import { sendFormSubmissionCopyToRequestor } from "@/lib/mail/form-submission-email";
 
 type Payload = {
   values?: Record<string, unknown>;
@@ -65,12 +66,19 @@ export async function POST(
     );
   }
 
-  await createFormSubmission({
+  const submission = await createFormSubmission({
     form,
     payload: validated.data,
     pagePath: body.pagePath ?? "",
     userAgent,
     ipHash: ip === "unknown" ? "" : hashIp(ip),
+  });
+
+  // Best-effort confirmation to the requestor — never fails the submission.
+  await sendFormSubmissionCopyToRequestor({
+    form,
+    payload: validated.data,
+    submissionId: submission.id,
   });
 
   return NextResponse.json({

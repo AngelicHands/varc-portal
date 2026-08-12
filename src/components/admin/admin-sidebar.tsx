@@ -199,6 +199,17 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
+        href: "/admin/mailbox",
+        label: "Mailbox",
+        flag: "site",
+        icon: (
+          <Icon>
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="m3 7 9 6 9-6" />
+          </Icon>
+        ),
+      },
+      {
         href: "/admin/templates",
         label: "Templates",
         flag: "site",

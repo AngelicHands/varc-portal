@@ -95,7 +95,8 @@ export default async function proxy(req: NextRequest) {
       if (
         (pathMatches(pathname, "/admin/settings") ||
           pathMatches(pathname, "/admin/pages") ||
-          pathMatches(pathname, "/admin/menu")) &&
+          pathMatches(pathname, "/admin/menu") ||
+          pathMatches(pathname, "/admin/mailbox")) &&
         !canManageSite(role)
       ) {
         return NextResponse.redirect(adminHome);

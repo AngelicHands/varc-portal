@@ -70,7 +70,6 @@ const FormDefinitionSchema = new Schema(
       type: String,
       required: true,
       trim: true,
-      index: true,
     },
     /** Denormalized from locales.vi for list sorting / legacy reads. */
     name: { type: String, required: true, trim: true },
