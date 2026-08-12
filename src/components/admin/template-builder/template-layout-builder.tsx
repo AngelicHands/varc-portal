@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type DragEvent } from "react";
+import { useMemo, useRef, useState, type DragEvent } from "react";
 import {
   createBlock,
   createSection,
@@ -65,7 +65,25 @@ type DragPayload =
 type DropTarget =
   | { kind: "section-end"; sectionId: string }
   | { kind: "block-before"; sectionId: string; blockId: string }
-  | { kind: "section-reorder"; sectionId: string };
+  | { kind: "section-before"; sectionId: string }
+  | { kind: "section-after" };
+
+function moveItem<T>(items: T[], from: number, to: number): T[] {
+  if (
+    from === to ||
+    from < 0 ||
+    to < 0 ||
+    from >= items.length ||
+    to > items.length
+  ) {
+    return items;
+  }
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  const insertAt = from < to ? to - 1 : to;
+  next.splice(insertAt, 0, item!);
+  return next;
+}
 
 function cloneLayout(layout: TemplateLayout): TemplateLayout {
   return structuredClone(layout);
@@ -137,6 +155,7 @@ export function TemplateLayoutBuilder({
     blockId: string;
   } | null>(null);
   const [drag, setDrag] = useState<DragPayload | null>(null);
+  const dragRef = useRef<DragPayload | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
 
@@ -149,7 +168,15 @@ export function TemplateLayoutBuilder({
       : null;
   }, [layout, selected]);
 
+  function beginDrag(payload: DragPayload, e: DragEvent) {
+    dragRef.current = payload;
+    setDrag(payload);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", "template-layout-drag");
+  }
+
   function clearDrag() {
+    dragRef.current = null;
     setDrag(null);
     setDropTarget(null);
   }
@@ -189,17 +216,23 @@ export function TemplateLayoutBuilder({
   }
 
   function applyBlockDrop(target: DropTarget) {
-    if (!drag || drag.kind === "section") return;
-
-    if (target.kind === "section-reorder") return;
+    const current = dragRef.current;
+    if (
+      !current ||
+      current.kind === "section" ||
+      target.kind === "section-before" ||
+      target.kind === "section-after"
+    ) {
+      return;
+    }
 
     let working = cloneLayout(layout);
     let block: TemplateBlock | null = null;
 
-    if (drag.kind === "palette") {
-      block = createFromPalette(drag.item);
+    if (current.kind === "palette") {
+      block = createFromPalette(current.item);
     } else {
-      const removed = removeBlock(working, drag.sectionId, drag.blockId);
+      const removed = removeBlock(working, current.sectionId, current.blockId);
       working = removed.layout;
       block = removed.block;
     }
@@ -226,23 +259,59 @@ export function TemplateLayoutBuilder({
     clearDrag();
   }
 
-  function onSectionReorderDrop(targetSectionId: string) {
-    if (!drag || drag.kind !== "section") return;
-    const from = layout.sections.findIndex((s) => s.id === drag.sectionId);
-    const to = layout.sections.findIndex((s) => s.id === targetSectionId);
-    if (from < 0 || to < 0 || from === to) {
+  function onSectionReorderDrop(target: DropTarget) {
+    const current = dragRef.current;
+    if (!current || current.kind !== "section") return;
+
+    const from = layout.sections.findIndex((s) => s.id === current.sectionId);
+    if (from < 0) {
       clearDrag();
       return;
     }
-    const sections = [...layout.sections];
-    const [item] = sections.splice(from, 1);
-    sections.splice(to, 0, item!);
-    onChange({ sections });
+
+    let to: number;
+    if (target.kind === "section-after") {
+      to = layout.sections.length;
+    } else if (target.kind === "section-before") {
+      to = layout.sections.findIndex((s) => s.id === target.sectionId);
+    } else {
+      clearDrag();
+      return;
+    }
+
+    if (to < 0) {
+      clearDrag();
+      return;
+    }
+
+    onChange({ sections: moveItem(layout.sections, from, to) });
     clearDrag();
   }
 
   function allowBlockDrop(e: DragEvent, target: DropTarget) {
-    if (!drag || drag.kind === "section") return;
+    const current = dragRef.current;
+    if (
+      !current ||
+      current.kind === "section" ||
+      target.kind === "section-before" ||
+      target.kind === "section-after"
+    ) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTarget(target);
+  }
+
+  function allowSectionDrop(e: DragEvent, target: DropTarget) {
+    const current = dragRef.current;
+    if (!current || current.kind !== "section") return;
+    if (
+      target.kind === "section-before" &&
+      current.sectionId === target.sectionId
+    ) {
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     setDropTarget(target);
@@ -261,6 +330,7 @@ export function TemplateLayoutBuilder({
   }
 
   const isDraggingBlock = drag?.kind === "block" || drag?.kind === "palette";
+  const isDraggingSection = drag?.kind === "section";
 
   return (
     <div className="grid gap-4 lg:grid-cols-[200px_minmax(0,1fr)_280px]">
@@ -274,7 +344,7 @@ export function TemplateLayoutBuilder({
               key={item.id}
               type="button"
               draggable
-              onDragStart={() => setDrag({ kind: "palette", item })}
+              onDragStart={(e) => beginDrag({ kind: "palette", item }, e)}
               onDragEnd={clearDrag}
               onClick={() => addPaletteItem(item)}
               className="cursor-grab rounded border border-gray-200 px-2 py-1.5 text-left text-sm hover:bg-gray-50 active:cursor-grabbing"
@@ -308,66 +378,86 @@ export function TemplateLayoutBuilder({
           const dropOnEnd =
             dropTarget?.kind === "section-end" &&
             dropTarget.sectionId === section.id;
-          const dropReorder =
-            dropTarget?.kind === "section-reorder" &&
+          const dropBeforeSection =
+            dropTarget?.kind === "section-before" &&
             dropTarget.sectionId === section.id;
 
           return (
-            <div
-              key={section.id}
-              onDragOver={(e) => {
-                if (drag?.kind === "section") {
-                  e.preventDefault();
-                  setDropTarget({
-                    kind: "section-reorder",
-                    sectionId: section.id,
-                  });
-                  return;
-                }
-                if (isDraggingBlock) {
-                  allowBlockDrop(e, {
-                    kind: "section-end",
-                    sectionId: section.id,
-                  });
-                }
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (drag?.kind === "section") {
-                  onSectionReorderDrop(section.id);
-                  return;
-                }
-                applyBlockDrop({ kind: "section-end", sectionId: section.id });
-              }}
-              onDragLeave={() => {
-                setDropTarget((current) =>
-                  current?.sectionId === section.id ? null : current,
-                );
-              }}
-              className={`rounded-lg border bg-white p-3 transition ${
-                dropOnEnd
-                  ? "border-gray-900 ring-2 ring-gray-900/20"
-                  : dropReorder
-                    ? "border-blue-500 ring-2 ring-blue-500/20"
-                    : "border-gray-200"
-              }`}
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  draggable
-                  onDragStart={(e) => {
+            <div key={section.id} className="space-y-1">
+              {isDraggingSection ? (
+                <div
+                  onDragOver={(e) =>
+                    allowSectionDrop(e, {
+                      kind: "section-before",
+                      sectionId: section.id,
+                    })
+                  }
+                  onDrop={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
-                    setDrag({ kind: "section", sectionId: section.id });
+                    onSectionReorderDrop({
+                      kind: "section-before",
+                      sectionId: section.id,
+                    });
                   }}
-                  onDragEnd={clearDrag}
-                  className="cursor-grab text-left text-xs font-medium text-gray-500 active:cursor-grabbing"
-                  title="Drag to reorder sections"
-                >
-                  ⠿ Section · {section.blocks.length} block
-                  {section.blocks.length === 1 ? "" : "s"}
-                </button>
+                  className={`rounded transition ${
+                    dropBeforeSection
+                      ? "h-2 bg-blue-500"
+                      : "h-2 bg-transparent hover:bg-blue-100"
+                  }`}
+                  aria-hidden
+                />
+              ) : null}
+              <div
+                onDragOver={(e) => {
+                  if (isDraggingSection) return;
+                  if (isDraggingBlock) {
+                    allowBlockDrop(e, {
+                      kind: "section-end",
+                      sectionId: section.id,
+                    });
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (isDraggingSection) return;
+                  applyBlockDrop({ kind: "section-end", sectionId: section.id });
+                }}
+                onDragLeave={() => {
+                  setDropTarget((current) => {
+                    if (!current || current.kind === "section-before") {
+                      return current;
+                    }
+                    if (current.kind === "section-after") return current;
+                    return current.sectionId === section.id ? null : current;
+                  });
+                }}
+                className={`rounded-lg border bg-white p-3 transition ${
+                  dropOnEnd
+                    ? "border-gray-900 ring-2 ring-gray-900/20"
+                    : "border-gray-200"
+                }`}
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div
+                    draggable
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      beginDrag({ kind: "section", sectionId: section.id }, e);
+                    }}
+                    onDragEnd={clearDrag}
+                    className="flex flex-1 cursor-grab items-center gap-1.5 rounded px-1 py-0.5 text-left text-xs font-medium text-gray-500 hover:bg-gray-50 active:cursor-grabbing"
+                    title="Drag to reorder sections"
+                  >
+                    <span aria-hidden className="select-none">
+                      ⠿
+                    </span>
+                    <span>
+                      Section · {section.blocks.length} block
+                      {section.blocks.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
                 <button
                   type="button"
                   className="text-xs text-red-600 hover:underline"
@@ -438,11 +528,14 @@ export function TemplateLayoutBuilder({
                           draggable
                           onDragStart={(e: DragEvent) => {
                             e.stopPropagation();
-                            setDrag({
-                              kind: "block",
-                              sectionId: section.id,
-                              blockId: block.id,
-                            });
+                            beginDrag(
+                              {
+                                kind: "block",
+                                sectionId: section.id,
+                                blockId: block.id,
+                              },
+                              e,
+                            );
                           }}
                           onDragEnd={clearDrag}
                           onClick={() =>
@@ -527,9 +620,26 @@ export function TemplateLayoutBuilder({
                     : "Drop here to add at end of section"}
                 </div>
               ) : null}
+              </div>
             </div>
           );
         })}
+        {isDraggingSection && layout.sections.length > 0 ? (
+          <div
+            onDragOver={(e) => allowSectionDrop(e, { kind: "section-after" })}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSectionReorderDrop({ kind: "section-after" });
+            }}
+            className={`rounded transition ${
+              dropTarget?.kind === "section-after"
+                ? "h-2 bg-blue-500"
+                : "h-2 bg-transparent hover:bg-blue-100"
+            }`}
+            aria-hidden
+          />
+        ) : null}
       </div>
 
       <aside className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">

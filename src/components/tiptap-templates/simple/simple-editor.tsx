@@ -12,6 +12,7 @@ import {
 import { StarterKit } from "@tiptap/starter-kit"
 import { TaskItem, TaskList } from "@tiptap/extension-list"
 import { TextAlign } from "@tiptap/extension-text-align"
+import { TextStyle, FontFamily } from "@tiptap/extension-text-style"
 import { Typography } from "@tiptap/extension-typography"
 import { Highlight } from "@tiptap/extension-highlight"
 import { Subscript } from "@tiptap/extension-subscript"
@@ -49,6 +50,7 @@ import "@/components/tiptap-node/paragraph-node/paragraph-node.scss"
 
 // --- Tiptap UI ---
 import { HeadingDropdownMenu } from "@/components/tiptap-ui/heading-dropdown-menu"
+import { FontFamilyDropdown } from "@/components/tiptap-ui/font-family-dropdown"
 import { FileUploadButton } from "@/components/tiptap-ui/file-upload-button"
 import { ImageUploadButton } from "@/components/tiptap-ui/image-upload-button"
 import { MediaLibraryButton } from "@/components/tiptap-ui/media-library-button"
@@ -150,6 +152,7 @@ const MainToolbarContent = ({
 
       <ToolbarGroup>
         <HeadingDropdownMenu modal={false} levels={[1, 2, 3, 4]} />
+        <FontFamilyDropdown />
         <ListDropdownMenu
           modal={false}
           types={["bulletList", "orderedList", "taskList"]}
@@ -367,6 +370,8 @@ function SimpleEditorClient({
         },
       }),
       HorizontalRule,
+      TextStyle,
+      FontFamily,
       TextAlign.configure({ types: ["heading", "paragraph", "image"] }),
       TaskList,
       TaskItem.configure({ nested: true }),
