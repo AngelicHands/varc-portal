@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
 import {
@@ -300,6 +301,8 @@ Photo: #![image:{id_photo}:{required:true}]`}
 
 type Props = {
   formId?: string;
+  /** Shown in front of Save draft when editing an existing form. */
+  newSubmissionCount?: number;
   initial: FormDefinitionFormValues & {
     key?: string;
   };
@@ -478,7 +481,11 @@ function CollapseIcon() {
   );
 }
 
-export function FormDefinitionEditor({ formId, initial }: Props) {
+export function FormDefinitionEditor({
+  formId,
+  newSubmissionCount = 0,
+  initial,
+}: Props) {
   const router = useRouter();
   const { ask, modal } = useConfirm();
   const [pending, startTransition] = useTransition();
@@ -763,7 +770,16 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
               </span>
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {formId ? (
+              <Link
+                href={`/admin/forms/${formId}/submissions`}
+                className="rounded border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
+              >
+                View submissions
+                {newSubmissionCount > 0 ? ` (${newSubmissionCount} new)` : ""}
+              </Link>
+            ) : null}
             <button
               type="button"
               disabled={pending}

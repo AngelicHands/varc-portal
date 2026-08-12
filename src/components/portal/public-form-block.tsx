@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentPropsWithoutRef,
+} from "react";
 import { useTranslations } from "next-intl";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkBreaks from "remark-breaks";
@@ -262,6 +269,113 @@ type FieldRenderContext = {
     checked: boolean,
   ) => void;
   selectPlaceholder: string;
+};
+
+const FormFieldRenderContext = createContext<FieldRenderContext | null>(null);
+
+function useFormFieldRenderContext() {
+  const ctx = useContext(FormFieldRenderContext);
+  if (!ctx) {
+    throw new Error("Form field render context is missing");
+  }
+  return ctx;
+}
+
+/** Stable markdown components — inline factories remount inputs on every keystroke. */
+function FormMarkdownParagraph({
+  children,
+}: {
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="my-[1em] whitespace-pre-wrap [tab-size:4]">{children}</div>
+  );
+}
+
+/** Keep markdown list numbers (e.g. `9. abc` → start at 9, not reset to 1). */
+function FormMarkdownOrderedList({
+  start,
+  children,
+  style,
+  ...props
+}: ComponentPropsWithoutRef<"ol">) {
+  const startNum = Math.max(1, Number(start) || 1);
+  return (
+    <ol
+      {...props}
+      start={startNum}
+      style={{
+        ...style,
+        // Custom ::before markers ignore native start; seed the CSS counter.
+        counterReset: `prose-ol ${startNum - 1}`,
+      }}
+    >
+      {children}
+    </ol>
+  );
+}
+
+function FormMarkdownFieldImage({ src }: { src?: string | Blob }) {
+  const ctx = useFormFieldRenderContext();
+  if (typeof src !== "string" || !src.startsWith(FORM_FIELD_LINK_PREFIX)) {
+    return null;
+  }
+  const tokenIndex = Number.parseInt(
+    src.slice(FORM_FIELD_LINK_PREFIX.length),
+    10,
+  );
+  if (Number.isNaN(tokenIndex)) return null;
+  const token = ctx.tokensByIndex.get(tokenIndex);
+  const field = token ? ctx.fieldsByName.get(token.name) : null;
+  const fill =
+    field != null &&
+    isFillWidthFieldType(field.type) &&
+    field.width === "full-width";
+  const sized =
+    field != null &&
+    isFillWidthFieldType(field.type) &&
+    field.width !== "full-width";
+  return (
+    <span
+      className={
+        fill
+          ? "not-prose form-field-slot"
+          : sized
+            ? "not-prose form-field-sized"
+            : "not-prose form-field-inline"
+      }
+    >
+      {renderFormFieldToken(tokenIndex, ctx)}
+    </span>
+  );
+}
+
+function FormMarkdownChoiceInput({
+  type,
+  checked,
+  ...props
+}: ComponentPropsWithoutRef<"input">) {
+  if (type === "checkbox") {
+    return (
+      <input
+        type="checkbox"
+        checked={Boolean(checked)}
+        disabled
+        readOnly
+        className="form-choice-input"
+        {...props}
+      />
+    );
+  }
+  return <input type={type} checked={checked} {...props} />;
+}
+
+const formMarkdownComponents = {
+  // Avoid <p> wrapping fields — invalid nesting with controls breaks hydration.
+  p: FormMarkdownParagraph,
+  ol: FormMarkdownOrderedList,
+  img: FormMarkdownFieldImage,
+  input: FormMarkdownChoiceInput,
 };
 
 function withSuggestion(
@@ -635,72 +749,23 @@ function FormMarkdownLayout({
   };
 
   return (
-    <div
-      className="prose-article-wide max-w-none text-foreground"
-      style={formStepFontStyle(font)}
-    >
-      {title ? (
-        <h3 className="!mt-0 font-display text-xl text-foreground">{title}</h3>
-      ) : null}
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        urlTransform={allowFormFieldUrl}
-        components={{
-          // Avoid <p> wrapping fields — invalid nesting with controls breaks hydration.
-          p: ({ children }) => <div className="my-[1em]">{children}</div>,
-          img: ({ src }) => {
-            if (typeof src !== "string" || !src.startsWith(FORM_FIELD_LINK_PREFIX)) {
-              return null;
-            }
-            const tokenIndex = Number.parseInt(
-              src.slice(FORM_FIELD_LINK_PREFIX.length),
-              10,
-            );
-            if (Number.isNaN(tokenIndex)) return null;
-            const token = ctx.tokensByIndex.get(tokenIndex);
-            const field = token ? ctx.fieldsByName.get(token.name) : null;
-            const fill =
-              field != null &&
-              isFillWidthFieldType(field.type) &&
-              field.width === "full-width";
-            const sized =
-              field != null &&
-              isFillWidthFieldType(field.type) &&
-              field.width !== "full-width";
-            return (
-              <span
-                className={
-                  fill
-                    ? "not-prose form-field-slot"
-                    : sized
-                      ? "not-prose form-field-sized"
-                      : "not-prose form-field-inline"
-                }
-              >
-                {renderFormFieldToken(tokenIndex, ctx)}
-              </span>
-            );
-          },
-          input: ({ type, checked, ...props }) => {
-            if (type === "checkbox") {
-              return (
-                <input
-                  type="checkbox"
-                  checked={Boolean(checked)}
-                  disabled
-                  readOnly
-                  className="form-choice-input"
-                  {...props}
-                />
-              );
-            }
-            return <input type={type} {...props} />;
-          },
-        }}
+    <FormFieldRenderContext.Provider value={ctx}>
+      <div
+        className="prose-article-wide max-w-none whitespace-pre-wrap text-foreground [tab-size:4]"
+        style={formStepFontStyle(font)}
       >
-        {markdown}
-      </ReactMarkdown>
-    </div>
+        {title ? (
+          <h3 className="!mt-0 font-display text-xl text-foreground">{title}</h3>
+        ) : null}
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkBreaks]}
+          urlTransform={allowFormFieldUrl}
+          components={formMarkdownComponents}
+        >
+          {markdown}
+        </ReactMarkdown>
+      </div>
+    </FormFieldRenderContext.Provider>
   );
 }
 

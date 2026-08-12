@@ -154,6 +154,7 @@ button:disabled,
   margin: 1em 0;
   padding-left: 0;
   list-style: none;
+  /* Default start at 1; overridden inline when markdown uses e.g. `9. …`. */
   counter-reset: prose-ol;
 }
 

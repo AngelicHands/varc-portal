@@ -146,13 +146,23 @@ export function splitFormMarkdownSteps(markdown: string): FormMarkdownLayout {
   };
 }
 
+export function unescapeFormMarkdownText(markdown: string): string {
+  // Convert authoring escapes in prose: \n → newline, \t → tab, \\ → \.
+  // Do not touch unknown sequences (keep `\x` as written).
+  return markdown.replace(/\\([nt\\])/g, (_, ch: string) => {
+    if (ch === "n") return "\n";
+    if (ch === "t") return "\t";
+    return "\\";
+  });
+}
+
 export function preprocessFormSchemaMarkdown(markdown: string): {
   markdown: string;
   tokens: FormMarkdownToken[];
 } {
   const tokens: FormMarkdownToken[] = [];
 
-  const processed = replaceMarkdownFieldTokens(markdown, (raw, tokenIndex) => {
+  const withFields = replaceMarkdownFieldTokens(markdown, (raw, tokenIndex) => {
     const parsed = parseMarkdownFieldToken(raw);
     if (!parsed) return raw;
     tokens.push({
@@ -163,5 +173,6 @@ export function preprocessFormSchemaMarkdown(markdown: string): {
     return `![](${FORM_FIELD_LINK_PREFIX}${tokenIndex})`;
   });
 
-  return { markdown: processed, tokens };
+  // Unescape after field tokens are replaced so attrs like placeholder stay intact.
+  return { markdown: unescapeFormMarkdownText(withFields), tokens };
 }
