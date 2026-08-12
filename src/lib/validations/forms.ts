@@ -176,6 +176,30 @@ export function normalizeFormFieldTypingAlignment(
   return "left";
 }
 
+export function normalizeFormFieldAllowedExtensions(
+  value: unknown,
+): string[] {
+  const rawValues = Array.isArray(value)
+    ? value
+    : String(value ?? "")
+        .split(/[,\n|]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+  const normalized: string[] = [];
+  for (const raw of rawValues) {
+    const cleaned = String(raw)
+      .trim()
+      .toLowerCase()
+      .replace(/^\.+/, "")
+      .replace(/[^a-z0-9]+/g, "");
+    if (!cleaned) continue;
+    const ext = `.${cleaned}`;
+    if (!normalized.includes(ext)) normalized.push(ext);
+  }
+  return normalized;
+}
+
 export function supportsFormFieldTypingStyle(type: FormFieldType): boolean {
   return (
     type === "text" ||
@@ -186,6 +210,27 @@ export function supportsFormFieldTypingStyle(type: FormFieldType): boolean {
     type === "time" ||
     type === "date_time"
   );
+}
+
+export function supportsFormFieldAllowedExtensions(type: FormFieldType): boolean {
+  return type === "image" || type === "file";
+}
+
+export function fileExtensionFromName(name: string): string {
+  const trimmed = name.trim().toLowerCase();
+  const dot = trimmed.lastIndexOf(".");
+  if (dot <= 0 || dot === trimmed.length - 1) return "";
+  return trimmed.slice(dot);
+}
+
+export function matchesAllowedUploadExtension(
+  fileName: string,
+  allowedExtensions: string[] | null | undefined,
+): boolean {
+  const normalized = normalizeFormFieldAllowedExtensions(allowedExtensions ?? []);
+  if (normalized.length === 0) return true;
+  const extension = fileExtensionFromName(fileName);
+  return extension ? normalized.includes(extension) : false;
 }
 
 export function normalizeFormDateFormat(value: unknown): FormDateFormat {
@@ -462,6 +507,7 @@ export const formFieldSchema = z
       .array(z.enum(FORM_FIELD_TYPING_STYLES))
       .default([]),
     typingAlignment: z.enum(FORM_FIELD_TYPING_ALIGNMENTS).default("left"),
+    allowedExtensions: z.array(z.string().trim().min(2).max(20)).default([]),
     dateFormat: formDateFormatSchema.default("yyyy-mm-dd"),
     timeFormat: formTimeFormatSchema.default("HH:mm"),
     /** Default checked for a single yes/no checkbox (no options). */
@@ -507,6 +553,17 @@ export const formFieldSchema = z
         message:
           "typingAlignment is only supported for text-like fields (text, textarea, email, phone, date, time, date_time)",
         path: ["typingAlignment"],
+      });
+    }
+    if (
+      field.allowedExtensions.length > 0 &&
+      !supportsFormFieldAllowedExtensions(field.type)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "allowedExtensions is only supported for image and file upload fields",
+        path: ["allowedExtensions"],
       });
     }
     if (
@@ -867,6 +924,7 @@ export type ParsedMarkdownFieldToken = {
   style: FormFieldStyle;
   typingStyle: FormFieldTypingStyle[];
   typingAlignment: FormFieldTypingAlignment;
+  allowedExtensions: string[];
   width: FormFieldWidth;
   dateFormat: FormDateFormat;
   timeFormat: FormTimeFormat;
@@ -1258,6 +1316,7 @@ export function parseMarkdownFieldToken(
   let style: FormFieldStyle = "default";
   let typingStyle: FormFieldTypingStyle[] = [];
   let typingAlignment: FormFieldTypingAlignment = "left";
+  let allowedExtensions: string[] = [];
   /** Unset size keeps fill-the-line behavior for existing markdown layouts. */
   let width: FormFieldWidth = "full-width";
   let dateFormat: FormDateFormat = "yyyy-mm-dd";
@@ -1289,6 +1348,9 @@ export function parseMarkdownFieldToken(
     attrs.typing_alignment ??
       attrs.typingAlignment ??
       attrs.typing_alligment,
+  );
+  allowedExtensions = normalizeFormFieldAllowedExtensions(
+    attrs.allowed_extensions ?? attrs.allowedExtensions,
   );
   const rawSize = attrs.size ?? attrs.width;
   if (rawSize) {
@@ -1336,6 +1398,7 @@ export function parseMarkdownFieldToken(
     style,
     typingStyle,
     typingAlignment,
+    allowedExtensions,
     width,
     dateFormat,
     timeFormat,
@@ -1366,6 +1429,7 @@ export function emptyFormField(
     style: "default",
     typingStyle: [],
     typingAlignment: "left",
+    allowedExtensions: [],
     dateFormat: "yyyy-mm-dd",
     timeFormat: "HH:mm",
     checked: false,
@@ -1445,6 +1509,7 @@ export function parseFormSchemaMarkdown(markdown: string): {
       style: parsedLine.style,
       typingStyle: parsedLine.typingStyle,
       typingAlignment: parsedLine.typingAlignment,
+      allowedExtensions: parsedLine.allowedExtensions,
       dateFormat: parsedLine.dateFormat,
       timeFormat: parsedLine.timeFormat,
       checked: parsedLine.checked,
@@ -1588,6 +1653,18 @@ export function validateSubmissionPayload(
         return {
           ok: false,
           error: messages.invalidUploadKey(field.label),
+          fieldName: field.name,
+        };
+      }
+      if (
+        !matchesAllowedUploadExtension(
+          upload.originalName,
+          field.allowedExtensions,
+        )
+      ) {
+        return {
+          ok: false,
+          error: messages.invalidUpload(field.label),
           fieldName: field.name,
         };
       }

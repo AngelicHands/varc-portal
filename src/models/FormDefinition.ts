@@ -48,6 +48,10 @@ const FormFieldSchema = new Schema(
       enum: FORM_FIELD_TYPING_ALIGNMENTS,
       default: "left",
     },
+    allowedExtensions: {
+      type: [String],
+      default: [],
+    },
     dateFormat: {
       type: String,
       enum: FORM_DATE_FORMATS,

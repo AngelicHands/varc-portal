@@ -41,6 +41,7 @@ import {
   formatZodIssues,
   isFormUploadValue,
   normalizeChoiceOptions,
+  normalizeFormFieldAllowedExtensions,
   normalizeFormDateFormat,
   normalizeFormFieldTypingStyles,
   normalizeFormFieldTypingAlignment,
@@ -1085,6 +1086,9 @@ export async function saveFormDefinitionAction(
         maxLength: field.maxLength ?? 0,
         width: normalizeFormFieldWidth(field.width),
         style: field.style,
+        allowedExtensions: normalizeFormFieldAllowedExtensions(
+          field.allowedExtensions,
+        ),
         typingStyle: normalizeFormFieldTypingStyles(field.typingStyle),
         typingAlignment: normalizeFormFieldTypingAlignment(
           field.typingAlignment,

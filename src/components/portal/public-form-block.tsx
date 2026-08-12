@@ -23,9 +23,11 @@ import {
   type FormMarkdownToken,
 } from "@/lib/form-markdown";
 import {
+  fileExtensionFromName,
   FORM_UPLOAD_FILE_MIME,
   FORM_UPLOAD_IMAGE_MIME,
   FORM_UPLOAD_MAX_BYTES,
+  matchesAllowedUploadExtension,
   collectSubmissionFieldErrors,
   dateFormatPlaceholder,
   dateTimeFormatPlaceholder,
@@ -116,6 +118,23 @@ function inputTypingClass(field: {
   return classes.join(" ");
 }
 
+function uploadAcceptValue(field: PublicFormField) {
+  if (field.allowedExtensions.length > 0) {
+    return field.allowedExtensions.join(",");
+  }
+  return field.type === "image"
+    ? FORM_UPLOAD_IMAGE_MIME.join(",")
+    : FORM_UPLOAD_FILE_MIME.join(",");
+}
+
+function uploadExtensionError(field: PublicFormField, fileName: string) {
+  const extension = fileExtensionFromName(fileName);
+  if (!extension || field.allowedExtensions.length === 0) {
+    return "This file type is not allowed.";
+  }
+  return `Only these file extensions are allowed: ${field.allowedExtensions.join(", ")}`;
+}
+
 function FieldSuggestionIcon({ text }: { text: string }) {
   if (!text.trim()) return null;
   return (
@@ -161,14 +180,17 @@ function FormUploadControl({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = isFormUploadValue(value) ? value : null;
-  const accept =
-    field.type === "image"
-      ? FORM_UPLOAD_IMAGE_MIME.join(",")
-      : FORM_UPLOAD_FILE_MIME.join(",");
+  const accept = uploadAcceptValue(field);
 
   async function onFileSelected(file: File | null) {
     if (!file) return;
     setError(null);
+
+    if (!matchesAllowedUploadExtension(file.name, field.allowedExtensions)) {
+      setError(uploadExtensionError(field, file.name));
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
 
     if (file.size <= 0 || file.size > FORM_UPLOAD_MAX_BYTES) {
       setError(

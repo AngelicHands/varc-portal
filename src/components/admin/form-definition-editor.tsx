@@ -13,12 +13,14 @@ import {
   FORM_FIELD_TYPING_STYLES,
   FORM_FIELD_TYPING_ALIGNMENTS,
   normalizeChoiceOptions,
+  normalizeFormFieldAllowedExtensions,
   normalizeFormDateFormat,
   normalizeFormFieldTypingStyles,
   normalizeFormFieldTypingAlignment,
   normalizeFormFieldWidth,
   normalizeFormTimeFormat,
   parseFormSchemaMarkdown,
+  supportsFormFieldAllowedExtensions,
   supportsFormFieldTypingStyle,
   type FormDateFormat,
   type FormDefinitionFormValues,
@@ -252,6 +254,10 @@ Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value
                 while typing (<code>typing_alligment</code> accepted as alias)
               </li>
               <li>
+                <code>allowed_extensions:.pdf,.docx,.xlsx</code> — limit upload
+                fields to specific file extensions
+              </li>
+              <li>
                 <code>checked:true</code> — default on for a single yes/no
                 checkbox (no options list)
               </li>
@@ -349,6 +355,7 @@ function mapLocaleFields(
         maxLength?: number;
         width?: string | null;
         style?: FormFieldDefinition["style"];
+        allowedExtensions?: FormFieldDefinition["allowedExtensions"] | null;
         typingStyle?: FormFieldDefinition["typingStyle"] | null;
         typingAlignment?: FormFieldDefinition["typingAlignment"] | null;
         dateFormat?: string | null;
@@ -373,6 +380,9 @@ function mapLocaleFields(
     maxLength: field.maxLength ?? 0,
     width: normalizeFormFieldWidth(field.width),
     style: field.style ?? "default",
+    allowedExtensions: normalizeFormFieldAllowedExtensions(
+      field.allowedExtensions,
+    ),
     typingStyle: normalizeFormFieldTypingStyles(field.typingStyle),
     typingAlignment: normalizeFormFieldTypingAlignment(field.typingAlignment),
     dateFormat: normalizeFormDateFormat(field.dateFormat),
@@ -1081,6 +1091,11 @@ export function FormDefinitionEditor({
                           setField(field.id, (current) => ({
                             ...current,
                             type: nextType,
+                            allowedExtensions: supportsFormFieldAllowedExtensions(
+                              nextType,
+                            )
+                              ? current.allowedExtensions
+                              : [],
                             checked:
                               nextType === "checkbox" ? current.checked : false,
                             options:
@@ -1216,6 +1231,32 @@ export function FormDefinitionEditor({
                             </option>
                           ))}
                         </select>
+                      </label>
+                    ) : null}
+
+                    {supportsFormFieldAllowedExtensions(field.type) ? (
+                      <label className="block md:col-span-2">
+                        <span className="mb-1 block text-sm font-medium">
+                          Allowed file extensions
+                        </span>
+                        <input
+                          value={field.allowedExtensions.join(", ")}
+                          onChange={(e) =>
+                            setField(field.id, (current) => ({
+                              ...current,
+                              allowedExtensions:
+                                normalizeFormFieldAllowedExtensions(
+                                  e.target.value,
+                                ),
+                            }))
+                          }
+                          placeholder=".pdf, .docx, .xlsx"
+                          className="w-full rounded border border-gray-300 px-3 py-2"
+                        />
+                        <p className="mt-1 text-xs text-muted">
+                          Optional. Leave empty to allow any supported upload
+                          type for this field.
+                        </p>
                       </label>
                     ) : null}
 

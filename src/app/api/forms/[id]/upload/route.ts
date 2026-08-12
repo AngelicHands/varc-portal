@@ -8,6 +8,7 @@ import { getMediaConfig } from "@/lib/media/config";
 import { buildObjectKey, putObject } from "@/lib/media/storage";
 import { logServerError, publicErrorMessage } from "@/lib/safe-error";
 import {
+  matchesAllowedUploadExtension,
   FORM_UPLOAD_FILE_MIME,
   FORM_UPLOAD_IMAGE_MIME,
   FORM_UPLOAD_MAX_BYTES,
@@ -80,6 +81,19 @@ export async function POST(
             field.type === "image"
               ? "Unsupported image type. Use JPEG, PNG, GIF, or WebP."
               : `Unsupported file type: ${contentType || "unknown"}`,
+        },
+        { status: 400 },
+      );
+    }
+
+    if (!matchesAllowedUploadExtension(file.name, field.allowedExtensions)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            field.allowedExtensions.length > 0
+              ? `Only these file extensions are allowed: ${field.allowedExtensions.join(", ")}`
+              : "This file extension is not allowed.",
         },
         { status: 400 },
       );

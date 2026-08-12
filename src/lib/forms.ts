@@ -20,6 +20,7 @@ import type {
 } from "@/lib/validations/forms";
 import {
   normalizeChoiceOptions,
+  normalizeFormFieldAllowedExtensions,
   normalizeFormDateFormat,
   normalizeFormFieldTypingStyles,
   normalizeFormFieldTypingAlignment,
@@ -98,6 +99,9 @@ function mapFields(
     style: field.style ?? "default",
     typingStyle: normalizeFormFieldTypingStyles(field.typingStyle),
     typingAlignment: normalizeFormFieldTypingAlignment(field.typingAlignment),
+    allowedExtensions: normalizeFormFieldAllowedExtensions(
+      field.allowedExtensions,
+    ),
     dateFormat: normalizeFormDateFormat(field.dateFormat),
     timeFormat: normalizeFormTimeFormat(field.timeFormat),
     checked: Boolean(field.checked),
