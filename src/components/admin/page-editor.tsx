@@ -8,7 +8,10 @@ import { isEmptyHtml } from "@/lib/html";
 import { CONTENT_FONT_OPTIONS } from "@/lib/fonts";
 import { makeSlug } from "@/lib/slug";
 import type { PageFormValues } from "@/lib/validations/article";
-import type { TemplateLayout } from "@/lib/blocks/types";
+import {
+  layoutWithBreadcrumbOnTop,
+  type TemplateLayout,
+} from "@/lib/blocks/types";
 import { RichTextEditor } from "@/components/admin/rich-text-editor";
 import { PageGalleryField } from "@/components/admin/page-gallery-field";
 import { TemplateLayoutBuilder } from "@/components/admin/template-builder/template-layout-builder";
@@ -40,6 +43,16 @@ const emptyLocale = {
   metaDescription: "",
 };
 
+function layoutFromTemplate(
+  templateKey: string,
+  defaultLayouts: Record<string, TemplateLayout>,
+  fallback?: TemplateLayout | null,
+): TemplateLayout {
+  const base =
+    defaultLayouts[templateKey] ?? fallback ?? { sections: [] };
+  return layoutWithBreadcrumbOnTop(structuredClone(base));
+}
+
 export function PageEditor({
   pageId,
   initial,
@@ -53,7 +66,13 @@ export function PageEditor({
   const { ask, modal } = useConfirm();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState(initial);
+  const [form, setForm] = useState(() => {
+    if (pageId || initial.layoutOverride) return initial;
+    return {
+      ...initial,
+      layoutOverride: layoutFromTemplate(initial.templateKey, defaultLayouts),
+    };
+  });
   const [tab, setTab] = useState<"vi" | "en">("vi");
   const customize = form.layoutOverride != null;
 
@@ -182,8 +201,10 @@ export function PageEditor({
                   ...prev,
                   templateKey,
                   layoutOverride: prev.layoutOverride
-                    ? structuredClone(
-                        defaultLayouts[templateKey] ?? prev.layoutOverride,
+                    ? layoutFromTemplate(
+                        templateKey,
+                        defaultLayouts,
+                        prev.layoutOverride as TemplateLayout,
                       )
                     : null,
                 }));
@@ -234,12 +255,12 @@ export function PageEditor({
             checked={customize}
             onChange={(e) => {
               if (e.target.checked) {
-                const base =
-                  (form.layoutOverride as TemplateLayout | null) ??
-                  defaultLayouts[form.templateKey] ?? { sections: [] };
+                const existing = form.layoutOverride as TemplateLayout | null;
                 setForm((prev) => ({
                   ...prev,
-                  layoutOverride: structuredClone(base),
+                  layoutOverride: existing
+                    ? layoutWithBreadcrumbOnTop(structuredClone(existing))
+                    : layoutFromTemplate(form.templateKey, defaultLayouts),
                 }));
               } else {
                 setForm((prev) => ({ ...prev, layoutOverride: null }));

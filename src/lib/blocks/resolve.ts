@@ -352,6 +352,8 @@ export async function resolveBlock(
           400,
         ),
       };
+    case "breadcrumb":
+      return {};
     default:
       return {};
   }

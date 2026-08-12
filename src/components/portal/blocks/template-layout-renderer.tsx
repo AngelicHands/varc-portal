@@ -26,6 +26,7 @@ type Labels = {
   latestTitle?: string;
   previous?: string;
   next?: string;
+  backHome?: string;
 };
 
 type Props = {
@@ -285,6 +286,12 @@ function BlockView({
       return <MenuBlockNav items={data.menuLinks} />;
     case "spacer":
       return <div style={{ height: data.spacerHeight ?? 32 }} aria-hidden />;
+    case "breadcrumb":
+      return (
+        <Link href="/" className="text-sm text-accent hover:underline">
+          {labels.backHome || "Back to home"}
+        </Link>
+      );
     default:
       return null;
   }

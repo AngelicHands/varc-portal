@@ -25,6 +25,7 @@ import {
   pageContextFromPage,
   resolveLayoutBlocks,
 } from "@/lib/blocks/resolve";
+import { layoutHasBlockType } from "@/lib/blocks/types";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +89,8 @@ export default async function CmsPage({ params }: Props) {
   const galleryImages = galleryImagesFromPage(page);
   const hasIntro = !isEmptyHtml(content.content);
   const branding = await getPublicSiteBranding(locale);
+  const { layout } = await resolvePageLayout(page);
+  const hasBreadcrumbBlock = layoutHasBlockType(layout, "breadcrumb");
 
   if (templateKey === "gallery") {
     return (
@@ -96,6 +99,13 @@ export default async function CmsPage({ params }: Props) {
           vi={vi.slug ? pageHref(vi.slug) : null}
           en={en.slug ? pageHref(en.slug) : null}
         />
+        {hasBreadcrumbBlock ? (
+          <div className="mx-auto max-w-6xl px-4 pt-6 md:px-6">
+            <Link href="/" className="text-sm text-accent hover:underline">
+              {t("backHome")}
+            </Link>
+          </div>
+        ) : null}
         {hasIntro ? (
           <div className="sr-only">
             <HtmlContent html={content.content} />
@@ -106,7 +116,6 @@ export default async function CmsPage({ params }: Props) {
     );
   }
 
-  const { layout } = await resolvePageLayout(page);
   const resolved = await resolveLayoutBlocks(
     layout,
     locale,
@@ -123,10 +132,7 @@ export default async function CmsPage({ params }: Props) {
             vi={vi.slug ? pageHref(vi.slug) : null}
             en={en.slug ? pageHref(en.slug) : null}
           />
-          <Link href="/" className="text-sm text-accent hover:underline">
-            {t("backHome")}
-          </Link>
-          <header className="mt-6 border-b border-border pb-8">
+          <header className="border-b border-border pb-8">
             <h1 className="font-display text-4xl leading-tight text-foreground md:text-5xl">
               {content.title}
             </h1>
@@ -155,13 +161,6 @@ export default async function CmsPage({ params }: Props) {
         vi={vi.slug ? pageHref(vi.slug) : null}
         en={en.slug ? pageHref(en.slug) : null}
       />
-      {!startsWithHero ? (
-        <div className="mx-auto mb-6 max-w-6xl px-4 md:px-6">
-          <Link href="/" className="text-sm text-accent hover:underline">
-            {t("backHome")}
-          </Link>
-        </div>
-      ) : null}
       <TemplateLayoutRenderer
         layout={layout}
         resolved={resolved}
@@ -175,6 +174,7 @@ export default async function CmsPage({ params }: Props) {
           latestTitle: tHome("title"),
           previous: tHome("previousSlide"),
           next: tHome("nextSlide"),
+          backHome: t("backHome"),
         }}
       />
     </PageFontScope>

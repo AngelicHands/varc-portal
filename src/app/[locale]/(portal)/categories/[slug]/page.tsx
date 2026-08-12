@@ -62,6 +62,7 @@ export default async function CategoryArchivePage({ params }: Props) {
   setRequestLocale(locale);
 
   const tHome = await getTranslations("home");
+  const tPage = await getTranslations("page");
   const [category, settings, branding] = await Promise.all([
     findPublishedCategory(locale, slug),
     getSiteSettingsDocument(),
@@ -112,6 +113,7 @@ export default async function CategoryArchivePage({ params }: Props) {
             latestTitle: content.name,
             previous: tHome("previousSlide"),
             next: tHome("nextSlide"),
+            backHome: tPage("backHome"),
           }}
         />
       ) : (

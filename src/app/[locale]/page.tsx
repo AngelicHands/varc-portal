@@ -29,6 +29,7 @@ export default async function HomePage({ params }: Props) {
   setRequestLocale(locale);
 
   const t = await getTranslations("home");
+  const tPage = await getTranslations("page");
   const [branding, settings, defaultHome] = await Promise.all([
     getPublicSiteBranding(locale),
     getSiteSettingsDocument(),
@@ -42,6 +43,7 @@ export default async function HomePage({ params }: Props) {
     latestTitle: t("title"),
     previous: t("previousSlide"),
     next: t("nextSlide"),
+    backHome: tPage("backHome"),
   };
 
   const assignedId = settings?.homePageId

@@ -78,6 +78,7 @@ export function blankTemplateLayout(): TemplateLayout {
 export function customTemplateLayout(): TemplateLayout {
   return {
     sections: [
+      createSection([createBlock("breadcrumb")]),
       createSection([
         createBlock("heading", {
           source: { text: "{{page.title}}" },

@@ -14,6 +14,7 @@ export const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
   html: "HTML",
   spacer: "Spacer",
   featuredSlider: "Featured slider",
+  breadcrumb: "Breadcrumb",
 };
 
 /** Palette entries shown in the template builder (can include presets). */
@@ -30,6 +31,12 @@ export type BlockPaletteItem = {
 
 export const BLOCK_PALETTE: BlockPaletteItem[] = [
   { id: "heading", type: "heading", label: "Heading" },
+  {
+    id: "breadcrumb",
+    type: "breadcrumb",
+    label: "Breadcrumb",
+    description: "Back to home link",
+  },
   { id: "pageContent", type: "pageContent", label: "Page content" },
   { id: "richText", type: "richText", label: "Rich text" },
   { id: "html", type: "html", label: "HTML" },

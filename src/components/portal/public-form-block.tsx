@@ -1078,12 +1078,6 @@ export function PublicFormBlock({ form, preview = false }: Props) {
           {t("previewBanner")}
         </p>
       ) : null}
-      <div className="mb-5 space-y-2">
-        <h2 className="font-display text-2xl text-foreground">{form.name}</h2>
-        {form.description ? (
-          <p className="text-sm leading-6 text-muted">{form.description}</p>
-        ) : null}
-      </div>
 
       {state.type === "success" ? (
         <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">

@@ -1131,6 +1131,12 @@ function BlockInspector({
         </label>
       ) : null}
 
+      {block.type === "breadcrumb" ? (
+        <p className="text-xs text-gray-500">
+          Renders a Back to home link. Drag this block into any section.
+        </p>
+      ) : null}
+
       <button
         type="button"
         onClick={onRemove}

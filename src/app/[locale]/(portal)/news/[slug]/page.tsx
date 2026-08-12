@@ -77,6 +77,7 @@ export default async function ArticlePage({ params }: Props) {
 
   const t = await getTranslations("article");
   const tHome = await getTranslations("home");
+  const tPage = await getTranslations("page");
   const [article, session, settings, branding] = await Promise.all([
     getPublishedArticleBySlug(locale, slug),
     auth(),
@@ -167,6 +168,7 @@ export default async function ArticlePage({ params }: Props) {
               latestTitle: tHome("title"),
               previous: tHome("previousSlide"),
               next: tHome("nextSlide"),
+              backHome: tPage("backHome"),
             }}
           />
         </div>

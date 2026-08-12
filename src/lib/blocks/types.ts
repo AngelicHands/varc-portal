@@ -25,6 +25,7 @@ export const BLOCK_TYPES = [
   "html",
   "spacer",
   "featuredSlider",
+  "breadcrumb",
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -199,5 +200,24 @@ export function createSection(blocks: TemplateBlock[] = []): TemplateSection {
   return {
     id: makeSectionId(),
     blocks,
+  };
+}
+
+export function layoutHasBlockType(
+  layout: TemplateLayout,
+  type: BlockType,
+): boolean {
+  return layout.sections.some((section) =>
+    section.blocks.some((block) => block.type === type),
+  );
+}
+
+/** Prepend a breadcrumb section unless the layout already has one. */
+export function layoutWithBreadcrumbOnTop(
+  layout: TemplateLayout,
+): TemplateLayout {
+  if (layoutHasBlockType(layout, "breadcrumb")) return layout;
+  return {
+    sections: [createSection([createBlock("breadcrumb")]), ...layout.sections],
   };
 }
