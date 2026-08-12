@@ -144,12 +144,115 @@ const templateBlockSchema = z.object({
 
 export type TemplateBlock = z.infer<typeof templateBlockSchema>;
 
+const spacingSideSchema = z.object({
+  top: z.coerce.number().int().min(0).max(500).default(0),
+  right: z.coerce.number().int().min(0).max(500).default(0),
+  bottom: z.coerce.number().int().min(0).max(500).default(0),
+  left: z.coerce.number().int().min(0).max(500).default(0),
+});
+
+export type SectionSpacing = z.infer<typeof spacingSideSchema>;
+
+export const DEFAULT_SECTION_PADDING: SectionSpacing = {
+  top: 24,
+  right: 16,
+  bottom: 24,
+  left: 16,
+};
+
+export function emptySectionSpacing(): SectionSpacing {
+  return { top: 0, right: 0, bottom: 0, left: 0 };
+}
+
+export function resolveSectionSpacing(section: TemplateSection): {
+  padding: SectionSpacing;
+  margin: SectionSpacing;
+} {
+  return {
+    padding: section.padding ?? { ...DEFAULT_SECTION_PADDING },
+    margin: section.margin ?? emptySectionSpacing(),
+  };
+}
+
+export function sectionPaddingToStyle(
+  padding: SectionSpacing,
+): Record<string, string> {
+  return {
+    paddingTop: `${padding.top}px`,
+    paddingRight: `${padding.right}px`,
+    paddingBottom: `${padding.bottom}px`,
+    paddingLeft: `${padding.left}px`,
+  };
+}
+
+export function sectionMarginToStyle(
+  margin: SectionSpacing,
+): Record<string, string> {
+  return {
+    marginTop: `${margin.top}px`,
+    marginRight: `${margin.right}px`,
+    marginBottom: `${margin.bottom}px`,
+    marginLeft: `${margin.left}px`,
+  };
+}
+
+export function sectionSpacingToStyle(
+  padding: SectionSpacing,
+  margin: SectionSpacing,
+): Record<string, string> {
+  return {
+    ...sectionPaddingToStyle(padding),
+    ...sectionMarginToStyle(margin),
+  };
+}
+
+export const SECTION_TEXT_ALIGNS = ["left", "center", "right"] as const;
+export type SectionTextAlign = (typeof SECTION_TEXT_ALIGNS)[number];
+
+export function resolveSectionTextAlign(
+  section: TemplateSection,
+): SectionTextAlign {
+  return section.textAlign ?? "left";
+}
+
+export function sectionTextAlignClass(textAlign: SectionTextAlign): string {
+  switch (textAlign) {
+    case "center":
+      return "text-center";
+    case "right":
+      return "text-right";
+    default:
+      return "text-left";
+  }
+}
+
 const templateSectionSchema = z.object({
   id: z.string().min(1).max(64),
   blocks: z.array(templateBlockSchema).max(40),
+  padding: spacingSideSchema.default(DEFAULT_SECTION_PADDING),
+  margin: spacingSideSchema.default(emptySectionSpacing()),
+  textAlign: z.enum(SECTION_TEXT_ALIGNS).default("left"),
 });
 
 export type TemplateSection = z.infer<typeof templateSectionSchema>;
+
+export function normalizeSection(section: {
+  id: string;
+  blocks: TemplateBlock[];
+  padding?: SectionSpacing;
+  margin?: SectionSpacing;
+  textAlign?: SectionTextAlign;
+}): TemplateSection {
+  const parsed = templateSectionSchema.safeParse(section);
+  if (parsed.success) return parsed.data;
+  return {
+    id: section.id,
+    blocks: section.blocks,
+    padding: section.padding ?? { ...DEFAULT_SECTION_PADDING },
+    margin: section.margin ?? emptySectionSpacing(),
+    textAlign: section.textAlign ?? "left",
+  };
+}
 
 export const templateLayoutSchema = z.object({
   sections: z.array(templateSectionSchema).max(40),
@@ -200,6 +303,9 @@ export function createSection(blocks: TemplateBlock[] = []): TemplateSection {
   return {
     id: makeSectionId(),
     blocks,
+    padding: { ...DEFAULT_SECTION_PADDING },
+    margin: emptySectionSpacing(),
+    textAlign: "left",
   };
 }
 

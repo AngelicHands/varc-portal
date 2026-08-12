@@ -15,6 +15,11 @@ import {
 } from "@/lib/blocks/resolve";
 import {
   resolveBlockLocaleText,
+  resolveSectionSpacing,
+  resolveSectionTextAlign,
+  sectionMarginToStyle,
+  sectionPaddingToStyle,
+  sectionTextAlignClass,
   type TemplateBlock,
   type TemplateLayout,
 } from "@/lib/blocks/types";
@@ -325,10 +330,16 @@ export function TemplateLayoutRenderer({
     <div className="w-full">
       {layout.sections.map((section) => {
         const fullBleed = isFullBleedSection(section.blocks);
+        const { padding, margin } = resolveSectionSpacing(section);
+        const textAlign = resolveSectionTextAlign(section);
+        const marginStyle = sectionMarginToStyle(margin);
+        const paddingStyle = sectionPaddingToStyle(padding);
+        const textAlignClass = sectionTextAlignClass(textAlign);
 
         if (fullBleed) {
           return (
-            <section key={section.id} className="w-full">
+            <section key={section.id} className="w-full" style={marginStyle}>
+              <div className={`w-full ${textAlignClass}`} style={paddingStyle}>
               {section.blocks.map((block) => {
                 const data = resolved.get(block.id) ?? {};
                 // Featured slider / spotlight always span the viewport edge-to-edge.
@@ -346,15 +357,17 @@ export function TemplateLayoutRenderer({
                   </div>
                 );
               })}
+              </div>
             </section>
           );
         }
 
         return (
-          <section
-            key={section.id}
-            className="mx-auto grid w-full max-w-6xl grid-cols-12 gap-4 px-4 py-6 md:px-6 md:py-8"
-          >
+          <section key={section.id} className="w-full" style={marginStyle}>
+            <div
+              className={`mx-auto grid w-full max-w-6xl grid-cols-12 gap-4 ${textAlignClass}`}
+              style={paddingStyle}
+            >
             {section.blocks.map((block) => {
               const data = resolved.get(block.id) ?? {};
               return (
@@ -371,6 +384,7 @@ export function TemplateLayoutRenderer({
                 </div>
               );
             })}
+            </div>
           </section>
         );
       })}

@@ -5,8 +5,12 @@ import {
   createBlock,
   createSection,
   resolveBlockLocaleText,
+  resolveSectionSpacing,
+  resolveSectionTextAlign,
   type BlockAlign,
   type BlockContentLocale,
+  type SectionSpacing,
+  type SectionTextAlign,
   type TemplateBlock,
   type TemplateLayout,
   type TemplateSection,
@@ -21,6 +25,10 @@ import { PageGalleryField } from "@/components/admin/page-gallery-field";
 import type { PageGalleryItemValues } from "@/lib/validations/article";
 
 type Option = { id: string; label: string; depth?: number };
+
+type BuilderSelection =
+  | { kind: "section"; sectionId: string }
+  | { kind: "block"; sectionId: string; blockId: string };
 
 function blockPreviewLabel(block: TemplateBlock): string {
   if (block.type === "heading") {
@@ -150,23 +158,26 @@ export function TemplateLayoutBuilder({
   categoryOptions = [],
   formOptions = [],
 }: Props) {
-  const [selected, setSelected] = useState<{
-    sectionId: string;
-    blockId: string;
-  } | null>(null);
+  const [selection, setSelection] = useState<BuilderSelection | null>(null);
   const [drag, setDrag] = useState<DragPayload | null>(null);
   const dragRef = useRef<DragPayload | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
 
   const selectedBlock = useMemo(() => {
-    if (!selected) return null;
-    const section = layout.sections.find((s) => s.id === selected.sectionId);
-    const block = section?.blocks.find((b) => b.id === selected.blockId);
+    if (!selection || selection.kind !== "block") return null;
+    const section = layout.sections.find((s) => s.id === selection.sectionId);
+    const block = section?.blocks.find((b) => b.id === selection.blockId);
     return block && section
       ? { sectionId: section.id, block }
       : null;
-  }, [layout, selected]);
+  }, [layout, selection]);
+
+  const selectedSection = useMemo(() => {
+    if (!selection || selection.kind !== "section") return null;
+    const section = layout.sections.find((s) => s.id === selection.sectionId);
+    return section ? { sectionId: section.id, section } : null;
+  }, [layout, selection]);
 
   function beginDrag(payload: DragPayload, e: DragEvent) {
     dragRef.current = payload;
@@ -198,12 +209,16 @@ export function TemplateLayoutBuilder({
 
   function addPaletteItem(item: BlockPaletteItem) {
     const sectionId =
-      selected?.sectionId ?? layout.sections[layout.sections.length - 1]?.id;
+      selection?.kind === "block"
+        ? selection.sectionId
+        : selection?.kind === "section"
+          ? selection.sectionId
+          : layout.sections[layout.sections.length - 1]?.id;
     const block = createFromPalette(item);
     if (!sectionId) {
       const section = createSection([block]);
       onChange({ sections: [section] });
-      setSelected({ sectionId: section.id, blockId: block.id });
+      setSelection({ kind: "block", sectionId: section.id, blockId: block.id });
       return;
     }
     onChange(
@@ -212,7 +227,7 @@ export function TemplateLayoutBuilder({
         blocks: [...section.blocks, block],
       })),
     );
-    setSelected({ sectionId, blockId: block.id });
+    setSelection({ kind: "block", sectionId, blockId: block.id });
   }
 
   function applyBlockDrop(target: DropTarget) {
@@ -255,7 +270,7 @@ export function TemplateLayoutBuilder({
 
     working = insertBlock(working, target.sectionId, block, insertIndex);
     onChange(working);
-    setSelected({ sectionId: target.sectionId, blockId: block.id });
+    setSelection({ kind: "block", sectionId: target.sectionId, blockId: block.id });
     clearDrag();
   }
 
@@ -315,6 +330,15 @@ export function TemplateLayoutBuilder({
     e.preventDefault();
     e.stopPropagation();
     setDropTarget(target);
+  }
+
+  function patchSelectedSection(
+    updater: (section: TemplateSection) => TemplateSection,
+  ) {
+    if (!selectedSection) return;
+    onChange(
+      updateSection(layout, selectedSection.sectionId, updater),
+    );
   }
 
   function patchSelected(updater: (block: TemplateBlock) => TemplateBlock) {
@@ -381,6 +405,9 @@ export function TemplateLayoutBuilder({
           const dropBeforeSection =
             dropTarget?.kind === "section-before" &&
             dropTarget.sectionId === section.id;
+          const sectionSelected =
+            selection?.kind === "section" &&
+            selection.sectionId === section.id;
 
           return (
             <div key={section.id} className="space-y-1">
@@ -434,29 +461,40 @@ export function TemplateLayoutBuilder({
                   });
                 }}
                 className={`rounded-lg border bg-white p-3 transition ${
-                  dropOnEnd
-                    ? "border-gray-900 ring-2 ring-gray-900/20"
-                    : "border-gray-200"
+                  sectionSelected
+                    ? "border-blue-500 ring-2 ring-blue-500/20"
+                    : dropOnEnd
+                      ? "border-gray-900 ring-2 ring-gray-900/20"
+                      : "border-gray-200"
                 }`}
               >
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <div
-                    draggable
-                    onDragStart={(e) => {
-                      e.stopPropagation();
-                      beginDrag({ kind: "section", sectionId: section.id }, e);
-                    }}
-                    onDragEnd={clearDrag}
-                    className="flex flex-1 cursor-grab items-center gap-1.5 rounded px-1 py-0.5 text-left text-xs font-medium text-gray-500 hover:bg-gray-50 active:cursor-grabbing"
-                    title="Drag to reorder sections"
-                  >
-                    <span aria-hidden className="select-none">
+                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                    <div
+                      draggable
+                      onDragStart={(e) => {
+                        e.stopPropagation();
+                        beginDrag({ kind: "section", sectionId: section.id }, e);
+                      }}
+                      onDragEnd={clearDrag}
+                      className="cursor-grab rounded px-0.5 py-0.5 text-gray-400 hover:bg-gray-50 active:cursor-grabbing"
+                      title="Drag to reorder sections"
+                      aria-hidden
+                    >
                       ⠿
-                    </span>
-                    <span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelection({ kind: "section", sectionId: section.id })
+                      }
+                      className={`min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left text-xs font-medium hover:bg-gray-50 ${
+                        sectionSelected ? "text-blue-700" : "text-gray-500"
+                      }`}
+                    >
                       Section · {section.blocks.length} block
                       {section.blocks.length === 1 ? "" : "s"}
-                    </span>
+                    </button>
                   </div>
                 <button
                   type="button"
@@ -467,7 +505,7 @@ export function TemplateLayoutBuilder({
                         (s) => s.id !== section.id,
                       ),
                     });
-                    if (selected?.sectionId === section.id) setSelected(null);
+                    if (selection?.sectionId === section.id) setSelection(null);
                   }}
                 >
                   Remove
@@ -477,8 +515,9 @@ export function TemplateLayoutBuilder({
               <div className="grid grid-cols-12 gap-2">
                 {section.blocks.map((block) => {
                   const active =
-                    selected?.sectionId === section.id &&
-                    selected.blockId === block.id;
+                    selection?.kind === "block" &&
+                    selection.sectionId === section.id &&
+                    selection.blockId === block.id;
                   const dropBefore =
                     dropTarget?.kind === "block-before" &&
                     dropTarget.sectionId === section.id &&
@@ -539,7 +578,8 @@ export function TemplateLayoutBuilder({
                           }}
                           onDragEnd={clearDrag}
                           onClick={() =>
-                            setSelected({
+                            setSelection({
+                              kind: "block",
                               sectionId: section.id,
                               blockId: block.id,
                             })
@@ -573,10 +613,11 @@ export function TemplateLayoutBuilder({
                               })),
                             );
                             if (
-                              selected?.sectionId === section.id &&
-                              selected.blockId === block.id
+                              selection?.kind === "block" &&
+                              selection.sectionId === section.id &&
+                              selection.blockId === block.id
                             ) {
-                              setSelected(null);
+                              setSelection(null);
                             }
                           }}
                           className={`absolute top-1.5 right-1.5 z-10 inline-flex h-6 w-6 items-center justify-center rounded border text-xs transition ${
@@ -646,9 +687,12 @@ export function TemplateLayoutBuilder({
         <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
           Inspector
         </p>
-        {!selectedBlock ? (
-          <p className="text-sm text-gray-500">Select a block to edit.</p>
-        ) : (
+        {selection?.kind === "section" && selectedSection ? (
+          <SectionInspector
+            section={selectedSection.section}
+            onChange={(section) => patchSelectedSection(() => section)}
+          />
+        ) : selection?.kind === "block" && selectedBlock ? (
           <BlockInspector
             block={selectedBlock.block}
             articleOptions={articleOptions}
@@ -665,9 +709,13 @@ export function TemplateLayoutBuilder({
                   ),
                 })),
               );
-              setSelected(null);
+              setSelection(null);
             }}
           />
+        ) : (
+          <p className="text-sm text-gray-500">
+            Select a section or block to edit.
+          </p>
         )}
       </aside>
 
@@ -687,6 +735,95 @@ export function TemplateLayoutBuilder({
           setMediaOpen(false);
         }}
       />
+    </div>
+  );
+}
+
+function SectionInspector({
+  section,
+  onChange,
+}: {
+  section: TemplateSection;
+  onChange: (section: TemplateSection) => void;
+}) {
+  const spacing = resolveSectionSpacing(section);
+  const textAlign = resolveSectionTextAlign(section);
+
+  function setSpacingSide(
+    kind: "padding" | "margin",
+    side: keyof SectionSpacing,
+    value: number,
+  ) {
+    const next = Math.min(500, Math.max(0, Number.isFinite(value) ? value : 0));
+    onChange({
+      ...section,
+      [kind]: {
+        ...spacing[kind],
+        [side]: next,
+      },
+    });
+  }
+
+  function renderSpacingGroup(
+    label: string,
+    kind: "padding" | "margin",
+    values: SectionSpacing,
+  ) {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+          {label} (px)
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {(["top", "right", "bottom", "left"] as const).map((side) => (
+            <label key={`${kind}-${side}`} className="block">
+              <span className="mb-1 block text-xs capitalize text-gray-500">
+                {side}
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={500}
+                value={values[side]}
+                onChange={(e) =>
+                  setSpacingSide(kind, side, Number(e.target.value))
+                }
+                className="w-full rounded border border-gray-300 px-2 py-1.5"
+              />
+            </label>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 text-sm">
+      <p className="font-medium">Section</p>
+      <p className="text-xs text-gray-500">
+        {section.blocks.length} block{section.blocks.length === 1 ? "" : "s"}
+      </p>
+
+      <label className="block">
+        <span className="mb-1 block text-xs text-gray-500">Text alignment</span>
+        <select
+          value={textAlign}
+          onChange={(e) =>
+            onChange({
+              ...section,
+              textAlign: e.target.value as SectionTextAlign,
+            })
+          }
+          className="w-full rounded border border-gray-300 px-2 py-1.5"
+        >
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="right">Right</option>
+        </select>
+      </label>
+
+      {renderSpacingGroup("Padding", "padding", spacing.padding)}
+      {renderSpacingGroup("Margin", "margin", spacing.margin)}
     </div>
   );
 }

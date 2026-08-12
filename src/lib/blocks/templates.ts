@@ -6,6 +6,7 @@ import {
 } from "@/lib/cache/cms-cache";
 import { SYSTEM_TEMPLATE_SEEDS } from "@/lib/blocks/presets";
 import {
+  normalizeSection,
   templateLayoutSchema,
   type TemplateLayout,
 } from "@/lib/blocks/types";
@@ -281,7 +282,7 @@ export function parseLayout(raw: unknown): TemplateLayout | null {
           ? (section as { id: string }).id
           : `s_${Math.random().toString(36).slice(2, 10)}`;
       const blocksRaw = (section as { blocks?: unknown }).blocks;
-      if (!Array.isArray(blocksRaw)) return { id, blocks: [] };
+      if (!Array.isArray(blocksRaw)) return normalizeSection({ id, blocks: [] });
       const blocks = blocksRaw
         .map((block) => {
           const blockParsed =
@@ -291,7 +292,7 @@ export function parseLayout(raw: unknown): TemplateLayout | null {
           return blockParsed.success ? blockParsed.data : null;
         })
         .filter((block): block is NonNullable<typeof block> => Boolean(block));
-      return { id, blocks };
+      return normalizeSection({ id, blocks });
     })
     .filter((section): section is NonNullable<typeof section> => Boolean(section));
 
