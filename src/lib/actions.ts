@@ -42,6 +42,8 @@ import {
   isFormUploadValue,
   normalizeChoiceOptions,
   normalizeFormDateFormat,
+  normalizeFormFieldTypingStyles,
+  normalizeFormFieldTypingAlignment,
   normalizeFormFieldWidth,
   normalizeFormTimeFormat,
 } from "@/lib/validations/forms";
@@ -1083,6 +1085,10 @@ export async function saveFormDefinitionAction(
         maxLength: field.maxLength ?? 0,
         width: normalizeFormFieldWidth(field.width),
         style: field.style,
+        typingStyle: normalizeFormFieldTypingStyles(field.typingStyle),
+        typingAlignment: normalizeFormFieldTypingAlignment(
+          field.typingAlignment,
+        ),
         dateFormat: normalizeFormDateFormat(field.dateFormat),
         timeFormat: normalizeFormTimeFormat(field.timeFormat),
         checked: Boolean(field.checked),

@@ -2,6 +2,8 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 import {
   FORM_FIELD_TYPES,
   FORM_FIELD_STYLES,
+  FORM_FIELD_TYPING_STYLES,
+  FORM_FIELD_TYPING_ALIGNMENTS,
   FORM_FIELD_WIDTHS,
   FORM_DATE_FORMATS,
   FORM_TIME_FORMATS,
@@ -35,6 +37,16 @@ const FormFieldSchema = new Schema(
       type: String,
       enum: FORM_FIELD_STYLES,
       default: "default",
+    },
+    typingStyle: {
+      type: [String],
+      enum: FORM_FIELD_TYPING_STYLES,
+      default: [],
+    },
+    typingAlignment: {
+      type: String,
+      enum: FORM_FIELD_TYPING_ALIGNMENTS,
+      default: "left",
     },
     dateFormat: {
       type: String,

@@ -45,6 +45,19 @@ export const FORM_FIELD_STYLES = [
   "dotted_underline",
 ] as const;
 
+export const FORM_FIELD_TYPING_STYLES = [
+  "bold",
+  "italic",
+  "underline",
+  "strikethrough",
+] as const;
+
+export const FORM_FIELD_TYPING_ALIGNMENTS = [
+  "left",
+  "center",
+  "right",
+] as const;
+
 export const FORM_DATE_FORMATS = [
   "yyyy-mm-dd",
   "dd/mm/yyyy",
@@ -78,6 +91,9 @@ export const FORM_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 export type FormFieldWidth = (typeof FORM_FIELD_WIDTHS)[number];
 export type FormFieldStyle = (typeof FORM_FIELD_STYLES)[number];
+export type FormFieldTypingStyle = (typeof FORM_FIELD_TYPING_STYLES)[number];
+export type FormFieldTypingAlignment =
+  (typeof FORM_FIELD_TYPING_ALIGNMENTS)[number];
 export type FormDateFormat = (typeof FORM_DATE_FORMATS)[number];
 export type FormTimeFormat = (typeof FORM_TIME_FORMATS)[number];
 
@@ -88,6 +104,88 @@ export function normalizeFormFieldWidth(value: unknown): FormFieldWidth {
   if (value === "wide") return "wide";
   if (value === "default") return "default";
   return "default";
+}
+
+const TYPING_STYLE_ALIASES: Record<string, FormFieldTypingStyle> = {
+  bold: "bold",
+  b: "bold",
+  italic: "italic",
+  italics: "italic",
+  i: "italic",
+  underline: "underline",
+  u: "underline",
+  strikethrough: "strikethrough",
+  strikethought: "strikethrough",
+  strikethrought: "strikethrough",
+  strike: "strikethrough",
+  line_through: "strikethrough",
+  "line-through": "strikethrough",
+};
+
+export function normalizeFormFieldTypingStyles(
+  value: unknown,
+): FormFieldTypingStyle[] {
+  if (Array.isArray(value)) {
+    const merged: FormFieldTypingStyle[] = [];
+    for (const item of value) {
+      for (const style of normalizeFormFieldTypingStyles(item)) {
+        if (!merged.includes(style)) merged.push(style);
+      }
+    }
+    return merged;
+  }
+
+  const raw = String(value ?? "").trim();
+  if (!raw) return [];
+
+  const merged: FormFieldTypingStyle[] = [];
+  for (const part of raw.split(/[,|+\s]+/)) {
+    const normalized = TYPING_STYLE_ALIASES[part.trim().toLowerCase()];
+    if (normalized && !merged.includes(normalized)) {
+      merged.push(normalized);
+    }
+  }
+  return merged;
+}
+
+const TYPING_ALIGNMENT_ALIASES: Record<string, FormFieldTypingAlignment> = {
+  left: "left",
+  l: "left",
+  start: "left",
+  center: "center",
+  centre: "center",
+  middle: "center",
+  c: "center",
+  right: "right",
+  r: "right",
+  end: "right",
+};
+
+export function normalizeFormFieldTypingAlignment(
+  value: unknown,
+): FormFieldTypingAlignment {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  if (!raw) return "left";
+  const alias = TYPING_ALIGNMENT_ALIASES[raw];
+  if (alias) return alias;
+  if ((FORM_FIELD_TYPING_ALIGNMENTS as readonly string[]).includes(raw)) {
+    return raw as FormFieldTypingAlignment;
+  }
+  return "left";
+}
+
+export function supportsFormFieldTypingStyle(type: FormFieldType): boolean {
+  return (
+    type === "text" ||
+    type === "textarea" ||
+    type === "email" ||
+    type === "phone" ||
+    type === "date" ||
+    type === "time" ||
+    type === "date_time"
+  );
 }
 
 export function normalizeFormDateFormat(value: unknown): FormDateFormat {
@@ -360,6 +458,10 @@ export const formFieldSchema = z
     maxLength: z.number().int().min(0).max(MAX_TEXT).default(0),
     width: formFieldWidthSchema.default("default"),
     style: z.enum(FORM_FIELD_STYLES).default("default"),
+    typingStyle: z
+      .array(z.enum(FORM_FIELD_TYPING_STYLES))
+      .default([]),
+    typingAlignment: z.enum(FORM_FIELD_TYPING_ALIGNMENTS).default("left"),
     dateFormat: formDateFormatSchema.default("yyyy-mm-dd"),
     timeFormat: formTimeFormatSchema.default("HH:mm"),
     /** Default checked for a single yes/no checkbox (no options). */
@@ -383,6 +485,28 @@ export const formFieldSchema = z
         code: "custom",
         message: "checked is only supported on checkbox fields",
         path: ["checked"],
+      });
+    }
+    if (
+      field.typingStyle.length > 0 &&
+      !supportsFormFieldTypingStyle(field.type)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "typingStyle is only supported for text-like fields (text, textarea, email, phone, date, time, date_time)",
+        path: ["typingStyle"],
+      });
+    }
+    if (
+      field.typingAlignment !== "left" &&
+      !supportsFormFieldTypingStyle(field.type)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "typingAlignment is only supported for text-like fields (text, textarea, email, phone, date, time, date_time)",
+        path: ["typingAlignment"],
       });
     }
     if (
@@ -741,6 +865,8 @@ export type ParsedMarkdownFieldToken = {
   options: FormFieldOption[];
   placeholder: string;
   style: FormFieldStyle;
+  typingStyle: FormFieldTypingStyle[];
+  typingAlignment: FormFieldTypingAlignment;
   width: FormFieldWidth;
   dateFormat: FormDateFormat;
   timeFormat: FormTimeFormat;
@@ -1130,6 +1256,8 @@ export function parseMarkdownFieldToken(
   const rest = token.slice(header[0].length, -1);
   let placeholder = "";
   let style: FormFieldStyle = "default";
+  let typingStyle: FormFieldTypingStyle[] = [];
+  let typingAlignment: FormFieldTypingAlignment = "left";
   /** Unset size keeps fill-the-line behavior for existing markdown layouts. */
   let width: FormFieldWidth = "full-width";
   let dateFormat: FormDateFormat = "yyyy-mm-dd";
@@ -1154,6 +1282,14 @@ export function parseMarkdownFieldToken(
   ) {
     style = attrs.style as FormFieldStyle;
   }
+  typingStyle = normalizeFormFieldTypingStyles(
+    attrs.typing_style ?? attrs.typingStyle,
+  );
+  typingAlignment = normalizeFormFieldTypingAlignment(
+    attrs.typing_alignment ??
+      attrs.typingAlignment ??
+      attrs.typing_alligment,
+  );
   const rawSize = attrs.size ?? attrs.width;
   if (rawSize) {
     width = normalizeFormFieldWidth(rawSize);
@@ -1198,6 +1334,8 @@ export function parseMarkdownFieldToken(
     options: normalizeChoiceOptions(type, options),
     placeholder,
     style,
+    typingStyle,
+    typingAlignment,
     width,
     dateFormat,
     timeFormat,
@@ -1226,6 +1364,8 @@ export function emptyFormField(
     maxLength: 0,
     width: "default",
     style: "default",
+    typingStyle: [],
+    typingAlignment: "left",
     dateFormat: "yyyy-mm-dd",
     timeFormat: "HH:mm",
     checked: false,
@@ -1303,6 +1443,8 @@ export function parseFormSchemaMarkdown(markdown: string): {
         rawType === "text" || rawType === "textarea" ? parsedLine.maxLength : 0,
       width: parsedLine.width,
       style: parsedLine.style,
+      typingStyle: parsedLine.typingStyle,
+      typingAlignment: parsedLine.typingAlignment,
       dateFormat: parsedLine.dateFormat,
       timeFormat: parsedLine.timeFormat,
       checked: parsedLine.checked,

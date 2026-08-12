@@ -35,6 +35,8 @@ import {
   usesNativeDateInput,
   usesNativeTimeInput,
   type FormFieldErrorMessages,
+  type FormFieldTypingStyle,
+  type FormFieldTypingAlignment,
   type FormFieldWidth,
   type FormSubmissionValue,
   type FormUploadValue,
@@ -84,6 +86,34 @@ function inputStyleClass(style: string, invalid = false) {
     return `rounded-none border-x-0 border-t-0 border-b border-dotted border-gray-400 bg-transparent px-0 focus:border-gray-900${invalidClass}`;
   }
   return `rounded border border-gray-300 bg-white px-3 py-1.5 focus:border-gray-900${invalidClass}`;
+}
+
+function inputTypingStyleClass(typingStyle: FormFieldTypingStyle[] = []) {
+  const classes: string[] = [];
+  if (typingStyle.includes("bold")) classes.push("font-bold");
+  if (typingStyle.includes("italic")) classes.push("italic");
+  if (typingStyle.includes("underline")) classes.push("underline");
+  if (typingStyle.includes("strikethrough")) classes.push("line-through");
+  return classes.join(" ");
+}
+
+function inputTypingAlignmentClass(
+  alignment: FormFieldTypingAlignment = "left",
+) {
+  if (alignment === "center") return "text-center";
+  if (alignment === "right") return "text-right";
+  return "text-left";
+}
+
+function inputTypingClass(field: {
+  typingStyle?: FormFieldTypingStyle[];
+  typingAlignment?: FormFieldTypingAlignment;
+}) {
+  const classes = [
+    inputTypingStyleClass(field.typingStyle),
+    inputTypingAlignmentClass(field.typingAlignment),
+  ].filter(Boolean);
+  return classes.join(" ");
 }
 
 function FieldSuggestionIcon({ text }: { text: string }) {
@@ -494,7 +524,8 @@ function renderFormFieldToken(
   const value = ctx.values[field.name];
   const invalid = Boolean(ctx.fieldErrors[field.name]);
   const sizeClass = inputSizeClass(field.width);
-  const inputClass = `text-sm outline-none transition ${inputStyleClass(field.style, invalid)}`;
+  const typingClass = inputTypingClass(field);
+  const inputClass = `text-sm outline-none transition ${inputStyleClass(field.style, invalid)}${typingClass ? ` ${typingClass}` : ""}`;
   const isFirstTokenForField =
     ctx.firstTokenIndexByName.get(field.name) === tokenIndex;
   const showHint = isFirstTokenForField;
@@ -1122,7 +1153,8 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                 const value = values[field.name];
                 const invalid = Boolean(visibleFieldErrors[field.name]);
                 const sizeClass = inputSizeClass(field.width);
-                const commonTextClass = `${sizeClass} text-sm outline-none transition ${inputStyleClass(field.style, invalid)}`;
+                const typingClass = inputTypingClass(field);
+                const commonTextClass = `${sizeClass} text-sm outline-none transition ${inputStyleClass(field.style, invalid)}${typingClass ? ` ${typingClass}` : ""}`;
 
                 return (
                   <div key={field.id} className={fieldClass(field.width)}>

@@ -10,16 +10,22 @@ import {
 } from "@/lib/actions";
 import {
   emptyFormField,
+  FORM_FIELD_TYPING_STYLES,
+  FORM_FIELD_TYPING_ALIGNMENTS,
   normalizeChoiceOptions,
   normalizeFormDateFormat,
+  normalizeFormFieldTypingStyles,
+  normalizeFormFieldTypingAlignment,
   normalizeFormFieldWidth,
   normalizeFormTimeFormat,
   parseFormSchemaMarkdown,
+  supportsFormFieldTypingStyle,
   type FormDateFormat,
   type FormDefinitionFormValues,
   type FormDefinitionMode,
   type FormFieldDefinition,
   type FormFieldType,
+  type FormFieldTypingAlignment,
   type FormFieldWidth,
   type FormLocaleValues,
   type FormTimeFormat,
@@ -235,6 +241,17 @@ Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value
                 <code>style:default|borderless|underline|dotted_underline</code>
               </li>
               <li>
+                <code>
+                  typing_style:bold|italic|underline|strikethrough
+                </code>{" "}
+                — text appearance while typing (comma-separated to combine, e.g.{" "}
+                <code>typing_style:bold,italic</code>)
+              </li>
+              <li>
+                <code>typing_alignment:left|center|right</code> — text alignment
+                while typing (<code>typing_alligment</code> accepted as alias)
+              </li>
+              <li>
                 <code>checked:true</code> — default on for a single yes/no
                 checkbox (no options list)
               </li>
@@ -332,6 +349,8 @@ function mapLocaleFields(
         maxLength?: number;
         width?: string | null;
         style?: FormFieldDefinition["style"];
+        typingStyle?: FormFieldDefinition["typingStyle"] | null;
+        typingAlignment?: FormFieldDefinition["typingAlignment"] | null;
         dateFormat?: string | null;
         timeFormat?: string | null;
         checked?: boolean | null;
@@ -354,6 +373,8 @@ function mapLocaleFields(
     maxLength: field.maxLength ?? 0,
     width: normalizeFormFieldWidth(field.width),
     style: field.style ?? "default",
+    typingStyle: normalizeFormFieldTypingStyles(field.typingStyle),
+    typingAlignment: normalizeFormFieldTypingAlignment(field.typingAlignment),
     dateFormat: normalizeFormDateFormat(field.dateFormat),
     timeFormat: normalizeFormTimeFormat(field.timeFormat),
     checked: Boolean(field.checked),
@@ -1136,6 +1157,67 @@ export function FormDefinitionEditor({
                         <option value="dotted_underline">Dotted underline</option>
                       </select>
                     </label>
+
+                    {supportsFormFieldTypingStyle(field.type) ? (
+                      <fieldset className="block">
+                        <legend className="mb-1 text-sm font-medium">
+                          Typing style
+                        </legend>
+                        <div className="flex flex-wrap gap-x-4 gap-y-2">
+                          {FORM_FIELD_TYPING_STYLES.map((style) => (
+                            <label
+                              key={style}
+                              className="inline-flex items-center gap-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={field.typingStyle.includes(style)}
+                                onChange={() =>
+                                  setField(field.id, (current) => ({
+                                    ...current,
+                                    typingStyle: current.typingStyle.includes(
+                                      style,
+                                    )
+                                      ? current.typingStyle.filter(
+                                          (item) => item !== style,
+                                        )
+                                      : [...current.typingStyle, style],
+                                  }))
+                                }
+                                className="rounded border-gray-300"
+                              />
+                              <span className="capitalize">{style}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
+                    ) : null}
+
+                    {supportsFormFieldTypingStyle(field.type) ? (
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium">
+                          Typing alignment
+                        </span>
+                        <select
+                          value={field.typingAlignment}
+                          onChange={(e) =>
+                            setField(field.id, (current) => ({
+                              ...current,
+                              typingAlignment: e.target
+                                .value as FormFieldTypingAlignment,
+                            }))
+                          }
+                          className="w-full rounded border border-gray-300 px-3 py-2"
+                        >
+                          {FORM_FIELD_TYPING_ALIGNMENTS.map((alignment) => (
+                            <option key={alignment} value={alignment}>
+                              {alignment.charAt(0).toUpperCase() +
+                                alignment.slice(1)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
 
                     {field.type === "date" || field.type === "date_time" ? (
                       <label className="block">

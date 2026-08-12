@@ -21,6 +21,8 @@ import type {
 import {
   normalizeChoiceOptions,
   normalizeFormDateFormat,
+  normalizeFormFieldTypingStyles,
+  normalizeFormFieldTypingAlignment,
   normalizeFormFieldWidth,
   normalizeFormTimeFormat,
   validateSubmissionPayload,
@@ -94,6 +96,8 @@ function mapFields(
     maxLength: field.maxLength ?? 0,
     width: normalizeFormFieldWidth(field.width),
     style: field.style ?? "default",
+    typingStyle: normalizeFormFieldTypingStyles(field.typingStyle),
+    typingAlignment: normalizeFormFieldTypingAlignment(field.typingAlignment),
     dateFormat: normalizeFormDateFormat(field.dateFormat),
     timeFormat: normalizeFormTimeFormat(field.timeFormat),
     checked: Boolean(field.checked),
