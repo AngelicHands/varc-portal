@@ -19,7 +19,10 @@ import type {
   FormSubmissionStatus,
 } from "@/lib/validations/forms";
 import {
+  normalizeChoiceOptions,
+  normalizeFormDateFormat,
   normalizeFormFieldWidth,
+  normalizeFormTimeFormat,
   validateSubmissionPayload,
 } from "@/lib/validations/forms";
 import { getValkey } from "@/lib/cache/valkey";
@@ -91,10 +94,17 @@ function mapFields(
     maxLength: field.maxLength ?? 0,
     width: normalizeFormFieldWidth(field.width),
     style: field.style ?? "default",
-    options: (field.options ?? []).map((option) => ({
-      label: option.label,
-      value: option.value,
-    })),
+    dateFormat: normalizeFormDateFormat(field.dateFormat),
+    timeFormat: normalizeFormTimeFormat(field.timeFormat),
+    checked: Boolean(field.checked),
+    options: normalizeChoiceOptions(
+      (field.type as FormFieldDefinition["type"]) ?? "text",
+      (field.options ?? []).map((option) => ({
+        label: option.label,
+        value: option.value,
+        checked: Boolean(option.checked),
+      })),
+    ),
   }));
 }
 

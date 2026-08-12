@@ -74,6 +74,7 @@
     "invalidEmail": "{label} phải là email hợp lệ",
     "invalidPhone": "{label} phải là số điện thoại hợp lệ",
     "invalidDate": "{label} phải là ngày hợp lệ",
+    "invalidTime": "{label} phải là giờ hợp lệ",
     "invalidDateTime": "{label} phải là ngày giờ hợp lệ"
   }
 }

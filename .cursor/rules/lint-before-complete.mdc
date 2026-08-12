@@ -1,0 +1,14 @@
+---
+description: Always run lint before marking code changes complete
+alwaysApply: true
+---
+
+# Lint before complete
+
+Before considering any code change finished:
+
+1. Run `npm run lint` (or `pnpm lint`) from the repo root.
+2. Fix all reported lint errors and re-run until clean.
+3. Do not report the task as done while lint fails.
+
+Also run typecheck (`npx tsc --noEmit`) when the change touches TypeScript types, schemas, or public APIs.

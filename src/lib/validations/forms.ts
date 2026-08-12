@@ -26,6 +26,7 @@ export const FORM_FIELD_TYPES = [
   "checkbox",
   "radio",
   "date",
+  "time",
   "date_time",
   "image",
   "file",
@@ -43,6 +44,15 @@ export const FORM_FIELD_STYLES = [
   "underline",
   "dotted_underline",
 ] as const;
+
+export const FORM_DATE_FORMATS = [
+  "yyyy-mm-dd",
+  "dd/mm/yyyy",
+  "mm/dd/yyyy",
+  "dd-mm-yyyy",
+] as const;
+
+export const FORM_TIME_FORMATS = ["HH:mm", "hh:mm a"] as const;
 
 export const FORM_UPLOAD_IMAGE_MIME = [
   "image/jpeg",
@@ -68,6 +78,8 @@ export const FORM_UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 export type FormFieldWidth = (typeof FORM_FIELD_WIDTHS)[number];
 export type FormFieldStyle = (typeof FORM_FIELD_STYLES)[number];
+export type FormDateFormat = (typeof FORM_DATE_FORMATS)[number];
+export type FormTimeFormat = (typeof FORM_TIME_FORMATS)[number];
 
 /** Map legacy full/half values and markdown aliases onto current presets. */
 export function normalizeFormFieldWidth(value: unknown): FormFieldWidth {
@@ -76,6 +88,211 @@ export function normalizeFormFieldWidth(value: unknown): FormFieldWidth {
   if (value === "wide") return "wide";
   if (value === "default") return "default";
   return "default";
+}
+
+export function normalizeFormDateFormat(value: unknown): FormDateFormat {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  if (
+    raw === "yyyy-mm-dd" ||
+    raw === "yyyy/mm/dd" ||
+    raw === "iso" ||
+    raw === "native"
+  ) {
+    return "yyyy-mm-dd";
+  }
+  if (raw === "dd/mm/yyyy" || raw === "d/m/yyyy" || raw === "ddmmyyyy") {
+    return "dd/mm/yyyy";
+  }
+  if (raw === "mm/dd/yyyy" || raw === "m/d/yyyy" || raw === "mmddyyyy") {
+    return "mm/dd/yyyy";
+  }
+  if (
+    raw === "dd-mm-yyyy" ||
+    raw === "d-m-yyyy" ||
+    raw === "dd.mm.yyyy"
+  ) {
+    return "dd-mm-yyyy";
+  }
+  if (
+    typeof value === "string" &&
+    (FORM_DATE_FORMATS as readonly string[]).includes(value)
+  ) {
+    return value as FormDateFormat;
+  }
+  return "yyyy-mm-dd";
+}
+
+export function normalizeFormTimeFormat(value: unknown): FormTimeFormat {
+  const original = String(value ?? "").trim();
+  const compact = original.toLowerCase().replace(/\s+/g, "");
+
+  if (
+    original === "hh:mm a" ||
+    compact === "hh:mma" ||
+    compact === "h:mma" ||
+    compact === "12h" ||
+    compact === "12-hour" ||
+    compact === "ampm" ||
+    compact === "hh:mmam/pm"
+  ) {
+    return "hh:mm a";
+  }
+
+  if (
+    original === "HH:mm" ||
+    compact === "hh:mm" ||
+    compact === "hh:mm:ss" ||
+    compact === "24h" ||
+    compact === "24-hour" ||
+    compact === "native"
+  ) {
+    return "HH:mm";
+  }
+
+  return "HH:mm";
+}
+
+export function dateFormatPlaceholder(format: FormDateFormat): string {
+  return format;
+}
+
+export function timeFormatPlaceholder(format: FormTimeFormat): string {
+  return format === "hh:mm a" ? "hh:mm AM" : "HH:mm";
+}
+
+export function dateTimeFormatPlaceholder(
+  dateFormat: FormDateFormat,
+  timeFormat: FormTimeFormat,
+): string {
+  return `${dateFormatPlaceholder(dateFormat)} ${timeFormatPlaceholder(timeFormat)}`;
+}
+
+export function usesNativeDateInput(format: FormDateFormat): boolean {
+  return format === "yyyy-mm-dd";
+}
+
+export function usesNativeTimeInput(format: FormTimeFormat): boolean {
+  return format === "HH:mm";
+}
+
+function isValidCalendarDate(year: number, month: number, day: number) {
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return false;
+  }
+  if (year < 1000 || year > 9999 || month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+export function isValidFormDateValue(
+  value: string,
+  format: FormDateFormat,
+): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  let year = 0;
+  let month = 0;
+  let day = 0;
+
+  if (format === "yyyy-mm-dd") {
+    const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return false;
+    year = Number(match[1]);
+    month = Number(match[2]);
+    day = Number(match[3]);
+  } else if (format === "dd/mm/yyyy") {
+    const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!match) return false;
+    day = Number(match[1]);
+    month = Number(match[2]);
+    year = Number(match[3]);
+  } else if (format === "mm/dd/yyyy") {
+    const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!match) return false;
+    month = Number(match[1]);
+    day = Number(match[2]);
+    year = Number(match[3]);
+  } else {
+    const match = trimmed.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (!match) return false;
+    day = Number(match[1]);
+    month = Number(match[2]);
+    year = Number(match[3]);
+  }
+
+  return isValidCalendarDate(year, month, day);
+}
+
+export function isValidFormTimeValue(
+  value: string,
+  format: FormTimeFormat,
+): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  if (format === "HH:mm") {
+    const match = trimmed.match(/^([01]\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/);
+    return Boolean(match);
+  }
+
+  const match = trimmed.match(/^([0-1]?\d):([0-5]\d)\s*([AaPp][Mm])$/);
+  if (!match) return false;
+  const hour = Number(match[1]);
+  return hour >= 1 && hour <= 12;
+}
+
+export function isValidFormDateTimeValue(
+  value: string,
+  dateFormat: FormDateFormat,
+  timeFormat: FormTimeFormat,
+): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+
+  if (
+    usesNativeDateInput(dateFormat) &&
+    usesNativeTimeInput(timeFormat)
+  ) {
+    const match = trimmed.match(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/,
+    );
+    if (!match || Number.isNaN(Date.parse(trimmed))) return false;
+    const [datePart] = trimmed.split("T");
+    return isValidFormDateValue(datePart ?? "", "yyyy-mm-dd");
+  }
+
+  const parts = trimmed.split(/\s+/);
+  if (timeFormat === "hh:mm a") {
+    if (parts.length < 3) return false;
+    const timePart = `${parts[parts.length - 2]} ${parts[parts.length - 1]}`;
+    const datePart = parts.slice(0, -2).join(" ");
+    return (
+      isValidFormDateValue(datePart, dateFormat) &&
+      isValidFormTimeValue(timePart, timeFormat)
+    );
+  }
+
+  if (parts.length < 2) return false;
+  const timePart = parts[parts.length - 1] ?? "";
+  const datePart = parts.slice(0, -1).join(" ");
+  return (
+    isValidFormDateValue(datePart, dateFormat) &&
+    isValidFormTimeValue(timePart, timeFormat)
+  );
 }
 
 export type FormUploadValue = {
@@ -103,6 +320,7 @@ export function isFormUploadValue(value: unknown): value is FormUploadValue {
 export const formFieldOptionSchema = z.object({
   label: z.string().trim().min(1, "Option label is required").max(200),
   value: z.string().trim().min(1, "Option value is required").max(200),
+  checked: z.boolean().default(false),
 });
 
 export type FormFieldOption = z.infer<typeof formFieldOptionSchema>;
@@ -111,6 +329,16 @@ const formFieldWidthSchema = z
   .string()
   .optional()
   .transform((value): FormFieldWidth => normalizeFormFieldWidth(value));
+
+const formDateFormatSchema = z
+  .string()
+  .optional()
+  .transform((value): FormDateFormat => normalizeFormDateFormat(value));
+
+const formTimeFormatSchema = z
+  .string()
+  .optional()
+  .transform((value): FormTimeFormat => normalizeFormTimeFormat(value));
 
 export const formFieldSchema = z
   .object({
@@ -132,6 +360,10 @@ export const formFieldSchema = z
     maxLength: z.number().int().min(0).max(MAX_TEXT).default(0),
     width: formFieldWidthSchema.default("default"),
     style: z.enum(FORM_FIELD_STYLES).default("default"),
+    dateFormat: formDateFormatSchema.default("yyyy-mm-dd"),
+    timeFormat: formTimeFormatSchema.default("HH:mm"),
+    /** Default checked for a single yes/no checkbox (no options). */
+    checked: z.boolean().default(false),
     options: z.array(formFieldOptionSchema).max(100).default([]),
   })
   .superRefine((field, ctx) => {
@@ -144,6 +376,25 @@ export const formFieldSchema = z
         code: "custom",
         message: "Max length is only supported for text and textarea fields",
         path: ["maxLength"],
+      });
+    }
+    if (field.checked && field.type !== "checkbox") {
+      ctx.addIssue({
+        code: "custom",
+        message: "checked is only supported on checkbox fields",
+        path: ["checked"],
+      });
+    }
+    if (
+      field.type === "checkbox" &&
+      field.options.length > 0 &&
+      field.checked
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "Use option checked flags for checkbox groups; field checked is for yes/no only",
+        path: ["checked"],
       });
     }
     if (
@@ -170,6 +421,47 @@ export const formFieldSchema = z
   });
 
 export type FormFieldDefinition = z.infer<typeof formFieldSchema>;
+
+/** Keep at most one checked option for radio fields. */
+export function normalizeChoiceOptions(
+  type: FormFieldType,
+  options: FormFieldOption[],
+): FormFieldOption[] {
+  if (type !== "radio") {
+    return options.map((option) => ({
+      ...option,
+      checked: Boolean(option.checked),
+    }));
+  }
+
+  let found = false;
+  return options.map((option) => {
+    const checked = Boolean(option.checked) && !found;
+    if (checked) found = true;
+    return { ...option, checked };
+  });
+}
+
+/** Initial public-form value from field defaults / checked options. */
+export function defaultSubmissionValue(
+  field: FormFieldDefinition,
+): FormSubmissionValue {
+  if (field.type === "checkbox") {
+    if (field.options.length > 0) {
+      return field.options
+        .filter((option) => option.checked)
+        .map((option) => option.value);
+    }
+    return Boolean(field.checked);
+  }
+  if (field.type === "radio") {
+    return (
+      field.options.find((option) => option.checked)?.value ??
+      ""
+    );
+  }
+  return "";
+}
 
 export const FORM_DEFINITION_MODES = ["fields", "markdown"] as const;
 export type FormDefinitionMode = (typeof FORM_DEFINITION_MODES)[number];
@@ -435,7 +727,7 @@ export const FORM_SUBMISSION_STATUSES = ["new", "reviewed", "archived"] as const
 export type FormSubmissionStatus = (typeof FORM_SUBMISSION_STATUSES)[number];
 
 const FIELD_TYPE_PATTERN =
-  "text|textarea|email|phone|select|checkbox|radio|date_time|date|image|file";
+  "text|textarea|email|phone|select|checkbox|radio|date_time|date|time|image|file";
 
 /** Simple tokens without nested `]` — prefer `scanMarkdownFieldTokens`. */
 export const MARKDOWN_FIELD_TOKEN_RE = new RegExp(
@@ -450,7 +742,10 @@ export type ParsedMarkdownFieldToken = {
   placeholder: string;
   style: FormFieldStyle;
   width: FormFieldWidth;
+  dateFormat: FormDateFormat;
+  timeFormat: FormTimeFormat;
   required: boolean;
+  checked: boolean;
   helpText: string;
   maxLength: number;
 };
@@ -586,6 +881,7 @@ function parseOptionObject(raw: string): FormFieldOption | null {
 
   let label = "";
   let value = "";
+  let checked = false;
   let i = 0;
   const bareStrings: string[] = [];
 
@@ -632,6 +928,12 @@ function parseOptionObject(raw: string): FormFieldOption | null {
       label = parsedValue;
     } else if (key === "value" || key === "id" || key === "key") {
       value = parsedValue;
+    } else if (
+      key === "checked" ||
+      key === "selected" ||
+      key === "default"
+    ) {
+      checked = parseBooleanAttr(parsedValue);
     } else if (!label && parsedValue) {
       // tolerate `{value:"x", "Label text"}` style by treating unknown later
       bareStrings.push(parsedValue);
@@ -647,7 +949,7 @@ function parseOptionObject(raw: string): FormFieldOption | null {
   if (!label && value) label = value;
   if (!value && label) value = optionValue(label);
   if (!label || !value) return null;
-  return { label, value };
+  return { label, value, checked };
 }
 
 export function parseOptionsArray(raw: string): FormFieldOption[] {
@@ -689,6 +991,7 @@ export function parseOptionsArray(raw: string): FormFieldOption[] {
       options.push({
         label: quoted.value,
         value: optionValue(quoted.value),
+        checked: false,
       });
       i = quoted.end;
       continue;
@@ -698,7 +1001,7 @@ export function parseOptionsArray(raw: string): FormFieldOption[] {
     while (i < inner.length && inner[i] !== ",") i += 1;
     const label = inner.slice(start, i).trim();
     if (label) {
-      options.push({ label, value: optionValue(label) });
+      options.push({ label, value: optionValue(label), checked: false });
     }
   }
 
@@ -823,12 +1126,16 @@ export function parseMarkdownFieldToken(
   );
   if (!header || !token.endsWith("]")) return null;
 
+  const type = header[1]!.toLowerCase() as FormFieldType;
   const rest = token.slice(header[0].length, -1);
   let placeholder = "";
   let style: FormFieldStyle = "default";
   /** Unset size keeps fill-the-line behavior for existing markdown layouts. */
   let width: FormFieldWidth = "full-width";
+  let dateFormat: FormDateFormat = "yyyy-mm-dd";
+  let timeFormat: FormTimeFormat = "HH:mm";
   let required = false;
+  let checked = false;
   let helpText = "";
   let maxLength = 0;
 
@@ -851,7 +1158,25 @@ export function parseMarkdownFieldToken(
   if (rawSize) {
     width = normalizeFormFieldWidth(rawSize);
   }
+  if (attrs.dateFormat || attrs.date_format) {
+    dateFormat = normalizeFormDateFormat(
+      attrs.dateFormat ?? attrs.date_format,
+    );
+  } else if (attrs.format && type !== "time") {
+    dateFormat = normalizeFormDateFormat(attrs.format);
+  }
+  if (attrs.timeFormat || attrs.time_format) {
+    timeFormat = normalizeFormTimeFormat(
+      attrs.timeFormat ?? attrs.time_format,
+    );
+  } else if (attrs.format && type === "time") {
+    timeFormat = normalizeFormTimeFormat(attrs.format);
+  }
   required = parseBooleanAttr(attrs.required);
+  checked =
+    type === "checkbox" && options.length === 0
+      ? parseBooleanAttr(attrs.checked ?? attrs.selected ?? attrs.default)
+      : false;
   helpText = (attrs.suggestion ?? attrs.help ?? "").trim();
   placeholder = (attrs.placeholder ?? "").trim();
   const rawMax = attrs.maxLength ?? attrs.max ?? "";
@@ -860,7 +1185,6 @@ export function parseMarkdownFieldToken(
     maxLength = Math.min(parsedMax, MAX_TEXT);
   }
 
-  const type = header[1]!.toLowerCase() as FormFieldType;
   if (
     (type === "select" || type === "radio") &&
     options.length === 0
@@ -871,11 +1195,14 @@ export function parseMarkdownFieldToken(
   return {
     type,
     name: header[2] ?? "",
-    options,
+    options: normalizeChoiceOptions(type, options),
     placeholder,
     style,
     width,
+    dateFormat,
+    timeFormat,
     required,
+    checked,
     helpText,
     maxLength,
   };
@@ -899,9 +1226,12 @@ export function emptyFormField(
     maxLength: 0,
     width: "default",
     style: "default",
+    dateFormat: "yyyy-mm-dd",
+    timeFormat: "HH:mm",
+    checked: false,
     options:
       type === "select" || type === "radio"
-        ? [{ label: "Option 1", value: "option-1" }]
+        ? [{ label: "Option 1", value: "option-1", checked: false }]
         : [],
   };
 }
@@ -973,7 +1303,10 @@ export function parseFormSchemaMarkdown(markdown: string): {
         rawType === "text" || rawType === "textarea" ? parsedLine.maxLength : 0,
       width: parsedLine.width,
       style: parsedLine.style,
-      options: parsedLine.options,
+      dateFormat: parsedLine.dateFormat,
+      timeFormat: parsedLine.timeFormat,
+      checked: parsedLine.checked,
+      options: normalizeChoiceOptions(rawType, parsedLine.options),
     });
   }
 
@@ -1010,6 +1343,7 @@ export type FormFieldErrorMessages = {
   invalidEmail: (label: string) => string;
   invalidPhone: (label: string) => string;
   invalidDate: (label: string) => string;
+  invalidTime: (label: string) => string;
   invalidDateTime: (label: string) => string;
 };
 
@@ -1022,6 +1356,7 @@ const defaultFieldErrorMessages: FormFieldErrorMessages = {
   invalidEmail: (label) => `${label} must be a valid email`,
   invalidPhone: (label) => `${label} must be a valid phone number`,
   invalidDate: (label) => `${label} must be a valid date`,
+  invalidTime: (label) => `${label} must be a valid time`,
   invalidDateTime: (label) => `${label} must be a valid date and time`,
 };
 
@@ -1177,8 +1512,7 @@ export function validateSubmissionPayload(
     }
 
     if (field.type === "date") {
-      const parsed = z.string().date().safeParse(value);
-      if (!parsed.success) {
+      if (!isValidFormDateValue(value, field.dateFormat)) {
         return {
           ok: false,
           error: messages.invalidDate(field.label),
@@ -1187,12 +1521,24 @@ export function validateSubmissionPayload(
       }
     }
 
+    if (field.type === "time") {
+      if (!isValidFormTimeValue(value, field.timeFormat)) {
+        return {
+          ok: false,
+          error: messages.invalidTime(field.label),
+          fieldName: field.name,
+        };
+      }
+    }
+
     if (field.type === "date_time") {
-      const parsed = z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/)
-        .safeParse(value);
-      if (!parsed.success || Number.isNaN(Date.parse(value))) {
+      if (
+        !isValidFormDateTimeValue(
+          value,
+          field.dateFormat,
+          field.timeFormat,
+        )
+      ) {
         return {
           ok: false,
           error: messages.invalidDateTime(field.label),

@@ -3,12 +3,15 @@ import {
   FORM_FIELD_TYPES,
   FORM_FIELD_STYLES,
   FORM_FIELD_WIDTHS,
+  FORM_DATE_FORMATS,
+  FORM_TIME_FORMATS,
 } from "@/lib/validations/forms";
 
 const FormFieldOptionSchema = new Schema(
   {
     label: { type: String, required: true, trim: true },
     value: { type: String, required: true, trim: true },
+    checked: { type: Boolean, default: false },
   },
   { _id: false },
 );
@@ -33,6 +36,17 @@ const FormFieldSchema = new Schema(
       enum: FORM_FIELD_STYLES,
       default: "default",
     },
+    dateFormat: {
+      type: String,
+      enum: FORM_DATE_FORMATS,
+      default: "yyyy-mm-dd",
+    },
+    timeFormat: {
+      type: String,
+      enum: FORM_TIME_FORMATS,
+      default: "HH:mm",
+    },
+    checked: { type: Boolean, default: false },
     options: { type: [FormFieldOptionSchema], default: [] },
   },
   { _id: false },

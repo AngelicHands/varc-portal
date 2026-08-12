@@ -40,7 +40,10 @@ import {
   formDefinitionFormSchema,
   formatZodIssues,
   isFormUploadValue,
+  normalizeChoiceOptions,
+  normalizeFormDateFormat,
   normalizeFormFieldWidth,
+  normalizeFormTimeFormat,
 } from "@/lib/validations/forms";
 import {
   pageTemplateFormSchema,
@@ -1080,10 +1083,17 @@ export async function saveFormDefinitionAction(
         maxLength: field.maxLength ?? 0,
         width: normalizeFormFieldWidth(field.width),
         style: field.style,
-        options: field.options.map((option) => ({
-          label: option.label.trim(),
-          value: option.value.trim(),
-        })),
+        dateFormat: normalizeFormDateFormat(field.dateFormat),
+        timeFormat: normalizeFormTimeFormat(field.timeFormat),
+        checked: Boolean(field.checked),
+        options: normalizeChoiceOptions(
+          field.type,
+          field.options.map((option) => ({
+            label: option.label.trim(),
+            value: option.value.trim(),
+            checked: Boolean(option.checked),
+          })),
+        ),
       }));
     }
 

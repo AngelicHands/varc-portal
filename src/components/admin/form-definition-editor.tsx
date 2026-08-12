@@ -9,14 +9,19 @@ import {
 } from "@/lib/actions";
 import {
   emptyFormField,
+  normalizeChoiceOptions,
+  normalizeFormDateFormat,
   normalizeFormFieldWidth,
+  normalizeFormTimeFormat,
   parseFormSchemaMarkdown,
+  type FormDateFormat,
   type FormDefinitionFormValues,
   type FormDefinitionMode,
   type FormFieldDefinition,
   type FormFieldType,
   type FormFieldWidth,
   type FormLocaleValues,
+  type FormTimeFormat,
 } from "@/lib/validations/forms";
 import { makeSlug } from "@/lib/slug";
 import { notifyAction, notifyError } from "@/components/admin/admin-toast";
@@ -55,6 +60,7 @@ const FIELD_TYPES: Array<{ value: FormFieldType; label: string }> = [
   { value: "checkbox", label: "Checkbox" },
   { value: "radio", label: "Radio" },
   { value: "date", label: "Date" },
+  { value: "time", label: "Time" },
   { value: "date_time", label: "Date & time" },
   { value: "image", label: "Image upload" },
   { value: "file", label: "File upload" },
@@ -155,11 +161,13 @@ function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
               is filled, it becomes the source of truth for fields.
             </p>
             <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
-{`#![text|email|phone|textarea|select|checkbox|radio|date|date_time|image|file:{field_name}:{
+{`#![text|email|phone|textarea|select|checkbox|radio|date|time|date_time|image|file:{field_name}:{
   required:true,
   placeholder:"…",
   maxLength:80,
   size:medium,
+  dateFormat:dd/mm/yyyy,
+  timeFormat:HH:mm,
   style:underline,
   suggestion:"…"
 }]`}
@@ -172,11 +180,14 @@ function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
 {`Your name: #![text:{full_name}:{required:true,placeholder:"Your name",style:underline,size:wide,maxLength:80,suggestion:"Enter your legal name"}]
 Notes: #![textarea:{notes}:{required:true,maxLength:500,size:full-width}]
 Email: #![email:{email}:{required:true,placeholder:"name@example.com",size:medium}]
-Meeting: #![date_time:{meeting_at}:{required:true}]
+Birthday: #![date:{birthday}:{required:true,dateFormat:dd/mm/yyyy}]
+Start time: #![time:{start_time}:{required:true,timeFormat:HH:mm}]
+Meeting: #![date_time:{meeting_at}:{required:true,dateFormat:dd/mm/yyyy,timeFormat:hh:mm a}]
 Prefer contact by:
-#![radio:{contact}:{options:[{value:"email",label:"Email"},{value:"phone",label:"Phone"}],suggestion:"Choose one"}]
+#![radio:{contact}:{options:[{value:"email",label:"Email",checked:true},{value:"phone",label:"Phone"}],suggestion:"Choose one"}]
 Topics:
-#![checkbox:{topics}:{options:[{value:"dx",label:"DX"},{value:"comms",label:"Emergency comms"}],suggestion:"Select all that apply"}]
+#![checkbox:{topics}:{options:[{value:"dx",label:"DX",checked:true},{value:"comms",label:"Emergency comms"}],suggestion:"Select all that apply"}]
+Agree: #![checkbox:{agree}:{checked:true,placeholder:"I agree to the terms"}]
 ID photo: #![image:{id_photo}:{required:true,suggestion:"JPEG or PNG"}]
 Resume: #![file:{resume}:{suggestion:"PDF preferred"}]
 Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}],size:medium}]`}
@@ -211,17 +222,34 @@ Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value
                 preset (<code>width:</code> is accepted as an alias)
               </li>
               <li>
+                <code>dateFormat:yyyy-mm-dd|dd/mm/yyyy|mm/dd/yyyy|dd-mm-yyyy</code>{" "}
+                — for <code>date</code> / <code>date_time</code> (native picker
+                when <code>yyyy-mm-dd</code>)
+              </li>
+              <li>
+                <code>timeFormat:HH:mm|hh:mm a</code> — for <code>time</code> /{" "}
+                <code>date_time</code> (native picker when <code>HH:mm</code>)
+              </li>
+              <li>
                 <code>style:default|borderless|underline|dotted_underline</code>
               </li>
               <li>
-                Option lists for radio, checkbox, and select:
+                <code>checked:true</code> — default on for a single yes/no
+                checkbox (no options list)
+              </li>
+              <li>
+                Option lists for radio, checkbox, and select. Use{" "}
+                <code>checked:true</code> on an option for the default
+                selection (radio keeps only the first checked option):
                 <pre className="mt-2 overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
 {`#![checkbox:{topics}:{options:[
-  {value:"dx",label:"DX"},
+  {value:"dx",label:"DX",checked:true},
   {value:"comms",label:"Emergency comms"}
 ],suggestion:"Select all that apply"}]
 
-#![radio:{contact}:{options:[{value:"email",label:"Email"},{value:"phone",label:"Phone"}]}]
+#![radio:{contact}:{options:[{value:"email",label:"Email",checked:true},{value:"phone",label:"Phone"}]}]
+
+#![checkbox:{agree}:{checked:true,placeholder:"I agree"}]
 
 #![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}]}]`}
                 </pre>
@@ -299,7 +327,14 @@ function mapLocaleFields(
         maxLength?: number;
         width?: string | null;
         style?: FormFieldDefinition["style"];
-        options?: FormFieldDefinition["options"];
+        dateFormat?: string | null;
+        timeFormat?: string | null;
+        checked?: boolean | null;
+        options?: Array<{
+          label: string;
+          value: string;
+          checked?: boolean | null;
+        }>;
       }>
     | undefined,
 ): FormFieldDefinition[] {
@@ -314,10 +349,17 @@ function mapLocaleFields(
     maxLength: field.maxLength ?? 0,
     width: normalizeFormFieldWidth(field.width),
     style: field.style ?? "default",
-    options: (field.options ?? []).map((option) => ({
-      label: option.label,
-      value: option.value,
-    })),
+    dateFormat: normalizeFormDateFormat(field.dateFormat),
+    timeFormat: normalizeFormTimeFormat(field.timeFormat),
+    checked: Boolean(field.checked),
+    options: normalizeChoiceOptions(
+      field.type,
+      (field.options ?? []).map((option) => ({
+        label: option.label,
+        value: option.value,
+        checked: Boolean(option.checked),
+      })),
+    ),
   }));
 }
 
@@ -372,7 +414,12 @@ function defaultNameFromLabel(label: string) {
 }
 
 function optionsToText(options: FormFieldDefinition["options"]) {
-  return options.map((option) => `${option.label}|${option.value}`).join("\n");
+  return options
+    .map((option) => {
+      const base = `${option.label}|${option.value}`;
+      return option.checked ? `${base}|checked` : base;
+    })
+    .join("\n");
 }
 
 function textToOptions(text: string) {
@@ -381,12 +428,17 @@ function textToOptions(text: string) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [label, rawValue] = line.split("|");
+      const [label, rawValue, rawChecked] = line.split("|");
       const trimmedLabel = (label ?? "").trim();
       const value = (rawValue ?? defaultNameFromLabel(trimmedLabel)).trim();
+      const checkedFlag = (rawChecked ?? "").trim().toLowerCase();
+      const checked = ["1", "true", "yes", "on", "checked", "*"].includes(
+        checkedFlag,
+      );
       return {
         label: trimmedLabel,
         value: value || defaultNameFromLabel(trimmedLabel),
+        checked,
       };
     });
 }
@@ -990,13 +1042,24 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                           setField(field.id, (current) => ({
                             ...current,
                             type: nextType,
+                            checked:
+                              nextType === "checkbox" ? current.checked : false,
                             options:
                               nextType === "select" ||
                               nextType === "radio" ||
                               nextType === "checkbox"
-                                ? current.options.length
-                                  ? current.options
-                                  : [{ label: "Option 1", value: "option-1" }]
+                                ? normalizeChoiceOptions(
+                                    nextType,
+                                    current.options.length
+                                      ? current.options
+                                      : [
+                                          {
+                                            label: "Option 1",
+                                            value: "option-1",
+                                            checked: false,
+                                          },
+                                        ],
+                                  )
                                 : [],
                           }));
                         }}
@@ -1055,6 +1118,50 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                         <option value="dotted_underline">Dotted underline</option>
                       </select>
                     </label>
+
+                    {field.type === "date" || field.type === "date_time" ? (
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium">
+                          Date format
+                        </span>
+                        <select
+                          value={field.dateFormat}
+                          onChange={(e) =>
+                            setField(field.id, (current) => ({
+                              ...current,
+                              dateFormat: e.target.value as FormDateFormat,
+                            }))
+                          }
+                          className="w-full rounded border border-gray-300 px-3 py-2"
+                        >
+                          <option value="yyyy-mm-dd">yyyy-mm-dd (native)</option>
+                          <option value="dd/mm/yyyy">dd/mm/yyyy</option>
+                          <option value="mm/dd/yyyy">mm/dd/yyyy</option>
+                          <option value="dd-mm-yyyy">dd-mm-yyyy</option>
+                        </select>
+                      </label>
+                    ) : null}
+
+                    {field.type === "time" || field.type === "date_time" ? (
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium">
+                          Time format
+                        </span>
+                        <select
+                          value={field.timeFormat}
+                          onChange={(e) =>
+                            setField(field.id, (current) => ({
+                              ...current,
+                              timeFormat: e.target.value as FormTimeFormat,
+                            }))
+                          }
+                          className="w-full rounded border border-gray-300 px-3 py-2"
+                        >
+                          <option value="HH:mm">HH:mm (24h, native)</option>
+                          <option value="hh:mm a">hh:mm AM/PM</option>
+                        </select>
+                      </label>
+                    ) : null}
 
                     <label className="block">
                       <span className="mb-1 block text-sm font-medium">Label</span>
@@ -1179,16 +1286,43 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                           onChange={(e) =>
                             setField(field.id, (current) => ({
                               ...current,
-                              options: textToOptions(e.target.value),
+                              checked:
+                                current.type === "checkbox" &&
+                                textToOptions(e.target.value).length > 0
+                                  ? false
+                                  : current.checked,
+                              options: normalizeChoiceOptions(
+                                current.type,
+                                textToOptions(e.target.value),
+                              ),
                             }))
                           }
                           className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
-                          placeholder={"Option label|option_value"}
+                          placeholder={"Option label|option_value|checked"}
                         />
                         <p className="mt-1 text-xs text-gray-500">
-                          One option per line. Use `label|value`. Leave empty for
-                          a single yes/no checkbox.
+                          One option per line. Use `label|value` or
+                          `label|value|checked`. Leave empty for a single
+                          yes/no checkbox.
                         </p>
+                      </label>
+                    ) : null}
+
+                    {field.type === "checkbox" &&
+                    (field.options?.length ?? 0) === 0 ? (
+                      <label className="flex items-center gap-2 md:col-span-2">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(field.checked)}
+                          onChange={(e) =>
+                            setField(field.id, (current) => ({
+                              ...current,
+                              checked: e.target.checked,
+                            }))
+                          }
+                          className="form-choice-input"
+                        />
+                        <span className="text-sm">Checked by default</span>
                       </label>
                     ) : null}
                   </div>

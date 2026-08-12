@@ -74,6 +74,7 @@
     "invalidEmail": "{label} must be a valid email",
     "invalidPhone": "{label} must be a valid phone number",
     "invalidDate": "{label} must be a valid date",
+    "invalidTime": "{label} must be a valid time",
     "invalidDateTime": "{label} must be a valid date and time"
   }
 }

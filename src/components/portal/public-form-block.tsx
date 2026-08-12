@@ -18,7 +18,13 @@ import {
   FORM_UPLOAD_IMAGE_MIME,
   FORM_UPLOAD_MAX_BYTES,
   collectSubmissionFieldErrors,
+  dateFormatPlaceholder,
+  dateTimeFormatPlaceholder,
+  defaultSubmissionValue,
   isFormUploadValue,
+  timeFormatPlaceholder,
+  usesNativeDateInput,
+  usesNativeTimeInput,
   type FormFieldErrorMessages,
   type FormFieldWidth,
   type FormSubmissionValue,
@@ -296,9 +302,38 @@ function isFillWidthFieldType(type: PublicFormField["type"]) {
     type === "email" ||
     type === "phone" ||
     type === "date" ||
+    type === "time" ||
     type === "date_time" ||
     type === "select"
   );
+}
+
+function dateTimeInputType(field: PublicFormField): string {
+  if (field.type === "date") {
+    return usesNativeDateInput(field.dateFormat) ? "date" : "text";
+  }
+  if (field.type === "time") {
+    return usesNativeTimeInput(field.timeFormat) ? "time" : "text";
+  }
+  if (field.type === "date_time") {
+    return usesNativeDateInput(field.dateFormat) &&
+      usesNativeTimeInput(field.timeFormat)
+      ? "datetime-local"
+      : "text";
+  }
+  if (field.type === "email") return "email";
+  if (field.type === "phone") return "tel";
+  return "text";
+}
+
+function dateTimePlaceholder(field: PublicFormField): string {
+  if (field.placeholder.trim()) return field.placeholder;
+  if (field.type === "date") return dateFormatPlaceholder(field.dateFormat);
+  if (field.type === "time") return timeFormatPlaceholder(field.timeFormat);
+  if (field.type === "date_time") {
+    return dateTimeFormatPlaceholder(field.dateFormat, field.timeFormat);
+  }
+  return "";
 }
 
 function renderFormFieldToken(
@@ -505,17 +540,7 @@ function renderFormFieldToken(
       }
     >
       <input
-        type={
-          field.type === "email"
-            ? "email"
-            : field.type === "phone"
-              ? "tel"
-              : field.type === "date"
-                ? "date"
-                : field.type === "date_time"
-                  ? "datetime-local"
-                  : "text"
-        }
+        type={dateTimeInputType(field)}
         aria-required={field.required}
         aria-invalid={invalid}
         maxLength={
@@ -524,7 +549,7 @@ function renderFormFieldToken(
             : undefined
         }
         value={typeof value === "string" ? value : ""}
-        placeholder={field.placeholder}
+        placeholder={dateTimePlaceholder(field) || field.placeholder}
         onChange={(e) => {
           ctx.clearFieldError(field.name);
           ctx.setValues((prev) => ({
@@ -691,20 +716,14 @@ export function PublicFormBlock({ form, preview = false }: Props) {
       invalidEmail: (label) => t("invalidEmail", { label }),
       invalidPhone: (label) => t("invalidPhone", { label }),
       invalidDate: (label) => t("invalidDate", { label }),
+      invalidTime: (label) => t("invalidTime", { label }),
       invalidDateTime: (label) => t("invalidDateTime", { label }),
     }),
     [t],
   );
   const [values, setValues] = useState<Record<string, FormSubmissionValue>>(() =>
     Object.fromEntries(
-      form.fields.map((field) => [
-        field.name,
-        field.type === "checkbox"
-          ? field.options.length > 0
-            ? []
-            : false
-          : "",
-      ]),
+      form.fields.map((field) => [field.name, defaultSubmissionValue(field)]),
     ),
   );
   const [state, setState] = useState<SubmitState>({ type: "idle" });
@@ -785,11 +804,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
         Object.fromEntries(
           form.fields.map((field) => [
             field.name,
-            field.type === "checkbox"
-              ? field.options.length > 0
-                ? []
-                : false
-              : "",
+            defaultSubmissionValue(field),
           ]),
         ),
       );
@@ -832,11 +847,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
         Object.fromEntries(
           form.fields.map((field) => [
             field.name,
-            field.type === "checkbox"
-              ? field.options.length > 0
-                ? []
-                : false
-              : "",
+            defaultSubmissionValue(field),
           ]),
         ),
       );
@@ -1216,17 +1227,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                       field.type !== "file" ? (
                         <div>
                           <input
-                            type={
-                              field.type === "email"
-                                ? "email"
-                                : field.type === "phone"
-                                  ? "tel"
-                                  : field.type === "date"
-                                    ? "date"
-                                    : field.type === "date_time"
-                                      ? "datetime-local"
-                                      : "text"
-                            }
+                            type={dateTimeInputType(field)}
                             aria-required={field.required}
                             aria-invalid={invalid}
                             maxLength={
@@ -1235,7 +1236,9 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                                 : undefined
                             }
                             value={typeof value === "string" ? value : ""}
-                            placeholder={field.placeholder}
+                            placeholder={
+                              dateTimePlaceholder(field) || field.placeholder
+                            }
                             onChange={(e) => {
                               clearFieldError(field.name);
                               setValues((prev) => ({
