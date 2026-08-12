@@ -18,6 +18,8 @@ import {
 import { makeSlug } from "@/lib/slug";
 import { notifyAction, notifyError } from "@/components/admin/admin-toast";
 import { useConfirm } from "@/components/admin/use-confirm";
+import { PublicFormBlock } from "@/components/portal/public-form-block";
+import type { PublicFormDefinition } from "@/lib/forms";
 
 const FIELD_TYPES: Array<{ value: FormFieldType; label: string }> = [
   { value: "text", label: "Short text" },
@@ -34,6 +36,50 @@ const FIELD_TYPES: Array<{ value: FormFieldType; label: string }> = [
 ];
 
 type LocaleTab = "vi" | "en";
+type MarkdownView = "edit" | "preview";
+
+function buildMarkdownPreviewForm(params: {
+  formId?: string;
+  locale: FormLocaleValues;
+  fallback: FormLocaleValues;
+}): { form: PublicFormDefinition } | { error: string } {
+  const preferredMarkdown = (params.locale.schemaMarkdown ?? "").trim();
+  const fallbackMarkdown = (params.fallback.schemaMarkdown ?? "").trim();
+  const schemaMarkdown = preferredMarkdown || fallbackMarkdown;
+
+  if (!schemaMarkdown) {
+    return { error: "Add markdown layout to preview this form." };
+  }
+
+  const parsed = parseFormSchemaMarkdown(schemaMarkdown);
+  if (!parsed.ok) {
+    return { error: parsed.error };
+  }
+
+  return {
+    form: {
+      id: params.formId || "preview",
+      key: "preview",
+      name:
+        (params.locale.name ?? "").trim() ||
+        (params.fallback.name ?? "").trim() ||
+        "Form preview",
+      description:
+        (params.locale.description ?? "").trim() ||
+        (params.fallback.description ?? "").trim(),
+      submitLabel:
+        (params.locale.submitLabel ?? "").trim() ||
+        (params.fallback.submitLabel ?? "").trim() ||
+        "Send",
+      successMessage:
+        (params.locale.successMessage ?? "").trim() ||
+        (params.fallback.successMessage ?? "").trim() ||
+        "Thank you. Your submission has been received.",
+      schemaMarkdown,
+      fields: parsed.fields,
+    },
+  };
+}
 
 function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
   const titleId = useId();
@@ -81,42 +127,51 @@ function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
           <section className="space-y-2">
             <h3 className="font-semibold text-gray-900">Overview</h3>
             <p>
-              Write normal markdown for the layout. Insert inputs only where
-              needed with <code>#![…]</code> placeholders. If the markdown box
+              Write normal markdown for the layout. Every control uses the same
+              placeholder shape:{" "}
+              <code>{`#![type:{name}:{properties}]`}</code>. If the markdown box
               is filled, it becomes the source of truth for fields.
             </p>
-          </section>
-
-          <section className="space-y-2">
-            <h3 className="font-semibold text-gray-900">Input types</h3>
-            <p>
-              <code>text</code>, <code>textarea</code>, <code>email</code>,{" "}
-              <code>phone</code>, <code>select</code>, <code>checkbox</code>,{" "}
-              <code>radio</code>, <code>date</code>, <code>date_time</code>,{" "}
-              <code>image</code>, <code>file</code>
-            </p>
             <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
-{`Your name: #![text:{full_name}:"Your name":{style:underline,required:true,max:80,suggestion:"Enter your legal name"}]
-Notes: #![textarea:{notes}:{maxLength:500,required:true}]
-Email: #![email:{email}:"name@example.com":{required:true}]
-Meeting: #![date_time:{meeting_at}:{required:true}]
-Prefer contact by:
-#![radio:{contact}-Email:{suggestion:"Choose one contact method"}]
-#![radio:{contact}-Phone]
-ID photo: #![image:{id_photo}:{required:true,suggestion:"JPEG or PNG"}]
-Resume: #![file:{resume}:{suggestion:"PDF preferred"}]
-- #![checkbox:{topics}-DX:{suggestion:"Select all that apply"}]
-- #![checkbox:{topics}-Emergency comms]
-Choose region: #![select:{region}-North]
-#![select:{region}-South]`}
+{`#![text|email|phone|textarea|select|checkbox|radio|date|date_time|image|file:{field_name}:{
+  required:true,
+  placeholder:"…",
+  maxLength:80,
+  style:underline,
+  suggestion:"…"
+}]`}
             </pre>
           </section>
 
           <section className="space-y-2">
-            <h3 className="font-semibold text-gray-900">Attributes</h3>
+            <h3 className="font-semibold text-gray-900">Examples</h3>
+            <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
+{`Your name: #![text:{full_name}:{required:true,placeholder:"Your name",style:underline,maxLength:80,suggestion:"Enter your legal name"}]
+Notes: #![textarea:{notes}:{required:true,maxLength:500}]
+Email: #![email:{email}:{required:true,placeholder:"name@example.com"}]
+Meeting: #![date_time:{meeting_at}:{required:true}]
+Prefer contact by:
+#![radio:{contact}:{options:[{value:"email",label:"Email"},{value:"phone",label:"Phone"}],suggestion:"Choose one"}]
+Topics:
+#![checkbox:{topics}:{options:[{value:"dx",label:"DX"},{value:"comms",label:"Emergency comms"}],suggestion:"Select all that apply"}]
+ID photo: #![image:{id_photo}:{required:true,suggestion:"JPEG or PNG"}]
+Resume: #![file:{resume}:{suggestion:"PDF preferred"}]
+Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}]}]`}
+            </pre>
+            <p>
+              Text / email / phone / date / select inputs fill the remaining
+              width on the same line as the label text.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="font-semibold text-gray-900">Properties</h3>
             <ul className="list-disc space-y-1 pl-5">
               <li>
                 <code>required:true</code> — required field
+              </li>
+              <li>
+                <code>placeholder:&quot;…&quot;</code> — input placeholder
               </li>
               <li>
                 <code>suggestion:&quot;…&quot;</code> or{" "}
@@ -131,7 +186,17 @@ Choose region: #![select:{region}-North]
                 <code>style:default|borderless|underline|dotted_underline</code>
               </li>
               <li>
-                <code>:&quot;placeholder text&quot;</code> — input placeholder
+                Option lists for radio, checkbox, and select:
+                <pre className="mt-2 overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
+{`#![checkbox:{topics}:{options:[
+  {value:"dx",label:"DX"},
+  {value:"comms",label:"Emergency comms"}
+],suggestion:"Select all that apply"}]
+
+#![radio:{contact}:{options:[{value:"email",label:"Email"},{value:"phone",label:"Phone"}]}]
+
+#![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}]}]`}
+                </pre>
               </li>
             </ul>
           </section>
@@ -330,6 +395,7 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
   const [markdownFullscreen, setMarkdownFullscreen] = useState(false);
   const [markdownError, setMarkdownError] = useState<string | null>(null);
   const [tab, setTab] = useState<LocaleTab>("vi");
+  const [markdownView, setMarkdownView] = useState<MarkdownView>("edit");
   const [definitionMode, setDefinitionMode] = useState<FormDefinitionMode | null>(
     () => resolveInitialMode(formId, initial),
   );
@@ -344,6 +410,14 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
   const isMarkdownMode = definitionMode === "markdown";
   const isFieldsMode = definitionMode === "fields";
   const showFieldSchema = isFieldsMode && tab === "vi";
+  const markdownPreview = useMemo(() => {
+    if (!isMarkdownMode) return null;
+    return buildMarkdownPreviewForm({
+      formId,
+      locale,
+      fallback: form.locales.vi,
+    });
+  }, [form.locales.vi, formId, isMarkdownMode, locale]);
 
   function chooseDefinitionMode(mode: FormDefinitionMode) {
     setDefinitionMode(mode);
@@ -723,38 +797,80 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                     i
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setMarkdownFullscreen(true)}
-                  aria-label="Expand markdown editor"
-                  title="Expand"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-600 hover:border-gray-500 hover:bg-gray-50 hover:text-gray-900"
-                >
-                  <ExpandIcon />
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded border border-gray-300 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setMarkdownView("edit")}
+                      className={`rounded px-2.5 py-1 text-xs font-medium ${
+                        markdownView === "edit"
+                          ? "bg-gray-900 text-white"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMarkdownView("preview")}
+                      className={`rounded px-2.5 py-1 text-xs font-medium ${
+                        markdownView === "preview"
+                          ? "bg-gray-900 text-white"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      Preview
+                    </button>
+                  </div>
+                  {markdownView === "edit" ? (
+                    <button
+                      type="button"
+                      onClick={() => setMarkdownFullscreen(true)}
+                      aria-label="Expand markdown editor"
+                      title="Expand"
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-600 hover:border-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      <ExpandIcon />
+                    </button>
+                  ) : null}
+                </div>
               </div>
               <p className="mt-1 text-sm text-gray-500">
-                Markdown layout for {tab.toUpperCase()}. Field tokens become the
-                source of truth for this language.
-                {tab === "en"
-                  ? " Leave empty to fall back to Vietnamese fields."
-                  : null}
+                {markdownView === "edit"
+                  ? `Markdown layout for ${tab.toUpperCase()}. Field tokens become the source of truth for this language.${
+                      tab === "en"
+                        ? " Leave empty to fall back to Vietnamese fields."
+                        : ""
+                    }`
+                  : "Live preview of the public form for the current language."}
               </p>
             </div>
-            <textarea
-              rows={8}
-              value={locale.schemaMarkdown ?? ""}
-              onChange={(e) => {
-                setMarkdownError(null);
-                updateLocale((current) => ({
-                  ...current,
-                  schemaMarkdown: e.target.value,
-                }));
-              }}
-              className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
-            />
-            {markdownError ? (
-              <p className="mt-2 text-sm text-red-700">{markdownError}</p>
+            {markdownView === "edit" ? (
+              <>
+                <textarea
+                  rows={8}
+                  value={locale.schemaMarkdown ?? ""}
+                  onChange={(e) => {
+                    setMarkdownError(null);
+                    updateLocale((current) => ({
+                      ...current,
+                      schemaMarkdown: e.target.value,
+                    }));
+                  }}
+                  className="w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
+                />
+                {markdownError ? (
+                  <p className="mt-2 text-sm text-red-700">{markdownError}</p>
+                ) : null}
+              </>
+            ) : markdownPreview && "error" in markdownPreview ? (
+              <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {markdownPreview.error}
+              </p>
+            ) : markdownPreview && "form" in markdownPreview ? (
+              <div className="rounded-lg border border-gray-200 bg-[var(--background,#fff)] p-4 sm:p-6">
+                <PublicFormBlock form={markdownPreview.form} preview />
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -1074,6 +1190,30 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
               >
                 i
               </button>
+              <div className="flex rounded border border-gray-300 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setMarkdownView("edit")}
+                  className={`rounded px-2.5 py-1 text-xs font-medium ${
+                    markdownView === "edit"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMarkdownView("preview")}
+                  className={`rounded px-2.5 py-1 text-xs font-medium ${
+                    markdownView === "preview"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  Preview
+                </button>
+              </div>
             </div>
             <button
               type="button"
@@ -1085,21 +1225,35 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
               <CollapseIcon />
             </button>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col p-4 sm:p-6">
-            <textarea
-              autoFocus
-              value={locale.schemaMarkdown ?? ""}
-              onChange={(e) => {
-                setMarkdownError(null);
-                updateLocale((current) => ({
-                  ...current,
-                  schemaMarkdown: e.target.value,
-                }));
-              }}
-              className="min-h-0 w-full flex-1 resize-none rounded border border-gray-300 px-4 py-3 font-mono text-sm leading-6"
-            />
-            {markdownError ? (
-              <p className="mt-2 shrink-0 text-sm text-red-700">{markdownError}</p>
+          <div className="flex min-h-0 flex-1 flex-col overflow-auto p-4 sm:p-6">
+            {markdownView === "edit" ? (
+              <>
+                <textarea
+                  autoFocus
+                  value={locale.schemaMarkdown ?? ""}
+                  onChange={(e) => {
+                    setMarkdownError(null);
+                    updateLocale((current) => ({
+                      ...current,
+                      schemaMarkdown: e.target.value,
+                    }));
+                  }}
+                  className="min-h-0 w-full flex-1 resize-none rounded border border-gray-300 px-4 py-3 font-mono text-sm leading-6"
+                />
+                {markdownError ? (
+                  <p className="mt-2 shrink-0 text-sm text-red-700">
+                    {markdownError}
+                  </p>
+                ) : null}
+              </>
+            ) : markdownPreview && "error" in markdownPreview ? (
+              <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {markdownPreview.error}
+              </p>
+            ) : markdownPreview && "form" in markdownPreview ? (
+              <div className="mx-auto w-full max-w-3xl rounded-lg border border-gray-200 bg-[var(--background,#fff)] p-4 sm:p-6">
+                <PublicFormBlock form={markdownPreview.form} preview />
+              </div>
             ) : null}
           </div>
         </div>

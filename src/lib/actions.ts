@@ -39,6 +39,7 @@ import {
   FORM_SUBMISSION_STATUSES,
   formDefinitionFormSchema,
   formatZodIssues,
+  isFormUploadValue,
 } from "@/lib/validations/forms";
 import {
   pageTemplateFormSchema,
@@ -1280,6 +1281,41 @@ export async function updateFormSubmissionStatusAction(
     return { ok: true };
   } catch (error) {
     return failAction(error, "Failed to update submission");
+  }
+}
+
+export async function deleteFormSubmissionAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await requireSiteManager();
+    await connectDb();
+    const existing = await FormSubmission.findById(id).lean();
+    if (!existing) return { ok: false, error: "Submission not found" };
+
+    const payload =
+      existing.payload &&
+      typeof existing.payload === "object" &&
+      !Array.isArray(existing.payload)
+        ? (existing.payload as Record<string, unknown>)
+        : {};
+    for (const value of Object.values(payload)) {
+      if (
+        isFormUploadValue(value) &&
+        value.key.startsWith("form-uploads/")
+      ) {
+        try {
+          await deleteObject(value.key);
+        } catch (error) {
+          logServerError("form submission upload delete", error);
+        }
+      }
+    }
+
+    await FormSubmission.findByIdAndDelete(id);
+    return { ok: true };
+  } catch (error) {
+    return failAction(error, "Failed to delete submission");
   }
 }
 

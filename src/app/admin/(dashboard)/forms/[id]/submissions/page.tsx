@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FormSubmissionDeleteButton } from "@/components/admin/form-submission-delete-button";
 import { requireSitePage } from "@/lib/admin-access";
 import { getFormById, listFormSubmissions } from "@/lib/forms";
 import { PORTAL_TIMEZONE } from "@/lib/datetime-local";
@@ -61,7 +62,7 @@ export default async function FormSubmissionsPage({ params }: Props) {
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Page</th>
                 <th className="px-4 py-3 font-medium">Preview</th>
-                <th className="px-4 py-3 font-medium text-right">Open</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -92,13 +93,21 @@ export default async function FormSubmissionsPage({ params }: Props) {
                       .map(([key, value]) => `${key}: ${previewValue(value)}`)
                       .join(" · ") || "—"}
                   </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/admin/forms/${id}/submissions/${submission.id}`}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      View
-                    </Link>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-3">
+                      <Link
+                        href={`/admin/forms/${id}/submissions/${submission.id}`}
+                        className="text-sm font-medium hover:underline"
+                      >
+                        View
+                      </Link>
+                      <FormSubmissionDeleteButton
+                        submissionId={submission.id}
+                        formId={id}
+                        redirectTo={`/admin/forms/${id}/submissions`}
+                        className="text-sm font-medium text-red-700 hover:underline disabled:opacity-60"
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -129,12 +138,20 @@ export default async function FormSubmissionsPage({ params }: Props) {
                     {submission.status}
                   </span>
                 </div>
-                <Link
-                  href={`/admin/forms/${id}/submissions/${submission.id}`}
-                  className="text-sm font-medium hover:underline"
-                >
-                  View details
-                </Link>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Link
+                    href={`/admin/forms/${id}/submissions/${submission.id}`}
+                    className="text-sm font-medium hover:underline"
+                  >
+                    View details
+                  </Link>
+                  <FormSubmissionDeleteButton
+                    submissionId={submission.id}
+                    formId={id}
+                    redirectTo={`/admin/forms/${id}/submissions`}
+                    className="text-sm font-medium text-red-700 hover:underline disabled:opacity-60"
+                  />
+                </div>
               </li>
             ))}
           </ul>

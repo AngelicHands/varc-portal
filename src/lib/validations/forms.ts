@@ -418,6 +418,7 @@ export type FormSubmissionStatus = (typeof FORM_SUBMISSION_STATUSES)[number];
 const FIELD_TYPE_PATTERN =
   "text|textarea|email|phone|select|checkbox|radio|date_time|date|image|file";
 
+/** Simple tokens without nested `]` — prefer `scanMarkdownFieldTokens`. */
 export const MARKDOWN_FIELD_TOKEN_RE = new RegExp(
   `#!\\[(${FIELD_TYPE_PATTERN}):\\{([a-z][a-z0-9_]*)\\}([^\\]]*)\\]`,
   "gi",
@@ -426,13 +427,293 @@ export const MARKDOWN_FIELD_TOKEN_RE = new RegExp(
 export type ParsedMarkdownFieldToken = {
   type: FormFieldType;
   name: string;
-  optionOrLabel: string;
+  options: FormFieldOption[];
   placeholder: string;
   style: FormFieldStyle;
   required: boolean;
   helpText: string;
   maxLength: number;
 };
+
+function findBalancedEnd(
+  source: string,
+  start: number,
+  open: string,
+  close: string,
+): number {
+  if (source[start] !== open) return -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < source.length; i += 1) {
+    const ch = source[i] ?? "";
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === open) depth += 1;
+    else if (ch === close) {
+      depth -= 1;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/** Find `#![...]` tokens, allowing nested `[]` / `{}` inside options. */
+export function scanMarkdownFieldTokens(
+  markdown: string,
+): Array<{ raw: string; index: number }> {
+  const results: Array<{ raw: string; index: number }> = [];
+  let cursor = 0;
+
+  while (cursor < markdown.length) {
+    const start = markdown.indexOf("#![", cursor);
+    if (start < 0) break;
+    // Step markers use `!#![step:...]` — skip those.
+    if (start > 0 && markdown[start - 1] === "!") {
+      cursor = start + 3;
+      continue;
+    }
+    const openBracket = start + 2; // points at '['
+    const end = findBalancedEnd(markdown, openBracket, "[", "]");
+    if (end < 0) {
+      cursor = start + 3;
+      continue;
+    }
+    results.push({
+      raw: markdown.slice(start, end + 1),
+      index: start,
+    });
+    cursor = end + 1;
+  }
+
+  return results;
+}
+
+export function replaceMarkdownFieldTokens(
+  markdown: string,
+  replace: (raw: string, tokenIndex: number) => string,
+): string {
+  const matches = scanMarkdownFieldTokens(markdown);
+  if (matches.length === 0) return markdown;
+
+  let result = "";
+  let cursor = 0;
+  matches.forEach((match, tokenIndex) => {
+    result += markdown.slice(cursor, match.index);
+    result += replace(match.raw, tokenIndex);
+    cursor = match.index + match.raw.length;
+  });
+  result += markdown.slice(cursor);
+  return result;
+}
+
+function optionValue(label: string) {
+  const normalized = label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized || "option";
+}
+
+function readQuotedString(
+  source: string,
+  start: number,
+): { value: string; end: number } | null {
+  if (source[start] !== '"') return null;
+  let i = start + 1;
+  let value = "";
+  let escaped = false;
+  while (i < source.length) {
+    const ch = source[i] ?? "";
+    if (escaped) {
+      value += ch;
+      escaped = false;
+      i += 1;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      return { value, end: i + 1 };
+    }
+    value += ch;
+    i += 1;
+  }
+  return null;
+}
+
+function parseOptionObject(raw: string): FormFieldOption | null {
+  const body = raw.trim().replace(/^\{/, "").replace(/\}$/, "").trim();
+  if (!body) return null;
+
+  let label = "";
+  let value = "";
+  let i = 0;
+  const bareStrings: string[] = [];
+
+  while (i < body.length) {
+    while (i < body.length && /[\s,]/.test(body[i] ?? "")) i += 1;
+    if (i >= body.length) break;
+
+    if (body[i] === '"') {
+      const quoted = readQuotedString(body, i);
+      if (!quoted) break;
+      bareStrings.push(quoted.value);
+      i = quoted.end;
+      continue;
+    }
+
+    const keyStart = i;
+    while (i < body.length && /[a-zA-Z0-9_]/.test(body[i] ?? "")) i += 1;
+    const key = body.slice(keyStart, i).toLowerCase();
+    while (i < body.length && /\s/.test(body[i] ?? "")) i += 1;
+    if (body[i] !== ":") {
+      // indexed noise like `1:` — skip until next comma / value
+      if (body[i] === ":") {
+        i += 1;
+        continue;
+      }
+      break;
+    }
+    i += 1;
+    while (i < body.length && /\s/.test(body[i] ?? "")) i += 1;
+
+    let parsedValue = "";
+    if (body[i] === '"') {
+      const quoted = readQuotedString(body, i);
+      if (!quoted) break;
+      parsedValue = quoted.value;
+      i = quoted.end;
+    } else {
+      const valueStart = i;
+      while (i < body.length && body[i] !== ",") i += 1;
+      parsedValue = body.slice(valueStart, i).trim();
+    }
+
+    if (key === "label" || key === "name" || key === "text") {
+      label = parsedValue;
+    } else if (key === "value" || key === "id" || key === "key") {
+      value = parsedValue;
+    } else if (!label && parsedValue) {
+      // tolerate `{value:"x", "Label text"}` style by treating unknown later
+      bareStrings.push(parsedValue);
+    }
+  }
+
+  if (!label && bareStrings.length > 0) {
+    label = bareStrings[bareStrings.length - 1] ?? "";
+  }
+  if (!value && bareStrings.length > 1) {
+    value = bareStrings[0] ?? "";
+  }
+  if (!label && value) label = value;
+  if (!value && label) value = optionValue(label);
+  if (!label || !value) return null;
+  return { label, value };
+}
+
+export function parseOptionsArray(raw: string): FormFieldOption[] {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("[")) return [];
+  const end = findBalancedEnd(trimmed, 0, "[", "]");
+  if (end < 0) return [];
+  const inner = trimmed.slice(1, end).trim();
+  if (!inner) return [];
+
+  const options: FormFieldOption[] = [];
+  let i = 0;
+  while (i < inner.length) {
+    while (i < inner.length && /[\s,]/.test(inner[i] ?? "")) i += 1;
+    if (i >= inner.length) break;
+
+    // Skip numeric indexes like `1:` from authoring drafts.
+    if (/[0-9]/.test(inner[i] ?? "")) {
+      while (i < inner.length && /[0-9]/.test(inner[i] ?? "")) i += 1;
+      while (i < inner.length && /\s/.test(inner[i] ?? "")) i += 1;
+      if (inner[i] === ":") {
+        i += 1;
+        continue;
+      }
+    }
+
+    if (inner[i] === '{') {
+      const objEnd = findBalancedEnd(inner, i, "{", "}");
+      if (objEnd < 0) break;
+      const option = parseOptionObject(inner.slice(i, objEnd + 1));
+      if (option) options.push(option);
+      i = objEnd + 1;
+      continue;
+    }
+
+    if (inner[i] === '"') {
+      const quoted = readQuotedString(inner, i);
+      if (!quoted) break;
+      options.push({
+        label: quoted.value,
+        value: optionValue(quoted.value),
+      });
+      i = quoted.end;
+      continue;
+    }
+
+    const start = i;
+    while (i < inner.length && inner[i] !== ",") i += 1;
+    const label = inner.slice(start, i).trim();
+    if (label) {
+      options.push({ label, value: optionValue(label) });
+    }
+  }
+
+  return options;
+}
+
+function extractOptionsFromAttrs(raw: string): {
+  options: FormFieldOption[];
+  attrs: string;
+} {
+  const optionsKey = /(?:^|[,{])\s*options\s*:/i;
+  const match = optionsKey.exec(`{${raw}}`);
+  if (!match) {
+    return { options: [], attrs: raw };
+  }
+
+  // Locate options: inside the original raw string.
+  const local = raw.search(/\boptions\s*:/i);
+  if (local < 0) return { options: [], attrs: raw };
+  let i = local + raw.slice(local).search(/:/) + 1;
+  while (i < raw.length && /\s/.test(raw[i] ?? "")) i += 1;
+  if (raw[i] !== "[") return { options: [], attrs: raw };
+
+  const end = findBalancedEnd(raw, i, "[", "]");
+  if (end < 0) return { options: [], attrs: raw };
+
+  const options = parseOptionsArray(raw.slice(i, end + 1));
+  const before = raw.slice(0, local).replace(/,\s*$/, "");
+  const after = raw.slice(end + 1).replace(/^\s*,/, "");
+  const attrs = [before, after]
+    .map((part) => part.trim().replace(/^,|,$/g, "").trim())
+    .filter(Boolean)
+    .join(",");
+  return { options, attrs };
+}
 
 export function parseAttrBlock(raw: string): Record<string, string> {
   const result: Record<string, string> = {};
@@ -450,30 +731,26 @@ export function parseAttrBlock(raw: string): Record<string, string> {
     i += 1;
     while (i < raw.length && /\s/.test(raw[i] ?? "")) i += 1;
 
+    // Skip nested arrays/objects — handled by extractOptionsFromAttrs.
+    if (raw[i] === "[") {
+      const end = findBalancedEnd(raw, i, "[", "]");
+      if (end < 0) break;
+      i = end + 1;
+      continue;
+    }
+    if (raw[i] === "{") {
+      const end = findBalancedEnd(raw, i, "{", "}");
+      if (end < 0) break;
+      i = end + 1;
+      continue;
+    }
+
     let value = "";
     if ((raw[i] ?? "") === '"') {
-      i += 1;
-      let escaped = false;
-      while (i < raw.length) {
-        const ch = raw[i] ?? "";
-        if (escaped) {
-          value += ch;
-          escaped = false;
-          i += 1;
-          continue;
-        }
-        if (ch === "\\") {
-          escaped = true;
-          i += 1;
-          continue;
-        }
-        if (ch === '"') {
-          i += 1;
-          break;
-        }
-        value += ch;
-        i += 1;
-      }
+      const quoted = readQuotedString(raw, i);
+      if (!quoted) break;
+      value = quoted.value;
+      i = quoted.end;
     } else {
       const valueStart = i;
       while (i < raw.length && raw[i] !== ",") i += 1;
@@ -491,64 +768,84 @@ function parseBooleanAttr(value: string | undefined): boolean {
   return ["1", "true", "yes", "on", "required"].includes(value.toLowerCase());
 }
 
+function consumePropertyBlocks(rest: string): {
+  options: FormFieldOption[];
+  attrs: Record<string, string>;
+  rest: string;
+} {
+  let cursor = rest;
+  let options: FormFieldOption[] = [];
+  const attrs: Record<string, string> = {};
+
+  while (cursor.startsWith(":{")) {
+    const end = findBalancedEnd(cursor, 1, "{", "}");
+    if (end < 0) break;
+    const body = cursor.slice(2, end);
+    const extracted = extractOptionsFromAttrs(body);
+    if (extracted.options.length > 0) {
+      options = extracted.options;
+    }
+    Object.assign(attrs, parseAttrBlock(extracted.attrs));
+    cursor = cursor.slice(end + 1);
+  }
+
+  return { options, attrs, rest: cursor };
+}
+
 export function parseMarkdownFieldToken(
   token: string,
 ): ParsedMarkdownFieldToken | null {
-  const match = token.match(
+  const header = token.match(
     new RegExp(
-      `^#!\\[(${FIELD_TYPE_PATTERN}):\\{([a-z][a-z0-9_]*)\\}([^\\]]*)\\]$`,
+      `^#!\\[(${FIELD_TYPE_PATTERN}):\\{([a-z][a-z0-9_]*)\\}`,
       "i",
     ),
   );
-  if (!match) return null;
+  if (!header || !token.endsWith("]")) return null;
 
-  let rest = match[3] ?? "";
-  let optionOrLabel = "";
+  const rest = token.slice(header[0].length, -1);
   let placeholder = "";
   let style: FormFieldStyle = "default";
   let required = false;
   let helpText = "";
   let maxLength = 0;
 
-  if (rest.startsWith("-")) {
-    const nextPlaceholder = rest.indexOf(':"');
-    const nextStyle = rest.indexOf(":{");
-    const cutIndices = [nextPlaceholder, nextStyle]
-      .filter((value) => value >= 0)
-      .sort((a, b) => a - b);
-    const cut = cutIndices[0] ?? rest.length;
-    optionOrLabel = rest.slice(1, cut).trim();
-    rest = rest.slice(cut);
+  const blocks = consumePropertyBlocks(rest);
+  if (blocks.rest.trim()) {
+    // Only property blocks (`:{...}`) are allowed after the field name.
+    return null;
   }
 
-  const placeholderMatch = rest.match(/^:"([^"]*)"(.*)$/);
-  if (placeholderMatch) {
-    placeholder = placeholderMatch[1] ?? "";
-    rest = placeholderMatch[2] ?? "";
+  const options = blocks.options;
+  const attrs = blocks.attrs;
+
+  if (
+    attrs.style &&
+    (FORM_FIELD_STYLES as readonly string[]).includes(attrs.style)
+  ) {
+    style = attrs.style as FormFieldStyle;
+  }
+  required = parseBooleanAttr(attrs.required);
+  helpText = (attrs.suggestion ?? attrs.help ?? "").trim();
+  placeholder = (attrs.placeholder ?? "").trim();
+  const rawMax = attrs.maxLength ?? attrs.max ?? "";
+  const parsedMax = Number.parseInt(rawMax, 10);
+  if (Number.isFinite(parsedMax) && parsedMax > 0) {
+    maxLength = Math.min(parsedMax, MAX_TEXT);
   }
 
-  const attrsMatch = rest.match(/^:\{([\s\S]*)\}(.*)$/);
-  if (attrsMatch) {
-    const attrs = parseAttrBlock(attrsMatch[1] ?? "");
-    if (
-      attrs.style &&
-      (FORM_FIELD_STYLES as readonly string[]).includes(attrs.style)
-    ) {
-      style = attrs.style as FormFieldStyle;
-    }
-    required = parseBooleanAttr(attrs.required);
-    helpText = (attrs.suggestion ?? attrs.help ?? "").trim();
-    const rawMax = attrs.maxLength ?? attrs.max ?? "";
-    const parsedMax = Number.parseInt(rawMax, 10);
-    if (Number.isFinite(parsedMax) && parsedMax > 0) {
-      maxLength = Math.min(parsedMax, MAX_TEXT);
-    }
+  const type = header[1]!.toLowerCase() as FormFieldType;
+  if (
+    (type === "select" || type === "radio") &&
+    options.length === 0
+  ) {
+    return null;
   }
 
   return {
-    type: match[1].toLowerCase() as FormFieldType,
-    name: match[2] ?? "",
-    optionOrLabel,
+    type,
+    name: header[2] ?? "",
+    options,
     placeholder,
     style,
     required,
@@ -582,15 +879,6 @@ export function emptyFormField(
   };
 }
 
-function optionValue(label: string) {
-  const normalized = label
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return normalized || "option";
-}
-
 export function parseFormSchemaMarkdown(markdown: string): {
   ok: true;
   fields: FormFieldDefinition[];
@@ -605,17 +893,13 @@ export function parseFormSchemaMarkdown(markdown: string): {
     return { ok: false, error: "Markdown schema is empty" };
   }
 
-  const tokenRe = new RegExp(MARKDOWN_FIELD_TOKEN_RE.source, "gi");
   const tokens: ParsedMarkdownFieldToken[] = [];
-  let match: RegExpExecArray | null;
-
-  while ((match = tokenRe.exec(trimmed)) !== null) {
-    const raw = match[0] ?? "";
-    const parsedToken = parseMarkdownFieldToken(raw);
+  for (const match of scanMarkdownFieldTokens(trimmed)) {
+    const parsedToken = parseMarkdownFieldToken(match.raw);
     if (!parsedToken) {
       return {
         ok: false,
-        error: `Invalid field placeholder: ${raw}`,
+        error: `Invalid field placeholder: ${match.raw}`,
       };
     }
     tokens.push(parsedToken);
@@ -631,68 +915,39 @@ export function parseFormSchemaMarkdown(markdown: string): {
   for (const parsedLine of tokens) {
     const rawType = parsedLine.type;
     const name = parsedLine.name;
-    const optionOrLabel = parsedLine.optionOrLabel;
-    const placeholder = parsedLine.placeholder;
-    const style = parsedLine.style;
-    const required = parsedLine.required;
-    const helpText = parsedLine.helpText;
-    const maxLength = parsedLine.maxLength;
     const key = `${rawType}:${name}`;
 
-    const existing = grouped.get(key);
-    if (!existing) {
-      grouped.set(key, {
-        id: makeFormFieldId(),
-        type: rawType,
-        name,
-        label: optionOrLabel || name.replace(/_/g, " "),
-        required,
-        placeholder:
-          placeholder ||
-          (rawType === "checkbox" && optionOrLabel ? optionOrLabel : ""),
-        helpText,
-        maxLength:
-          rawType === "text" || rawType === "textarea" ? maxLength : 0,
-        width: "full",
-        style,
-        options:
-          rawType === "select" || rawType === "radio"
-            ? optionOrLabel
-              ? [{ label: optionOrLabel, value: optionValue(optionOrLabel) }]
-              : []
-            : rawType === "checkbox" && optionOrLabel
-              ? [{ label: optionOrLabel, value: optionValue(optionOrLabel) }]
-              : [],
-      });
-      continue;
-    }
-
-    if (
-      rawType !== "select" &&
-      rawType !== "radio" &&
-      rawType !== "checkbox"
-    ) {
+    if (grouped.has(key)) {
       return {
         ok: false,
         error: `Duplicate field ${name} in markdown placeholders`,
       };
     }
 
-    if (!optionOrLabel) {
+    if (
+      (rawType === "select" || rawType === "radio") &&
+      parsedLine.options.length === 0
+    ) {
       return {
         ok: false,
-        error: `Field ${name} needs an option label in its placeholder`,
+        error: `Field ${name} needs options:[{value,label},…]`,
       };
     }
 
-    existing.options = [
-      ...existing.options,
-      { label: optionOrLabel, value: optionValue(optionOrLabel) },
-    ];
-    if (required) existing.required = true;
-    if (helpText && !existing.helpText.trim()) {
-      existing.helpText = helpText;
-    }
+    grouped.set(key, {
+      id: makeFormFieldId(),
+      type: rawType,
+      name,
+      label: name.replace(/_/g, " "),
+      required: parsedLine.required,
+      placeholder: parsedLine.placeholder,
+      helpText: parsedLine.helpText,
+      maxLength:
+        rawType === "text" || rawType === "textarea" ? parsedLine.maxLength : 0,
+      width: "full",
+      style: parsedLine.style,
+      options: parsedLine.options,
+    });
   }
 
   const fields = [...grouped.values()].map((field) => ({
@@ -702,8 +957,6 @@ export function parseFormSchemaMarkdown(markdown: string): {
         .replace(/\s+/g, " ")
         .trim()
         .replace(/^\w/, (c) => c.toUpperCase()) || field.name,
-    placeholder:
-      field.type === "checkbox" && field.options.length > 0 ? "" : field.placeholder,
   }));
 
   const parsed = z.array(formFieldSchema).safeParse(fields);

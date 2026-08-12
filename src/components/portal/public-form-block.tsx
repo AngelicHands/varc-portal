@@ -24,6 +24,8 @@ import {
 
 type Props = {
   form: PublicFormDefinition;
+  /** Admin draft preview — no real submit/upload. */
+  preview?: boolean;
 };
 
 type SubmitState =
@@ -86,6 +88,7 @@ function FormUploadControl({
   compact = false,
   showSuggestion = true,
   invalid = false,
+  preview = false,
 }: {
   formId: string;
   field: PublicFormField;
@@ -94,6 +97,7 @@ function FormUploadControl({
   compact?: boolean;
   showSuggestion?: boolean;
   invalid?: boolean;
+  preview?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +116,18 @@ function FormUploadControl({
       setError(
         `File must be under ${Math.floor(FORM_UPLOAD_MAX_BYTES / (1024 * 1024))}MB`,
       );
+      return;
+    }
+
+    if (preview) {
+      onChange({
+        url: URL.createObjectURL(file),
+        key: `preview/${field.name}/${file.name}`,
+        originalName: file.name,
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+      });
+      if (inputRef.current) inputRef.current.value = "";
       return;
     }
 
@@ -208,14 +224,15 @@ function FormUploadControl({
 
 type FieldRenderContext = {
   formId: string;
+  preview: boolean;
   fieldsByName: Map<string, PublicFormField>;
   values: Record<string, FormSubmissionValue>;
   setValues: React.Dispatch<
     React.SetStateAction<Record<string, FormSubmissionValue>>
   >;
   tokensByIndex: Map<number, FormMarkdownToken>;
-  renderedSelects: Set<string>;
-  hintShownFor: Set<string>;
+  /** First markdown token index for each field name (stable, no render mutation). */
+  firstTokenIndexByName: Map<string, number>;
   fieldErrors: Record<string, string>;
   clearFieldError: (name: string) => void;
   toggleCheckboxGroup: (
@@ -228,12 +245,21 @@ type FieldRenderContext = {
 function withSuggestion(
   field: PublicFormField,
   control: React.ReactNode,
-  options?: { inline?: boolean; showMeta?: boolean },
+  options?: { inline?: boolean; showMeta?: boolean; fill?: boolean },
 ) {
   const inline = options?.inline ?? true;
   const showMeta = options?.showMeta ?? true;
+  const fill = options?.fill ?? false;
   return (
-    <span className={inline ? "inline-flex items-center gap-1 align-middle" : "block"}>
+    <span
+      className={
+        fill
+          ? "flex w-full min-w-0 items-center gap-1"
+          : inline
+            ? "inline-flex items-center gap-1 align-middle"
+            : "block"
+      }
+    >
       {control}
       {showMeta && field.type !== "image" && field.type !== "file" ? (
         <FieldSuggestionIcon text={field.helpText} />
@@ -242,9 +268,20 @@ function withSuggestion(
       field.required &&
       field.type !== "image" &&
       field.type !== "file" ? (
-        <span className="text-xs text-red-600">*</span>
+        <span className="shrink-0 text-xs text-red-600">*</span>
       ) : null}
     </span>
+  );
+}
+
+function isFillWidthFieldType(type: PublicFormField["type"]) {
+  return (
+    type === "text" ||
+    type === "email" ||
+    type === "phone" ||
+    type === "date" ||
+    type === "date_time" ||
+    type === "select"
   );
 }
 
@@ -261,6 +298,9 @@ function renderFormFieldToken(
   const value = ctx.values[field.name];
   const invalid = Boolean(ctx.fieldErrors[field.name]);
   const inputClass = `text-sm outline-none transition ${inputStyleClass(field.style, invalid)}`;
+  const isFirstTokenForField =
+    ctx.firstTokenIndexByName.get(field.name) === tokenIndex;
+  const showHint = isFirstTokenForField;
 
   if (field.type === "image" || field.type === "file") {
     return (
@@ -270,6 +310,7 @@ function renderFormFieldToken(
         value={value}
         compact
         invalid={invalid}
+        preview={ctx.preview}
         onChange={(next) => {
           ctx.clearFieldError(field.name);
           ctx.setValues((prev) => ({
@@ -282,8 +323,7 @@ function renderFormFieldToken(
   }
 
   if (field.type === "select") {
-    if (ctx.renderedSelects.has(field.name)) return null;
-    ctx.renderedSelects.add(field.name);
+    if (!isFirstTokenForField) return null;
     return withSuggestion(
       field,
       <select
@@ -297,7 +337,7 @@ function renderFormFieldToken(
             [field.name]: e.target.value,
           }));
         }}
-        className={`${inputClass} my-1 inline-block min-w-40 align-baseline`}
+        className={`${inputClass} my-1 w-full align-baseline`}
       >
         <option value="">Select…</option>
         {field.options.map((option) => (
@@ -306,69 +346,76 @@ function renderFormFieldToken(
           </option>
         ))}
       </select>,
+      { fill: true, showMeta: showHint },
     );
   }
 
   if (field.type === "radio") {
-    const option = field.options.find(
-      (item) =>
-        item.label === token.optionOrLabel ||
-        item.value === token.optionOrLabel,
-    );
-    if (!option) return null;
-    const showHint = !ctx.hintShownFor.has(field.name);
-    if (showHint) ctx.hintShownFor.add(field.name);
+    if (field.options.length === 0) return null;
+    if (!isFirstTokenForField) return null;
     return withSuggestion(
       field,
-      <label
-        className={`inline-flex items-center gap-1.5 align-middle${invalid ? " rounded px-1 ring-2 ring-red-400" : ""}`}
+      <span
+        role="radiogroup"
+        className={`inline-flex flex-wrap items-center gap-x-4 gap-y-2 align-middle${invalid ? " rounded px-1 ring-2 ring-red-400" : ""}`}
       >
-        <input
-          type="radio"
-          name={field.name}
-          checked={value === option.value}
-          onChange={() => {
-            ctx.clearFieldError(field.name);
-            ctx.setValues((prev) => ({
-              ...prev,
-              [field.name]: option.value,
-            }));
-          }}
-          className="form-choice-input"
-        />
-        <span>{option.label}</span>
-      </label>,
+        {field.options.map((option) => (
+          <label
+            key={option.value}
+            className="inline-flex items-center gap-1.5"
+          >
+            <input
+              type="radio"
+              name={field.name}
+              checked={value === option.value}
+              onChange={() => {
+                ctx.clearFieldError(field.name);
+                ctx.setValues((prev) => ({
+                  ...prev,
+                  [field.name]: option.value,
+                }));
+              }}
+              className="form-choice-input"
+            />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </span>,
       { showMeta: showHint },
     );
   }
 
   if (field.type === "checkbox" && field.options.length > 0) {
-    const option = field.options.find(
-      (item) =>
-        item.label === token.optionOrLabel ||
-        item.value === token.optionOrLabel,
-    );
-    if (!option) return null;
-    const selected = Array.isArray(value) ? value.includes(option.value) : false;
-    const showHint = !ctx.hintShownFor.has(field.name);
-    if (showHint) ctx.hintShownFor.add(field.name);
+    if (!isFirstTokenForField) return null;
+    const selected = Array.isArray(value) ? value : [];
     return withSuggestion(
       field,
-      <label
-        className={`inline-flex items-center gap-1.5 align-middle${invalid ? " rounded px-1 ring-2 ring-red-400" : ""}`}
+      <span
+        className={`inline-flex flex-wrap items-center gap-x-4 gap-y-2 align-middle${invalid ? " rounded px-1 ring-2 ring-red-400" : ""}`}
       >
-        <input
-          type="checkbox"
-          aria-invalid={invalid}
-          checked={selected}
-          onChange={(e) => {
-            ctx.clearFieldError(field.name);
-            ctx.toggleCheckboxGroup(field.name, option.value, e.target.checked);
-          }}
-          className="form-choice-input"
-        />
-        <span>{option.label}</span>
-      </label>,
+        {field.options.map((option) => (
+          <label
+            key={option.value}
+            className="inline-flex items-center gap-1.5"
+          >
+            <input
+              type="checkbox"
+              aria-invalid={invalid}
+              checked={selected.includes(option.value)}
+              onChange={(e) => {
+                ctx.clearFieldError(field.name);
+                ctx.toggleCheckboxGroup(
+                  field.name,
+                  option.value,
+                  e.target.checked,
+                );
+              }}
+              className="form-choice-input"
+            />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </span>,
       { showMeta: showHint },
     );
   }
@@ -432,7 +479,7 @@ function renderFormFieldToken(
   const length = typeof value === "string" ? value.length : 0;
   return withSuggestion(
     field,
-    <span className="inline-flex flex-col align-baseline">
+    <span className="flex w-full min-w-0 flex-col align-baseline">
       <input
         type={
           field.type === "email"
@@ -461,7 +508,7 @@ function renderFormFieldToken(
             [field.name]: e.target.value,
           }));
         }}
-        className={`${inputClass} mx-0.5 inline-block min-w-32 align-baseline`}
+        className={`${inputClass} w-full min-w-0 align-baseline`}
       />
       {field.type === "text" && field.maxLength > 0 ? (
         <span className="mt-0.5 text-xs text-muted">
@@ -469,11 +516,13 @@ function renderFormFieldToken(
         </span>
       ) : null}
     </span>,
+    { fill: true },
   );
 }
 
 function FormMarkdownLayout({
   formId,
+  preview = false,
   schemaMarkdown,
   fieldsByName,
   values,
@@ -485,6 +534,7 @@ function FormMarkdownLayout({
   title = "",
 }: {
   formId: string;
+  preview?: boolean;
   schemaMarkdown: string;
   fieldsByName: Map<string, PublicFormField>;
   values: Record<string, FormSubmissionValue>;
@@ -509,18 +559,24 @@ function FormMarkdownLayout({
     () => new Map(tokens.map((token) => [token.tokenIndex, token])),
     [tokens],
   );
-  // Ephemeral per-render tracking while markdown tokens are walked once.
-  const renderedSelects = new Set<string>();
-  const hintShownFor = new Set<string>();
+  const firstTokenIndexByName = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const token of tokens) {
+      if (!map.has(token.name)) {
+        map.set(token.name, token.tokenIndex);
+      }
+    }
+    return map;
+  }, [tokens]);
 
   const ctx: FieldRenderContext = {
     formId,
+    preview,
     fieldsByName,
     values,
     setValues,
     tokensByIndex,
-    renderedSelects,
-    hintShownFor,
+    firstTokenIndexByName,
     fieldErrors,
     clearFieldError,
     toggleCheckboxGroup,
@@ -538,6 +594,8 @@ function FormMarkdownLayout({
         remarkPlugins={[remarkGfm, remarkBreaks]}
         urlTransform={allowFormFieldUrl}
         components={{
+          // Avoid <p> wrapping fields — invalid nesting with controls breaks hydration.
+          p: ({ children }) => <div className="my-[1em]">{children}</div>,
           img: ({ src }) => {
             if (typeof src !== "string" || !src.startsWith(FORM_FIELD_LINK_PREFIX)) {
               return null;
@@ -547,8 +605,15 @@ function FormMarkdownLayout({
               10,
             );
             if (Number.isNaN(tokenIndex)) return null;
+            const token = ctx.tokensByIndex.get(tokenIndex);
+            const field = token ? ctx.fieldsByName.get(token.name) : null;
+            const fill = field ? isFillWidthFieldType(field.type) : false;
             return (
-              <span className="not-prose inline">
+              <span
+                className={
+                  fill ? "not-prose form-field-slot" : "not-prose form-field-inline"
+                }
+              >
                 {renderFormFieldToken(tokenIndex, ctx)}
               </span>
             );
@@ -576,7 +641,7 @@ function FormMarkdownLayout({
   );
 }
 
-export function PublicFormBlock({ form }: Props) {
+export function PublicFormBlock({ form, preview = false }: Props) {
   const [values, setValues] = useState<Record<string, FormSubmissionValue>>(() =>
     Object.fromEntries(
       form.fields.map((field) => [
@@ -621,6 +686,12 @@ export function PublicFormBlock({ form }: Props) {
     });
   }
 
+  function clearValidation() {
+    setFieldErrors({});
+    setStepError(null);
+    setState((prev) => (prev.type === "error" ? { type: "idle" } : prev));
+  }
+
   function findStepIndexForField(fieldName: string): number {
     if (layout.sharedFieldNames.includes(fieldName)) return stepIndex;
     const index = steps.findIndex((step) => step.fieldNames.includes(fieldName));
@@ -644,6 +715,30 @@ export function PublicFormBlock({ form }: Props) {
     setState({ type: "submitting" });
     setStepError(null);
     setFieldErrors({});
+
+    if (preview) {
+      setState({
+        type: "success",
+        message:
+          form.successMessage ||
+          "Preview only — submission was not sent.",
+      });
+      setStepIndex(0);
+      setFieldErrors({});
+      setValues(
+        Object.fromEntries(
+          form.fields.map((field) => [
+            field.name,
+            field.type === "checkbox"
+              ? field.options.length > 0
+                ? []
+                : false
+              : "",
+          ]),
+        ),
+      );
+      return;
+    }
 
     try {
       const res = await fetch(`/api/forms/${form.id}/submit`, {
@@ -696,20 +791,28 @@ export function PublicFormBlock({ form }: Props) {
 
   function goToStep(target: number) {
     if (target === stepIndex) return;
+    if (target < 0 || target >= steps.length) return;
+    // Free travel between steps — never validate here.
+    clearValidation();
     setStepIndex(target);
   }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Enter in an input must not validate mid-wizard; advance instead.
+    if (multiStep && !isLastStep) {
+      goToStep(stepIndex + 1);
+      return;
+    }
     await submitForm();
   }
 
   function goBack() {
-    setStepIndex((prev) => Math.max(prev - 1, 0));
+    goToStep(stepIndex - 1);
   }
 
   function goNext() {
-    setStepIndex((prev) => Math.min(prev + 1, steps.length - 1));
+    goToStep(stepIndex + 1);
   }
 
   function toggleCheckboxGroup(name: string, optionValue: string, checked: boolean) {
@@ -733,6 +836,11 @@ export function PublicFormBlock({ form }: Props) {
           : "rounded-2xl border border-border bg-background p-5 shadow-sm md:p-6"
       }
     >
+      {preview ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Preview only — submissions and uploads are not saved.
+        </p>
+      ) : null}
       <div className="mb-5 space-y-2">
         <h2 className="font-display text-2xl text-foreground">{form.name}</h2>
         {form.description ? (
@@ -759,6 +867,7 @@ export function PublicFormBlock({ form }: Props) {
               {layout.sharedMarkdown ? (
                 <FormMarkdownLayout
                   formId={form.id}
+                  preview={preview}
                   schemaMarkdown={layout.sharedMarkdown}
                   fieldsByName={fieldsByName}
                   values={values}
@@ -805,6 +914,7 @@ export function PublicFormBlock({ form }: Props) {
               ) : null}
               <FormMarkdownLayout
                 formId={form.id}
+                preview={preview}
                 schemaMarkdown={currentStep.markdown}
                 fieldsByName={fieldsByName}
                 values={values}
@@ -1003,6 +1113,7 @@ export function PublicFormBlock({ form }: Props) {
                           value={value}
                           showSuggestion={false}
                           invalid={invalid}
+                          preview={preview}
                           onChange={(next) => {
                             clearFieldError(field.name);
                             setValues((prev) => ({

@@ -143,6 +143,55 @@ button:disabled,
   list-style: decimal;
 }
 
+.prose-article li,
+.prose-article-wide li {
+  margin: 0.75em 0;
+}
+
+.prose-article li > ul,
+.prose-article li > ol,
+.prose-article-wide li > ul,
+.prose-article-wide li > ol {
+  margin: 0.35em 0;
+}
+
+/* Markdown form: keep label text on the same line, input fills the rest. */
+.prose-article-wide p:has(.form-field-slot),
+.prose-article-wide li:has(.form-field-slot),
+.prose-article-wide div:has(> .form-field-slot) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.75rem;
+  row-gap: 0.5rem;
+}
+
+.prose-article-wide .form-field-slot {
+  display: inline-flex;
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.prose-article-wide .form-field-slot > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.prose-article-wide .form-field-slot input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.prose-article-wide .form-field-slot select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.prose-article-wide .form-field-inline {
+  display: inline;
+  vertical-align: middle;
+}
+
 .prose-article a,
 .prose-article-wide a {
   color: var(--accent);

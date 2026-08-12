@@ -1,8 +1,9 @@
 import type { CSSProperties } from "react";
 import {
-  MARKDOWN_FIELD_TOKEN_RE,
   parseAttrBlock,
   parseMarkdownFieldToken,
+  replaceMarkdownFieldTokens,
+  scanMarkdownFieldTokens,
   type ParsedMarkdownFieldToken,
 } from "@/lib/validations/forms";
 
@@ -42,18 +43,15 @@ export type FormMarkdownLayout = {
 
 export function extractFormMarkdownTokens(markdown: string): FormMarkdownToken[] {
   const tokens: FormMarkdownToken[] = [];
-  const re = new RegExp(MARKDOWN_FIELD_TOKEN_RE.source, "gi");
-  let match: RegExpExecArray | null;
   let tokenIndex = 0;
 
-  while ((match = re.exec(markdown)) !== null) {
-    const raw = match[0] ?? "";
-    const parsed = parseMarkdownFieldToken(raw);
+  for (const match of scanMarkdownFieldTokens(markdown)) {
+    const parsed = parseMarkdownFieldToken(match.raw);
     if (!parsed) continue;
     tokens.push({
       ...parsed,
       tokenIndex,
-      raw,
+      raw: match.raw,
     });
     tokenIndex += 1;
   }
@@ -81,10 +79,8 @@ export function parseFormStepToken(token: string): {
 function fieldNamesInMarkdown(markdown: string): string[] {
   const names: string[] = [];
   const seen = new Set<string>();
-  const re = new RegExp(MARKDOWN_FIELD_TOKEN_RE.source, "gi");
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(markdown)) !== null) {
-    const parsed = parseMarkdownFieldToken(match[0] ?? "");
+  for (const match of scanMarkdownFieldTokens(markdown)) {
+    const parsed = parseMarkdownFieldToken(match.raw);
     if (!parsed || seen.has(parsed.name)) continue;
     seen.add(parsed.name);
     names.push(parsed.name);
@@ -174,23 +170,17 @@ export function preprocessFormSchemaMarkdown(markdown: string): {
   tokens: FormMarkdownToken[];
 } {
   const tokens: FormMarkdownToken[] = [];
-  let tokenIndex = 0;
 
-  const processed = markdown.replace(
-    new RegExp(MARKDOWN_FIELD_TOKEN_RE.source, "gi"),
-    (raw) => {
-      const parsed = parseMarkdownFieldToken(raw);
-      if (!parsed) return raw;
-      tokens.push({
-        ...parsed,
-        tokenIndex,
-        raw,
-      });
-      const replacement = `![](${FORM_FIELD_LINK_PREFIX}${tokenIndex})`;
-      tokenIndex += 1;
-      return replacement;
-    },
-  );
+  const processed = replaceMarkdownFieldTokens(markdown, (raw, tokenIndex) => {
+    const parsed = parseMarkdownFieldToken(raw);
+    if (!parsed) return raw;
+    tokens.push({
+      ...parsed,
+      tokenIndex,
+      raw,
+    });
+    return `![](${FORM_FIELD_LINK_PREFIX}${tokenIndex})`;
+  });
 
   return { markdown: processed, tokens };
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FormSubmissionDeleteButton } from "@/components/admin/form-submission-delete-button";
 import { FormSubmissionStatusControls } from "@/components/admin/form-submission-status-controls";
 import { requireSitePage } from "@/lib/admin-access";
 import {
@@ -88,12 +89,19 @@ export default async function FormSubmissionDetailPage({ params }: Props) {
           <h1 className="text-2xl font-semibold">Submission detail</h1>
           <p className="mt-1 text-sm text-gray-600">{form.name}</p>
         </div>
-        <Link
-          href={`/admin/forms/${id}/submissions`}
-          className="text-sm text-gray-600 hover:underline"
-        >
-          ← Back to submissions
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <FormSubmissionDeleteButton
+            submissionId={submission.id}
+            formId={id}
+            redirectTo={`/admin/forms/${id}/submissions`}
+          />
+          <Link
+            href={`/admin/forms/${id}/submissions`}
+            className="text-sm text-gray-600 hover:underline"
+          >
+            ← Back to submissions
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 md:grid-cols-3">
