@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import {
   Courier_Prime,
   Newsreader,
@@ -41,6 +42,35 @@ const xanhMono = Xanh_Mono({
   display: "swap",
 });
 
+/** Bundled Courier New (regular, bold, italic, bold italic). */
+const courierNew = localFont({
+  src: [
+    {
+      path: "./fonts/courier-new/cour.ttf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "./fonts/courier-new/courbd.ttf",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "./fonts/courier-new/couri.ttf",
+      weight: "400",
+      style: "italic",
+    },
+    {
+      path: "./fonts/courier-new/courbi.ttf",
+      weight: "700",
+      style: "italic",
+    },
+  ],
+  variable: "--font-courier-new",
+  display: "swap",
+  fallback: ["Courier New", "Courier", "monospace"],
+});
+
 function siteOrigin(): string | undefined {
   const raw =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
@@ -81,7 +111,7 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
-      className={`${outfit.variable} ${newsreader.variable} ${specialElite.variable} ${courierPrime.variable} ${xanhMono.variable}`}
+      className={`${outfit.variable} ${newsreader.variable} ${specialElite.variable} ${courierPrime.variable} ${courierNew.variable} ${xanhMono.variable}`}
     >
       <body className="min-h-[100dvh] antialiased">{children}</body>
     </html>

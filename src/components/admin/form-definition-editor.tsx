@@ -280,8 +280,9 @@ Photo: #![image:{id_photo}:{required:true}]`}
             <p>
               Font presets: <code>default</code>, <code>sans</code>,{" "}
               <code>serif</code>, <code>display</code>, <code>mono</code>,{" "}
-              <code>typewriter</code>, <code>courier</code>, <code>xanh</code>{" "}
-              (Vietnamese typewriter), or a custom CSS family like{" "}
+              <code>typewriter</code>, <code>courier</code>,{" "}
+              <code>courier_new</code>, <code>xanh</code> (Vietnamese
+              typewriter), or a custom CSS family like{" "}
               <code>{`{font:"Georgia, serif"}`}</code>.
             </p>
           </section>

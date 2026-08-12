@@ -8,6 +8,7 @@ export const CONTENT_FONT_PRESETS = [
   "mono",
   "typewriter",
   "courier",
+  "courier_new",
   "xanh",
 ] as const;
 
@@ -24,6 +25,7 @@ export const CONTENT_FONT_OPTIONS: Array<{
   { value: "mono", label: "Monospace" },
   { value: "typewriter", label: "Typewriter (Special Elite)" },
   { value: "courier", label: "Typewriter (Courier Prime)" },
+  { value: "courier_new", label: "Typewriter (Courier New)" },
   { value: "xanh", label: "Typewriter (Xanh Mono · Vietnamese)" },
 ];
 
@@ -60,6 +62,12 @@ function resolveFontTokens(font: string): {
     return {
       token: "var(--font-courier)",
       stack: "var(--font-courier), Courier New, Courier, monospace",
+    };
+  }
+  if (normalized === "courier_new" || normalized === "courier-new") {
+    return {
+      token: "var(--font-courier-new)",
+      stack: 'var(--font-courier-new), "Courier New", Courier, monospace',
     };
   }
   if (normalized === "xanh") {
