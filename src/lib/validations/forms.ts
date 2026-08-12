@@ -974,9 +974,34 @@ function allowedOptions(field: FormFieldDefinition): Set<string> {
   return new Set((field.options ?? []).map((option) => option.value));
 }
 
+export type FormFieldErrorMessages = {
+  required: (label: string) => string;
+  invalidSelection: (label: string) => string;
+  invalidUpload: (label: string) => string;
+  invalidUploadKey: (label: string) => string;
+  maxLength: (label: string, max: number) => string;
+  invalidEmail: (label: string) => string;
+  invalidPhone: (label: string) => string;
+  invalidDate: (label: string) => string;
+  invalidDateTime: (label: string) => string;
+};
+
+const defaultFieldErrorMessages: FormFieldErrorMessages = {
+  required: (label) => `${label} is required`,
+  invalidSelection: (label) => `${label} has an invalid selection`,
+  invalidUpload: (label) => `${label} must be a valid uploaded file`,
+  invalidUploadKey: (label) => `${label} has an invalid upload`,
+  maxLength: (label, max) => `${label} must be at most ${max} characters`,
+  invalidEmail: (label) => `${label} must be a valid email`,
+  invalidPhone: (label) => `${label} must be a valid phone number`,
+  invalidDate: (label) => `${label} must be a valid date`,
+  invalidDateTime: (label) => `${label} must be a valid date and time`,
+};
+
 export function validateSubmissionPayload(
   fields: FormFieldDefinition[],
   input: Record<string, unknown>,
+  messages: FormFieldErrorMessages = defaultFieldErrorMessages,
 ): {
   ok: true;
   data: Record<string, FormSubmissionValue>;
@@ -1001,14 +1026,14 @@ export function validateSubmissionPayload(
         if (values.some((value) => !allowed.has(value))) {
           return {
             ok: false,
-            error: `${field.label} has an invalid selection`,
+            error: messages.invalidSelection(field.label),
             fieldName: field.name,
           };
         }
         if (field.required && values.length === 0) {
           return {
             ok: false,
-            error: `${field.label} is required`,
+            error: messages.required(field.label),
             fieldName: field.name,
           };
         }
@@ -1024,7 +1049,7 @@ export function validateSubmissionPayload(
       if (field.required && !checked) {
         return {
           ok: false,
-          error: `${field.label} is required`,
+          error: messages.required(field.label),
           fieldName: field.name,
         };
       }
@@ -1037,7 +1062,7 @@ export function validateSubmissionPayload(
         if (field.required) {
           return {
             ok: false,
-            error: `${field.label} is required`,
+            error: messages.required(field.label),
             fieldName: field.name,
           };
         }
@@ -1049,7 +1074,7 @@ export function validateSubmissionPayload(
       if (!parsedUpload.success) {
         return {
           ok: false,
-          error: `${field.label} must be a valid uploaded file`,
+          error: messages.invalidUpload(field.label),
           fieldName: field.name,
         };
       }
@@ -1058,7 +1083,7 @@ export function validateSubmissionPayload(
       if (!upload.key.startsWith("form-uploads/")) {
         return {
           ok: false,
-          error: `${field.label} has an invalid upload`,
+          error: messages.invalidUploadKey(field.label),
           fieldName: field.name,
         };
       }
@@ -1077,7 +1102,7 @@ export function validateSubmissionPayload(
     if (field.required && !value) {
       return {
         ok: false,
-        error: `${field.label} is required`,
+        error: messages.required(field.label),
         fieldName: field.name,
       };
     }
@@ -1094,7 +1119,7 @@ export function validateSubmissionPayload(
     ) {
       return {
         ok: false,
-        error: `${field.label} must be at most ${field.maxLength} characters`,
+        error: messages.maxLength(field.label, field.maxLength),
         fieldName: field.name,
       };
     }
@@ -1104,7 +1129,7 @@ export function validateSubmissionPayload(
       if (!parsed.success) {
         return {
           ok: false,
-          error: `${field.label} must be a valid email`,
+          error: messages.invalidEmail(field.label),
           fieldName: field.name,
         };
       }
@@ -1118,7 +1143,7 @@ export function validateSubmissionPayload(
       if (!parsed.success) {
         return {
           ok: false,
-          error: `${field.label} must be a valid phone number`,
+          error: messages.invalidPhone(field.label),
           fieldName: field.name,
         };
       }
@@ -1129,7 +1154,7 @@ export function validateSubmissionPayload(
       if (!parsed.success) {
         return {
           ok: false,
-          error: `${field.label} must be a valid date`,
+          error: messages.invalidDate(field.label),
           fieldName: field.name,
         };
       }
@@ -1143,7 +1168,7 @@ export function validateSubmissionPayload(
       if (!parsed.success || Number.isNaN(Date.parse(value))) {
         return {
           ok: false,
-          error: `${field.label} must be a valid date and time`,
+          error: messages.invalidDateTime(field.label),
           fieldName: field.name,
         };
       }
@@ -1153,7 +1178,7 @@ export function validateSubmissionPayload(
       if (!allowedOptions(field).has(value)) {
         return {
           ok: false,
-          error: `${field.label} has an invalid selection`,
+          error: messages.invalidSelection(field.label),
           fieldName: field.name,
         };
       }
@@ -1169,10 +1194,11 @@ export function validateSubmissionPayload(
 export function collectSubmissionFieldErrors(
   fields: FormFieldDefinition[],
   input: Record<string, unknown>,
+  messages?: FormFieldErrorMessages,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const field of fields) {
-    const result = validateSubmissionPayload([field], input);
+    const result = validateSubmissionPayload([field], input, messages);
     if (!result.ok) {
       errors[field.name] = result.error;
     }

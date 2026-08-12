@@ -48,5 +48,32 @@
   "footer": {
     "rights": "Vietnam Amateur Radio Club.",
     "menu": "Footer"
+  },
+  "form": {
+    "previous": "Previous",
+    "next": "Next",
+    "stepOf": "Step {current} of {total}",
+    "stepFallback": "Step {number}",
+    "stepsAriaLabel": "Form steps",
+    "selectPlaceholder": "Select…",
+    "sending": "Sending…",
+    "remove": "Remove",
+    "uploading": "Uploading…",
+    "uploadFailed": "Upload failed",
+    "fileTooLarge": "File must be under {mb}MB",
+    "fixFields": "Please fix the highlighted fields",
+    "submitFailed": "Failed to submit the form",
+    "successFallback": "Thank you. Your submission has been received.",
+    "previewBanner": "Preview only — submissions and uploads are not saved.",
+    "previewSuccess": "Preview only — submission was not sent.",
+    "required": "{label} is required",
+    "invalidSelection": "{label} has an invalid selection",
+    "invalidUpload": "{label} must be a valid uploaded file",
+    "invalidUploadKey": "{label} has an invalid upload",
+    "maxLength": "{label} must be at most {max} characters",
+    "invalidEmail": "{label} must be a valid email",
+    "invalidPhone": "{label} must be a valid phone number",
+    "invalidDate": "{label} must be a valid date",
+    "invalidDateTime": "{label} must be a valid date and time"
   }
 }

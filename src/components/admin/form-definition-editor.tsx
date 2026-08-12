@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { NextIntlClientProvider } from "next-intl";
 import {
   deleteFormDefinitionAction,
   saveFormDefinitionAction,
@@ -20,6 +21,28 @@ import { notifyAction, notifyError } from "@/components/admin/admin-toast";
 import { useConfirm } from "@/components/admin/use-confirm";
 import { PublicFormBlock } from "@/components/portal/public-form-block";
 import type { PublicFormDefinition } from "@/lib/forms";
+import enMessages from "../../../messages/en.json";
+import viMessages from "../../../messages/vi.json";
+
+type LocaleTab = "vi" | "en";
+type MarkdownView = "edit" | "preview";
+
+function FormPreviewI18n({
+  locale,
+  children,
+}: {
+  locale: LocaleTab;
+  children: React.ReactNode;
+}) {
+  return (
+    <NextIntlClientProvider
+      locale={locale}
+      messages={locale === "en" ? enMessages : viMessages}
+    >
+      {children}
+    </NextIntlClientProvider>
+  );
+}
 
 const FIELD_TYPES: Array<{ value: FormFieldType; label: string }> = [
   { value: "text", label: "Short text" },
@@ -34,9 +57,6 @@ const FIELD_TYPES: Array<{ value: FormFieldType; label: string }> = [
   { value: "image", label: "Image upload" },
   { value: "file", label: "File upload" },
 ];
-
-type LocaleTab = "vi" | "en";
-type MarkdownView = "edit" | "preview";
 
 function buildMarkdownPreviewForm(params: {
   formId?: string;
@@ -869,7 +889,9 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
               </p>
             ) : markdownPreview && "form" in markdownPreview ? (
               <div className="rounded-lg border border-gray-200 bg-[var(--background,#fff)] p-4 sm:p-6">
-                <PublicFormBlock form={markdownPreview.form} preview />
+                <FormPreviewI18n locale={tab}>
+                  <PublicFormBlock form={markdownPreview.form} preview />
+                </FormPreviewI18n>
               </div>
             ) : null}
           </div>
@@ -1252,7 +1274,9 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
               </p>
             ) : markdownPreview && "form" in markdownPreview ? (
               <div className="mx-auto w-full max-w-3xl rounded-lg border border-gray-200 bg-[var(--background,#fff)] p-4 sm:p-6">
-                <PublicFormBlock form={markdownPreview.form} preview />
+                <FormPreviewI18n locale={tab}>
+                  <PublicFormBlock form={markdownPreview.form} preview />
+                </FormPreviewI18n>
               </div>
             ) : null}
           </div>

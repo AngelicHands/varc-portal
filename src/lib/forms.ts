@@ -181,11 +181,13 @@ export function resolveFormLocale(
     submitLabel:
       (preferred.submitLabel ?? "").trim() ||
       fallback.submitLabel ||
-      "Send",
+      (locale === "en" ? "Send" : "Gửi"),
     successMessage:
       (preferred.successMessage ?? "").trim() ||
       fallback.successMessage ||
-      "Thank you. Your submission has been received.",
+      (locale === "en"
+        ? "Thank you. Your submission has been received."
+        : "Cảm ơn bạn. Chúng tôi đã nhận được thông tin."),
     schemaMarkdown: localeHasFormBody(preferred)
       ? preferred.schemaMarkdown || ""
       : fallback.schemaMarkdown || "",
@@ -235,10 +237,12 @@ function toPublicForm(
     name: resolved.name || "",
     description: resolved.description ?? "",
     schemaMarkdown: resolved.schemaMarkdown ?? "",
-    submitLabel: resolved.submitLabel || "Send",
+    submitLabel: resolved.submitLabel || (locale === "en" ? "Send" : "Gửi"),
     successMessage:
       resolved.successMessage ||
-      "Thank you. Your submission has been received.",
+      (locale === "en"
+        ? "Thank you. Your submission has been received."
+        : "Cảm ơn bạn. Chúng tôi đã nhận được thông tin."),
     fields: mapFields(resolved.fields),
   };
 }

@@ -48,5 +48,32 @@
   "footer": {
     "rights": "Hiệp hội Vô tuyến Nghiệp dư Việt Nam.",
     "menu": "Chân trang"
+  },
+  "form": {
+    "previous": "Trước",
+    "next": "Tiếp",
+    "stepOf": "Bước {current} / {total}",
+    "stepFallback": "Bước {number}",
+    "stepsAriaLabel": "Các bước biểu mẫu",
+    "selectPlaceholder": "Chọn…",
+    "sending": "Đang gửi…",
+    "remove": "Xóa",
+    "uploading": "Đang tải lên…",
+    "uploadFailed": "Tải lên thất bại",
+    "fileTooLarge": "Tệp phải nhỏ hơn {mb}MB",
+    "fixFields": "Vui lòng sửa các trường được đánh dấu",
+    "submitFailed": "Gửi biểu mẫu thất bại",
+    "successFallback": "Cảm ơn bạn. Chúng tôi đã nhận được thông tin.",
+    "previewBanner": "Chỉ xem trước — bài gửi và tệp tải lên không được lưu.",
+    "previewSuccess": "Chỉ xem trước — bài gửi không được gửi đi.",
+    "required": "{label} là bắt buộc",
+    "invalidSelection": "{label} có lựa chọn không hợp lệ",
+    "invalidUpload": "{label} phải là tệp tải lên hợp lệ",
+    "invalidUploadKey": "{label} có tệp tải lên không hợp lệ",
+    "maxLength": "{label} tối đa {max} ký tự",
+    "invalidEmail": "{label} phải là email hợp lệ",
+    "invalidPhone": "{label} phải là số điện thoại hợp lệ",
+    "invalidDate": "{label} phải là ngày hợp lệ",
+    "invalidDateTime": "{label} phải là ngày giờ hợp lệ"
   }
 }

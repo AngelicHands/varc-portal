@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
@@ -18,6 +19,7 @@ import {
   FORM_UPLOAD_MAX_BYTES,
   collectSubmissionFieldErrors,
   isFormUploadValue,
+  type FormFieldErrorMessages,
   type FormSubmissionValue,
   type FormUploadValue,
 } from "@/lib/validations/forms";
@@ -99,6 +101,7 @@ function FormUploadControl({
   invalid?: boolean;
   preview?: boolean;
 }) {
+  const t = useTranslations("form");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -114,7 +117,9 @@ function FormUploadControl({
 
     if (file.size <= 0 || file.size > FORM_UPLOAD_MAX_BYTES) {
       setError(
-        `File must be under ${Math.floor(FORM_UPLOAD_MAX_BYTES / (1024 * 1024))}MB`,
+        t("fileTooLarge", {
+          mb: Math.floor(FORM_UPLOAD_MAX_BYTES / (1024 * 1024)),
+        }),
       );
       return;
     }
@@ -144,7 +149,7 @@ function FormUploadControl({
         | (FormUploadValue & { ok?: boolean; error?: string })
         | null;
       if (!res.ok || !json?.ok || !json.url || !json.key) {
-        setError(json?.error || "Upload failed");
+        setError(json?.error || t("uploadFailed"));
         return;
       }
       onChange({
@@ -155,7 +160,7 @@ function FormUploadControl({
         size: json.size,
       });
     } catch {
-      setError("Upload failed");
+      setError(t("uploadFailed"));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -188,7 +193,7 @@ function FormUploadControl({
         ) : null}
       </span>
       {uploading ? (
-        <span className="text-xs text-muted">Uploading…</span>
+        <span className="text-xs text-muted">{t("uploading")}</span>
       ) : null}
       {error ? <span className="text-xs text-red-600">{error}</span> : null}
       {upload ? (
@@ -214,7 +219,7 @@ function FormUploadControl({
             onClick={() => onChange("")}
             className="text-red-600 underline"
           >
-            Remove
+            {t("remove")}
           </button>
         </span>
       ) : null}
@@ -240,6 +245,7 @@ type FieldRenderContext = {
     optionValue: string,
     checked: boolean,
   ) => void;
+  selectPlaceholder: string;
 };
 
 function withSuggestion(
@@ -339,7 +345,7 @@ function renderFormFieldToken(
         }}
         className={`${inputClass} my-1 w-full align-baseline`}
       >
-        <option value="">Select…</option>
+        <option value="">{ctx.selectPlaceholder}</option>
         {field.options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -532,6 +538,7 @@ function FormMarkdownLayout({
   clearFieldError,
   font = "default",
   title = "",
+  selectPlaceholder,
 }: {
   formId: string;
   preview?: boolean;
@@ -550,6 +557,7 @@ function FormMarkdownLayout({
   clearFieldError: (name: string) => void;
   font?: string;
   title?: string;
+  selectPlaceholder: string;
 }) {
   const { markdown, tokens } = useMemo(
     () => preprocessFormSchemaMarkdown(schemaMarkdown),
@@ -580,6 +588,7 @@ function FormMarkdownLayout({
     fieldErrors,
     clearFieldError,
     toggleCheckboxGroup,
+    selectPlaceholder,
   };
 
   return (
@@ -642,6 +651,21 @@ function FormMarkdownLayout({
 }
 
 export function PublicFormBlock({ form, preview = false }: Props) {
+  const t = useTranslations("form");
+  const fieldErrorMessages = useMemo<FormFieldErrorMessages>(
+    () => ({
+      required: (label) => t("required", { label }),
+      invalidSelection: (label) => t("invalidSelection", { label }),
+      invalidUpload: (label) => t("invalidUpload", { label }),
+      invalidUploadKey: (label) => t("invalidUploadKey", { label }),
+      maxLength: (label, max) => t("maxLength", { label, max }),
+      invalidEmail: (label) => t("invalidEmail", { label }),
+      invalidPhone: (label) => t("invalidPhone", { label }),
+      invalidDate: (label) => t("invalidDate", { label }),
+      invalidDateTime: (label) => t("invalidDateTime", { label }),
+    }),
+    [t],
+  );
   const [values, setValues] = useState<Record<string, FormSubmissionValue>>(() =>
     Object.fromEntries(
       form.fields.map((field) => [
@@ -679,6 +703,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
   const visibleStepError = errorsVisible ? stepError : null;
   const visibleFormError =
     errorsVisible && state.type === "error" ? state.message : null;
+  const selectPlaceholder = t("selectPlaceholder");
 
   function clearFieldError(name: string) {
     setFieldErrors((prev) => {
@@ -698,10 +723,14 @@ export function PublicFormBlock({ form, preview = false }: Props) {
   async function submitForm() {
     // Only the Submit button should call this — that is when we highlight.
     setErrorsVisible(true);
-    const errors = collectSubmissionFieldErrors(form.fields, values);
+    const errors = collectSubmissionFieldErrors(
+      form.fields,
+      values,
+      fieldErrorMessages,
+    );
     if (Object.keys(errors).length > 0) {
       const firstField = Object.keys(errors)[0] ?? "";
-      const firstError = errors[firstField] ?? "Please fix the highlighted fields";
+      const firstError = errors[firstField] ?? t("fixFields");
       setFieldErrors(errors);
       setStepError(firstError);
       setState({ type: "error", message: firstError });
@@ -719,9 +748,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
     if (preview) {
       setState({
         type: "success",
-        message:
-          form.successMessage ||
-          "Preview only — submission was not sent.",
+        message: form.successMessage || t("previewSuccess"),
       });
       setStepIndex(0);
       setFieldErrors({});
@@ -760,16 +787,14 @@ export function PublicFormBlock({ form, preview = false }: Props) {
         setErrorsVisible(true);
         setState({
           type: "error",
-          message: json?.error || "Failed to submit the form",
+          message: json?.error || t("submitFailed"),
         });
         return;
       }
       setState({
         type: "success",
         message:
-          form.successMessage ||
-          json.message ||
-          "Thank you. Your submission has been received.",
+          form.successMessage || json.message || t("successFallback"),
       });
       setStepIndex(0);
       setFieldErrors({});
@@ -790,7 +815,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
       setErrorsVisible(true);
       setState({
         type: "error",
-        message: "Failed to submit the form",
+        message: t("submitFailed"),
       });
     }
   }
@@ -861,7 +886,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
     >
       {preview ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Preview only — submissions and uploads are not saved.
+          {t("previewBanner")}
         </p>
       ) : null}
       <div className="mb-5 space-y-2">
@@ -898,13 +923,14 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                   toggleCheckboxGroup={toggleCheckboxGroup}
                   fieldErrors={visibleFieldErrors}
                   clearFieldError={clearFieldError}
+                  selectPlaceholder={selectPlaceholder}
                 />
               ) : null}
               {multiStep ? (
                 <div className="space-y-3">
                   <div
                     role="tablist"
-                    aria-label="Form steps"
+                    aria-label={t("stepsAriaLabel")}
                     className="flex flex-wrap gap-2 border-b border-border pb-2"
                   >
                     {steps.map((step, index) => {
@@ -925,13 +951,17 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                               : `rounded-md px-3 py-1.5 text-sm font-medium text-muted hover:bg-gray-100 hover:text-foreground${hasError ? " text-red-700 ring-1 ring-red-300" : ""}`
                           }
                         >
-                          {step.title || `Step ${index + 1}`}
+                          {step.title ||
+                            t("stepFallback", { number: index + 1 })}
                         </button>
                       );
                     })}
                   </div>
                   <p className="text-xs text-muted">
-                    Step {stepIndex + 1} of {steps.length}
+                    {t("stepOf", {
+                      current: stepIndex + 1,
+                      total: steps.length,
+                    })}
                   </p>
                 </div>
               ) : null}
@@ -947,6 +977,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                 clearFieldError={clearFieldError}
                 font={currentStep.font}
                 title=""
+                selectPlaceholder={selectPlaceholder}
               />
             </>
           ) : (
@@ -1015,7 +1046,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                           }}
                           className={commonTextClass}
                         >
-                          <option value="">Select…</option>
+                          <option value="">{selectPlaceholder}</option>
                           {field.options.map((option) => (
                             <option key={option.value} value={option.value}>
                               {option.label}
@@ -1216,7 +1247,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                   suppressHydrationWarning
                   className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-foreground transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Previous
+                  {t("previous")}
                 </button>
                 {isLastStep ? (
                   <button
@@ -1227,7 +1258,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                     className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:opacity-60"
                   >
                     {state.type === "submitting"
-                      ? "Sending..."
+                      ? t("sending")
                       : form.submitLabel}
                   </button>
                 ) : (
@@ -1238,7 +1269,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                     disabled={actionsDisabled}
                     className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:opacity-60"
                   >
-                    Next
+                    {t("next")}
                   </button>
                 )}
               </>
@@ -1251,7 +1282,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                 className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:opacity-60"
               >
                 {state.type === "submitting"
-                  ? "Sending..."
+                  ? t("sending")
                   : form.submitLabel}
               </button>
             )}
