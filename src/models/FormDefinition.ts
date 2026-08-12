@@ -26,7 +26,7 @@ const FormFieldSchema = new Schema(
     width: {
       type: String,
       enum: FORM_FIELD_WIDTHS,
-      default: "full",
+      default: "default",
     },
     style: {
       type: String,

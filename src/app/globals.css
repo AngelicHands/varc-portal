@@ -250,6 +250,13 @@ button:disabled,
   vertical-align: middle;
 }
 
+.prose-article-wide .form-field-sized {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  vertical-align: middle;
+}
+
 .prose-article a,
 .prose-article-wide a {
   color: var(--accent);

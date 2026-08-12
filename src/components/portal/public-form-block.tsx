@@ -20,6 +20,7 @@ import {
   collectSubmissionFieldErrors,
   isFormUploadValue,
   type FormFieldErrorMessages,
+  type FormFieldWidth,
   type FormSubmissionValue,
   type FormUploadValue,
 } from "@/lib/validations/forms";
@@ -41,8 +42,17 @@ function allowFormFieldUrl(url: string) {
   return defaultUrlTransform(url);
 }
 
-function fieldClass(width: "full" | "half") {
-  return width === "half" ? "md:col-span-1" : "md:col-span-2";
+function fieldClass(width: FormFieldWidth) {
+  return width === "default" || width === "medium"
+    ? "md:col-span-1"
+    : "md:col-span-2";
+}
+
+function inputSizeClass(width: FormFieldWidth) {
+  if (width === "medium") return "w-64 max-w-full";
+  if (width === "wide") return "w-full max-w-xl";
+  if (width === "full-width") return "w-full max-w-full";
+  return "w-40 max-w-full";
 }
 
 function inputStyleClass(style: string, invalid = false) {
@@ -303,10 +313,12 @@ function renderFormFieldToken(
 
   const value = ctx.values[field.name];
   const invalid = Boolean(ctx.fieldErrors[field.name]);
+  const sizeClass = inputSizeClass(field.width);
   const inputClass = `text-sm outline-none transition ${inputStyleClass(field.style, invalid)}`;
   const isFirstTokenForField =
     ctx.firstTokenIndexByName.get(field.name) === tokenIndex;
   const showHint = isFirstTokenForField;
+  const fillRemaining = field.width === "full-width";
 
   if (field.type === "image" || field.type === "file") {
     return (
@@ -343,7 +355,7 @@ function renderFormFieldToken(
             [field.name]: e.target.value,
           }));
         }}
-        className={`${inputClass} my-1 w-full align-baseline`}
+        className={`${inputClass} my-1 ${sizeClass} align-baseline`}
       >
         <option value="">{ctx.selectPlaceholder}</option>
         {field.options.map((option) => (
@@ -352,7 +364,7 @@ function renderFormFieldToken(
           </option>
         ))}
       </select>,
-      { fill: true, showMeta: showHint },
+      { fill: fillRemaining, showMeta: showHint },
     );
   }
 
@@ -455,7 +467,7 @@ function renderFormFieldToken(
     const length = typeof value === "string" ? value.length : 0;
     return withSuggestion(
       field,
-      <span className="my-2 block w-full">
+      <span className={`my-2 block ${sizeClass}`}>
         <textarea
           rows={5}
           aria-required={field.required}
@@ -485,7 +497,13 @@ function renderFormFieldToken(
   const length = typeof value === "string" ? value.length : 0;
   return withSuggestion(
     field,
-    <span className="flex w-full min-w-0 flex-col align-baseline">
+    <span
+      className={
+        fillRemaining
+          ? "flex w-full min-w-0 flex-col align-baseline"
+          : `inline-flex ${sizeClass} min-w-0 flex-col align-baseline`
+      }
+    >
       <input
         type={
           field.type === "email"
@@ -522,7 +540,7 @@ function renderFormFieldToken(
         </span>
       ) : null}
     </span>,
-    { fill: true },
+    { fill: fillRemaining },
   );
 }
 
@@ -616,11 +634,22 @@ function FormMarkdownLayout({
             if (Number.isNaN(tokenIndex)) return null;
             const token = ctx.tokensByIndex.get(tokenIndex);
             const field = token ? ctx.fieldsByName.get(token.name) : null;
-            const fill = field ? isFillWidthFieldType(field.type) : false;
+            const fill =
+              field != null &&
+              isFillWidthFieldType(field.type) &&
+              field.width === "full-width";
+            const sized =
+              field != null &&
+              isFillWidthFieldType(field.type) &&
+              field.width !== "full-width";
             return (
               <span
                 className={
-                  fill ? "not-prose form-field-slot" : "not-prose form-field-inline"
+                  fill
+                    ? "not-prose form-field-slot"
+                    : sized
+                      ? "not-prose form-field-sized"
+                      : "not-prose form-field-inline"
                 }
               >
                 {renderFormFieldToken(tokenIndex, ctx)}
@@ -985,7 +1014,8 @@ export function PublicFormBlock({ form, preview = false }: Props) {
               {form.fields.map((field) => {
                 const value = values[field.name];
                 const invalid = Boolean(visibleFieldErrors[field.name]);
-                const commonTextClass = `w-full text-sm outline-none transition ${inputStyleClass(field.style, invalid)}`;
+                const sizeClass = inputSizeClass(field.width);
+                const commonTextClass = `${sizeClass} text-sm outline-none transition ${inputStyleClass(field.style, invalid)}`;
 
                 return (
                   <div key={field.id} className={fieldClass(field.width)}>

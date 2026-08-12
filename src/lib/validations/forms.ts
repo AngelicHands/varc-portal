@@ -31,7 +31,12 @@ export const FORM_FIELD_TYPES = [
   "file",
 ] as const;
 
-export const FORM_FIELD_WIDTHS = ["full", "half"] as const;
+export const FORM_FIELD_WIDTHS = [
+  "default",
+  "medium",
+  "wide",
+  "full-width",
+] as const;
 export const FORM_FIELD_STYLES = [
   "default",
   "borderless",
@@ -64,6 +69,15 @@ export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
 export type FormFieldWidth = (typeof FORM_FIELD_WIDTHS)[number];
 export type FormFieldStyle = (typeof FORM_FIELD_STYLES)[number];
 
+/** Map legacy full/half values and markdown aliases onto current presets. */
+export function normalizeFormFieldWidth(value: unknown): FormFieldWidth {
+  if (value === "full" || value === "full-width") return "full-width";
+  if (value === "half" || value === "medium") return "medium";
+  if (value === "wide") return "wide";
+  if (value === "default") return "default";
+  return "default";
+}
+
 export type FormUploadValue = {
   url: string;
   key: string;
@@ -93,6 +107,11 @@ export const formFieldOptionSchema = z.object({
 
 export type FormFieldOption = z.infer<typeof formFieldOptionSchema>;
 
+const formFieldWidthSchema = z
+  .string()
+  .optional()
+  .transform((value): FormFieldWidth => normalizeFormFieldWidth(value));
+
 export const formFieldSchema = z
   .object({
     id: z.string().trim().min(1).max(64),
@@ -111,7 +130,7 @@ export const formFieldSchema = z
     placeholder: z.string().trim().max(500).default(""),
     helpText: z.string().trim().max(MAX_TEXT).default(""),
     maxLength: z.number().int().min(0).max(MAX_TEXT).default(0),
-    width: z.enum(FORM_FIELD_WIDTHS).default("full"),
+    width: formFieldWidthSchema.default("default"),
     style: z.enum(FORM_FIELD_STYLES).default("default"),
     options: z.array(formFieldOptionSchema).max(100).default([]),
   })
@@ -430,6 +449,7 @@ export type ParsedMarkdownFieldToken = {
   options: FormFieldOption[];
   placeholder: string;
   style: FormFieldStyle;
+  width: FormFieldWidth;
   required: boolean;
   helpText: string;
   maxLength: number;
@@ -806,6 +826,8 @@ export function parseMarkdownFieldToken(
   const rest = token.slice(header[0].length, -1);
   let placeholder = "";
   let style: FormFieldStyle = "default";
+  /** Unset size keeps fill-the-line behavior for existing markdown layouts. */
+  let width: FormFieldWidth = "full-width";
   let required = false;
   let helpText = "";
   let maxLength = 0;
@@ -824,6 +846,10 @@ export function parseMarkdownFieldToken(
     (FORM_FIELD_STYLES as readonly string[]).includes(attrs.style)
   ) {
     style = attrs.style as FormFieldStyle;
+  }
+  const rawSize = attrs.size ?? attrs.width;
+  if (rawSize) {
+    width = normalizeFormFieldWidth(rawSize);
   }
   required = parseBooleanAttr(attrs.required);
   helpText = (attrs.suggestion ?? attrs.help ?? "").trim();
@@ -848,6 +874,7 @@ export function parseMarkdownFieldToken(
     options,
     placeholder,
     style,
+    width,
     required,
     helpText,
     maxLength,
@@ -870,7 +897,7 @@ export function emptyFormField(
     placeholder: "",
     helpText: "",
     maxLength: 0,
-    width: "full",
+    width: "default",
     style: "default",
     options:
       type === "select" || type === "radio"
@@ -944,7 +971,7 @@ export function parseFormSchemaMarkdown(markdown: string): {
       helpText: parsedLine.helpText,
       maxLength:
         rawType === "text" || rawType === "textarea" ? parsedLine.maxLength : 0,
-      width: "full",
+      width: parsedLine.width,
       style: parsedLine.style,
       options: parsedLine.options,
     });

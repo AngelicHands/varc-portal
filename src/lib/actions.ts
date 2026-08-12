@@ -40,6 +40,7 @@ import {
   formDefinitionFormSchema,
   formatZodIssues,
   isFormUploadValue,
+  normalizeFormFieldWidth,
 } from "@/lib/validations/forms";
 import {
   pageTemplateFormSchema,
@@ -1077,7 +1078,7 @@ export async function saveFormDefinitionAction(
         placeholder: field.placeholder.trim(),
         helpText: field.helpText.trim(),
         maxLength: field.maxLength ?? 0,
-        width: field.width,
+        width: normalizeFormFieldWidth(field.width),
         style: field.style,
         options: field.options.map((option) => ({
           label: option.label.trim(),

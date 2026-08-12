@@ -18,7 +18,10 @@ import type {
   FormSubmissionValue,
   FormSubmissionStatus,
 } from "@/lib/validations/forms";
-import { validateSubmissionPayload } from "@/lib/validations/forms";
+import {
+  normalizeFormFieldWidth,
+  validateSubmissionPayload,
+} from "@/lib/validations/forms";
 import { getValkey } from "@/lib/cache/valkey";
 import { logServerError } from "@/lib/safe-error";
 
@@ -86,7 +89,7 @@ function mapFields(
     placeholder: field.placeholder ?? "",
     helpText: field.helpText ?? "",
     maxLength: field.maxLength ?? 0,
-    width: field.width ?? "full",
+    width: normalizeFormFieldWidth(field.width),
     style: field.style ?? "default",
     options: (field.options ?? []).map((option) => ({
       label: option.label,

@@ -9,11 +9,13 @@ import {
 } from "@/lib/actions";
 import {
   emptyFormField,
+  normalizeFormFieldWidth,
   parseFormSchemaMarkdown,
   type FormDefinitionFormValues,
   type FormDefinitionMode,
   type FormFieldDefinition,
   type FormFieldType,
+  type FormFieldWidth,
   type FormLocaleValues,
 } from "@/lib/validations/forms";
 import { makeSlug } from "@/lib/slug";
@@ -157,6 +159,7 @@ function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
   required:true,
   placeholder:"…",
   maxLength:80,
+  size:medium,
   style:underline,
   suggestion:"…"
 }]`}
@@ -166,9 +169,9 @@ function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
           <section className="space-y-2">
             <h3 className="font-semibold text-gray-900">Examples</h3>
             <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
-{`Your name: #![text:{full_name}:{required:true,placeholder:"Your name",style:underline,maxLength:80,suggestion:"Enter your legal name"}]
-Notes: #![textarea:{notes}:{required:true,maxLength:500}]
-Email: #![email:{email}:{required:true,placeholder:"name@example.com"}]
+{`Your name: #![text:{full_name}:{required:true,placeholder:"Your name",style:underline,size:wide,maxLength:80,suggestion:"Enter your legal name"}]
+Notes: #![textarea:{notes}:{required:true,maxLength:500,size:full-width}]
+Email: #![email:{email}:{required:true,placeholder:"name@example.com",size:medium}]
 Meeting: #![date_time:{meeting_at}:{required:true}]
 Prefer contact by:
 #![radio:{contact}:{options:[{value:"email",label:"Email"},{value:"phone",label:"Phone"}],suggestion:"Choose one"}]
@@ -176,11 +179,12 @@ Topics:
 #![checkbox:{topics}:{options:[{value:"dx",label:"DX"},{value:"comms",label:"Emergency comms"}],suggestion:"Select all that apply"}]
 ID photo: #![image:{id_photo}:{required:true,suggestion:"JPEG or PNG"}]
 Resume: #![file:{resume}:{suggestion:"PDF preferred"}]
-Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}]}]`}
+Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}],size:medium}]`}
             </pre>
             <p>
-              Text / email / phone / date / select inputs fill the remaining
-              width on the same line as the label text.
+              Use <code>size:full-width</code> when a text / email / phone /
+              date / select input should fill the remaining width on the same
+              line as the label.
             </p>
           </section>
 
@@ -201,6 +205,10 @@ Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value
               <li>
                 <code>max:200</code> or <code>maxLength:200</code> — max
                 characters for <code>text</code> / <code>textarea</code>
+              </li>
+              <li>
+                <code>size:default|medium|wide|full-width</code> — input width
+                preset (<code>width:</code> is accepted as an alias)
               </li>
               <li>
                 <code>style:default|borderless|underline|dotted_underline</code>
@@ -280,7 +288,19 @@ type FormEditorState = {
 
 function mapLocaleFields(
   fields:
-    | Array<Partial<FormFieldDefinition> & Pick<FormFieldDefinition, "id" | "type" | "name" | "label" | "required">>
+    | Array<{
+        id: string;
+        type: FormFieldDefinition["type"];
+        name: string;
+        label: string;
+        required: boolean;
+        placeholder?: string;
+        helpText?: string;
+        maxLength?: number;
+        width?: string | null;
+        style?: FormFieldDefinition["style"];
+        options?: FormFieldDefinition["options"];
+      }>
     | undefined,
 ): FormFieldDefinition[] {
   return (fields ?? []).map((field) => ({
@@ -292,7 +312,7 @@ function mapLocaleFields(
     placeholder: field.placeholder ?? "",
     helpText: field.helpText ?? "",
     maxLength: field.maxLength ?? 0,
-    width: field.width ?? "full",
+    width: normalizeFormFieldWidth(field.width),
     style: field.style ?? "default",
     options: (field.options ?? []).map((option) => ({
       label: option.label,
@@ -646,7 +666,7 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
               </p>
               <p className="mt-2 text-sm leading-6 text-gray-600">
                 Build the form with typed fields in the admin UI — labels,
-                options, validation, and layout width.
+                options, validation, and input size.
               </p>
             </button>
             <button
@@ -991,19 +1011,23 @@ export function FormDefinitionEditor({ formId, initial }: Props) {
                     </label>
 
                     <label className="block">
-                      <span className="mb-1 block text-sm font-medium">Width</span>
+                      <span className="mb-1 block text-sm font-medium">
+                        Input size
+                      </span>
                       <select
                         value={field.width}
                         onChange={(e) =>
                           setField(field.id, (current) => ({
                             ...current,
-                            width: e.target.value as "full" | "half",
+                            width: e.target.value as FormFieldWidth,
                           }))
                         }
                         className="w-full rounded border border-gray-300 px-3 py-2"
                       >
-                        <option value="full">Full width</option>
-                        <option value="half">Half width</option>
+                        <option value="default">Default</option>
+                        <option value="medium">Medium</option>
+                        <option value="wide">Wide</option>
+                        <option value="full-width">Full width</option>
                       </select>
                     </label>
 
