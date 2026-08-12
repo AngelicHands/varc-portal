@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Newsreader, Outfit } from "next/font/google";
+import { Courier_Prime, Newsreader, Outfit, Special_Elite } from "next/font/google";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -11,6 +11,20 @@ const outfit = Outfit({
 const newsreader = Newsreader({
   subsets: ["latin", "latin-ext"],
   variable: "--font-newsreader",
+  display: "swap",
+});
+
+const specialElite = Special_Elite({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-typewriter",
+  display: "swap",
+});
+
+const courierPrime = Courier_Prime({
+  weight: ["400", "700"],
+  subsets: ["latin"],
+  variable: "--font-courier",
   display: "swap",
 });
 
@@ -52,7 +66,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" className={`${outfit.variable} ${newsreader.variable}`}>
+    <html
+      lang="vi"
+      className={`${outfit.variable} ${newsreader.variable} ${specialElite.variable} ${courierPrime.variable}`}
+    >
       <body className="min-h-[100dvh] antialiased">{children}</body>
     </html>
   );

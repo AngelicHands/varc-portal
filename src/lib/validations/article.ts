@@ -143,6 +143,13 @@ export const pageFormSchema = z
   .object({
     status: z.enum(["draft", "published"]),
     templateKey: z.string().trim().min(1).max(100),
+    fontFamily: z
+      .string()
+      .trim()
+      .min(1)
+      .max(200)
+      .optional()
+      .transform((value) => value || "default"),
     /** When set, page uses this layout instead of the template's layout. */
     layoutOverride: z.unknown().nullable().optional(),
     galleryItems: z.array(pageGalleryItemSchema).max(500),

@@ -40,6 +40,19 @@ body {
   overflow-x: clip;
 }
 
+/*
+ * Page-level font: force the chosen family onto all nested content
+ * (blocks, forms, headings, inputs), including elements with their own
+ * font-display / inline form-step font styles.
+ */
+.page-font-scope {
+  font-family: var(--page-font, inherit) !important;
+}
+
+.page-font-scope :where(*):not(svg, svg *) {
+  font-family: inherit !important;
+}
+
 button:not(:disabled),
 [type="button"]:not(:disabled),
 [type="submit"]:not(:disabled),
@@ -132,20 +145,60 @@ button:disabled,
 .prose-article ul,
 .prose-article-wide ul {
   margin: 1em 0;
-  padding-left: 1.25rem;
-  list-style: disc;
+  padding-left: 0;
+  list-style: none;
 }
 
 .prose-article ol,
 .prose-article-wide ol {
   margin: 1em 0;
-  padding-left: 1.25rem;
-  list-style: decimal;
+  padding-left: 0;
+  list-style: none;
+  counter-reset: prose-ol;
 }
 
 .prose-article li,
 .prose-article-wide li {
+  position: relative;
   margin: 0.75em 0;
+  padding-left: 1.5rem;
+}
+
+/* Custom markers so numbers/bullets still show when li is display:flex
+   (form fields on the same line force flex and hide native ::marker). */
+.prose-article ul > li::before,
+.prose-article-wide ul > li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  width: 1.25rem;
+  text-align: left;
+}
+
+/* Task-list items already show a checkbox — skip the bullet. */
+.prose-article ul > li:has(> input[type="checkbox"])::before,
+.prose-article-wide ul > li:has(> input[type="checkbox"])::before {
+  content: none;
+}
+
+.prose-article ul > li:has(> input[type="checkbox"]),
+.prose-article-wide ul > li:has(> input[type="checkbox"]) {
+  padding-left: 0;
+}
+
+.prose-article ol > li,
+.prose-article-wide ol > li {
+  counter-increment: prose-ol;
+}
+
+.prose-article ol > li::before,
+.prose-article-wide ol > li::before {
+  content: counter(prose-ol) ".";
+  position: absolute;
+  left: 0;
+  width: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
 }
 
 .prose-article li > ul,
@@ -153,6 +206,11 @@ button:disabled,
 .prose-article-wide li > ul,
 .prose-article-wide li > ol {
   margin: 0.35em 0;
+}
+
+.prose-article li > ol,
+.prose-article-wide li > ol {
+  counter-reset: prose-ol;
 }
 
 /* Markdown form: keep label text on the same line, input fills the rest. */

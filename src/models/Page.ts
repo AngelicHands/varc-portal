@@ -45,6 +45,12 @@ const PageSchema = new Schema(
       index: true,
       trim: true,
     },
+    /** Content font for the whole page (cascades to children). */
+    fontFamily: {
+      type: String,
+      default: "default",
+      trim: true,
+    },
     /** When set, overrides the assigned template layout for this page only. */
     layoutOverride: { type: Schema.Types.Mixed, default: null },
     galleryItems: { type: [GalleryItemSchema], default: [] },
@@ -115,6 +121,7 @@ export type PageDocument = {
   status: "draft" | "published";
   template?: PageTemplateLegacy;
   templateKey: string;
+  fontFamily?: string;
   layoutOverride?: TemplateLayout | null;
   galleryItems: PageGalleryItem[];
   showInNav: boolean;
@@ -128,6 +135,10 @@ export type PageDocument = {
   updatedAt?: Date;
 };
 
-export const Page: Model<PageDocument> =
-  (mongoose.models.Page as Model<PageDocument> | undefined) ??
-  mongoose.model<PageDocument>("Page", PageSchema);
+export const Page: Model<PageDocument> = (() => {
+  // Drop cached model so schema HMR (e.g. new fontFamily) is applied in dev.
+  if (mongoose.models.Page) {
+    delete mongoose.models.Page;
+  }
+  return mongoose.model<PageDocument>("Page", PageSchema);
+})();

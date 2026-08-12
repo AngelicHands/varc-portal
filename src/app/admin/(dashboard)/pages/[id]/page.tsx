@@ -82,6 +82,7 @@ export default async function EditPagePage({ params }: Props) {
           ...emptyPageForm,
           status: page.status === "published" ? "published" : "draft",
           templateKey,
+          fontFamily: page.fontFamily?.trim() || "default",
           layoutOverride: parseLayout(page.layoutOverride) ?? null,
           galleryItems,
           showInNav: Boolean(page.showInNav),

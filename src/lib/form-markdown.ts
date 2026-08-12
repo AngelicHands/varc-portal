@@ -1,4 +1,8 @@
-import type { CSSProperties } from "react";
+import {
+  CONTENT_FONT_PRESETS,
+  contentFontStyle,
+  type ContentFontPreset,
+} from "@/lib/fonts";
 import {
   parseAttrBlock,
   parseMarkdownFieldToken,
@@ -12,16 +16,10 @@ export const FORM_FIELD_LINK_PREFIX = "form-field:";
 export const FORM_STEP_TOKEN_RE =
   /!#!\[step:"((?:\\.|[^"\\])*)"(?::\{([^}]*)\})?\]/gi;
 
-export const FORM_STEP_FONT_PRESETS = [
-  "default",
-  "sans",
-  "serif",
-  "display",
-  "mono",
-] as const;
+export const FORM_STEP_FONT_PRESETS = CONTENT_FONT_PRESETS;
+export type FormStepFontPreset = ContentFontPreset;
 
-export type FormStepFontPreset = (typeof FORM_STEP_FONT_PRESETS)[number];
-
+export { contentFontStyle as formStepFontStyle };
 export type FormMarkdownToken = ParsedMarkdownFieldToken & {
   tokenIndex: number;
   raw: string;
@@ -146,23 +144,6 @@ export function splitFormMarkdownSteps(markdown: string): FormMarkdownLayout {
     sharedFieldNames: fieldNamesInMarkdown(sharedMarkdown),
     steps: steps.filter((step) => step.markdown.length > 0 || step.title.length > 0),
   };
-}
-
-export function formStepFontStyle(font: string): CSSProperties {
-  const normalized = font.trim().toLowerCase();
-  if (!normalized || normalized === "default") return {};
-  if (normalized === "sans") {
-    return { fontFamily: "var(--font-sans), system-ui, sans-serif" };
-  }
-  if (normalized === "serif" || normalized === "display") {
-    return { fontFamily: "var(--font-display), Georgia, serif" };
-  }
-  if (normalized === "mono") {
-    return {
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-    };
-  }
-  return { fontFamily: font.trim() };
 }
 
 export function preprocessFormSchemaMarkdown(markdown: string): {

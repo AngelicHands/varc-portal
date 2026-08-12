@@ -937,6 +937,7 @@ export async function savePageAction(
       existing.status = data.status;
       existing.template = legacyTemplate;
       existing.templateKey = templateKey;
+      existing.set("fontFamily", data.fontFamily?.trim() || "default");
       existing.layoutOverride = layoutOverride;
       existing.galleryItems = data.galleryItems;
       existing.showInNav = data.showInNav;
@@ -951,6 +952,7 @@ export async function savePageAction(
       status: data.status,
       template: legacyTemplate,
       templateKey,
+      fontFamily: data.fontFamily?.trim() || "default",
       layoutOverride,
       galleryItems: data.galleryItems,
       showInNav: data.showInNav,

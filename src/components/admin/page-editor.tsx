@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deletePageAction, savePageAction } from "@/lib/actions";
 import { isEmptyHtml } from "@/lib/html";
+import { CONTENT_FONT_OPTIONS } from "@/lib/fonts";
 import { makeSlug } from "@/lib/slug";
 import type { PageFormValues } from "@/lib/validations/article";
 import type { TemplateLayout } from "@/lib/blocks/types";
@@ -170,40 +171,62 @@ export function PageEditor({
       </div>
 
       <div className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5">
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium">Template</span>
-          <select
-            value={form.templateKey}
-            onChange={(e) => {
-              const templateKey = e.target.value;
-              setForm((prev) => ({
-                ...prev,
-                templateKey,
-                layoutOverride: prev.layoutOverride
-                  ? structuredClone(
-                      defaultLayouts[templateKey] ?? prev.layoutOverride,
-                    )
-                  : null,
-              }));
-            }}
-            className="w-full rounded border border-gray-300 px-3 py-2 md:max-w-md"
-          >
-            {templates.map((template) => (
-              <option key={template.key} value={template.key}>
-                {template.name}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-gray-500">
-            {selectedTemplate?.description ||
-              (isGallery
-                ? "Gallery pages show a large selected image with a thumbnail strip."
-                : "Choose a layout template for this page.")}{" "}
-            <Link href="/admin/templates" className="underline">
-              Manage templates
-            </Link>
-          </p>
-        </label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Template</span>
+            <select
+              value={form.templateKey}
+              onChange={(e) => {
+                const templateKey = e.target.value;
+                setForm((prev) => ({
+                  ...prev,
+                  templateKey,
+                  layoutOverride: prev.layoutOverride
+                    ? structuredClone(
+                        defaultLayouts[templateKey] ?? prev.layoutOverride,
+                      )
+                    : null,
+                }));
+              }}
+              className="w-full rounded border border-gray-300 px-3 py-2"
+            >
+              {templates.map((template) => (
+                <option key={template.key} value={template.key}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              {selectedTemplate?.description ||
+                (isGallery
+                  ? "Gallery pages show a large selected image with a thumbnail strip."
+                  : "Choose a layout template for this page.")}{" "}
+              <Link href="/admin/templates" className="underline">
+                Manage templates
+              </Link>
+            </p>
+          </label>
+
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium">Font family</span>
+            <select
+              value={form.fontFamily || "default"}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, fontFamily: e.target.value }))
+              }
+              className="w-full rounded border border-gray-300 px-3 py-2"
+            >
+              {CONTENT_FONT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Applied to all content on this page, including headings and blocks.
+            </p>
+          </label>
+        </div>
 
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -361,6 +384,7 @@ export function PageEditor({
 export const emptyPageForm: PageFormValues = {
   status: "draft",
   templateKey: "custom",
+  fontFamily: "default",
   layoutOverride: null,
   galleryItems: [],
   showInNav: false,

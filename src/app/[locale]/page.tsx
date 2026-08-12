@@ -7,6 +7,7 @@ import {
 } from "@/lib/cms";
 import type { AppLocale } from "@/i18n/routing";
 import { TemplateLayoutRenderer } from "@/components/portal/blocks/template-layout-renderer";
+import { PageFontScope } from "@/components/portal/page-font-scope";
 import {
   ensureDefaultHomePage,
   resolvePageLayout,
@@ -61,13 +62,15 @@ export default async function HomePage({ params }: Props) {
   );
 
   return (
-    <TemplateLayoutRenderer
-      layout={layout}
-      resolved={resolved}
-      locale={locale}
-      siteName={branding.siteName}
-      pageTitle={content.title || branding.siteName}
-      labels={homeLabels}
-    />
+    <PageFontScope fontFamily={page.fontFamily}>
+      <TemplateLayoutRenderer
+        layout={layout}
+        resolved={resolved}
+        locale={locale}
+        siteName={branding.siteName}
+        pageTitle={content.title || branding.siteName}
+        labels={homeLabels}
+      />
+    </PageFontScope>
   );
 }

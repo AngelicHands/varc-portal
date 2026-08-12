@@ -658,11 +658,9 @@ export function PublicFormBlock({ form, preview = false }: Props) {
   const [stepIndex, setStepIndex] = useState(0);
   const [stepError, setStepError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  /** Highlights only after an explicit Submit click — never after Next/tabs. */
+  const [errorsVisible, setErrorsVisible] = useState(false);
 
-  const pagePath = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    return `${window.location.pathname}${window.location.search}`;
-  }, []);
   const fieldsByName = useMemo(
     () => new Map(form.fields.map((field) => [field.name, field])),
     [form.fields],
@@ -676,6 +674,11 @@ export function PublicFormBlock({ form, preview = false }: Props) {
   const multiStep = markdownMode && steps.length > 1;
   const currentStep = steps[Math.min(stepIndex, Math.max(steps.length - 1, 0))];
   const isLastStep = !multiStep || stepIndex >= steps.length - 1;
+  const actionsDisabled = state.type === "submitting";
+  const visibleFieldErrors = errorsVisible ? fieldErrors : {};
+  const visibleStepError = errorsVisible ? stepError : null;
+  const visibleFormError =
+    errorsVisible && state.type === "error" ? state.message : null;
 
   function clearFieldError(name: string) {
     setFieldErrors((prev) => {
@@ -689,6 +692,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
   function clearValidation() {
     setFieldErrors({});
     setStepError(null);
+    setErrorsVisible(false);
     setState((prev) => (prev.type === "error" ? { type: "idle" } : prev));
   }
 
@@ -699,6 +703,8 @@ export function PublicFormBlock({ form, preview = false }: Props) {
   }
 
   async function submitForm() {
+    // Only the Submit button should call this — that is when we highlight.
+    setErrorsVisible(true);
     const errors = collectSubmissionFieldErrors(form.fields, values);
     if (Object.keys(errors).length > 0) {
       const firstField = Object.keys(errors)[0] ?? "";
@@ -715,6 +721,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
     setState({ type: "submitting" });
     setStepError(null);
     setFieldErrors({});
+    setErrorsVisible(false);
 
     if (preview) {
       setState({
@@ -746,7 +753,10 @@ export function PublicFormBlock({ form, preview = false }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           values,
-          pagePath,
+          pagePath:
+            typeof window === "undefined"
+              ? ""
+              : `${window.location.pathname}${window.location.search}`,
           website: "",
         }),
       });
@@ -754,6 +764,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
         | { ok?: boolean; error?: string; message?: string }
         | null;
       if (!res.ok || !json?.ok) {
+        setErrorsVisible(true);
         setState({
           type: "error",
           message: json?.error || "Failed to submit the form",
@@ -769,6 +780,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
       });
       setStepIndex(0);
       setFieldErrors({});
+      setErrorsVisible(false);
       setValues(
         Object.fromEntries(
           form.fields.map((field) => [
@@ -782,6 +794,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
         ),
       );
     } catch {
+      setErrorsVisible(true);
       setState({
         type: "error",
         message: "Failed to submit the form",
@@ -797,14 +810,12 @@ export function PublicFormBlock({ form, preview = false }: Props) {
     setStepIndex(target);
   }
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onFormSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // Enter in an input must not validate mid-wizard; advance instead.
+    // Enter / implicit submit must never validate. Advance mid-wizard only.
     if (multiStep && !isLastStep) {
       goToStep(stepIndex + 1);
-      return;
     }
-    await submitForm();
   }
 
   function goBack() {
@@ -853,14 +864,14 @@ export function PublicFormBlock({ form, preview = false }: Props) {
           {state.message}
         </div>
       ) : (
-        <form onSubmit={onSubmit} noValidate className="space-y-5">
+        <form onSubmit={onFormSubmit} noValidate className="space-y-5">
           <input
             type="text"
             name="website"
             tabIndex={-1}
             autoComplete="off"
             className="hidden"
-            aria-hidden
+            aria-hidden={true}
           />
           {markdownMode && currentStep ? (
             <>
@@ -873,7 +884,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                   values={values}
                   setValues={setValues}
                   toggleCheckboxGroup={toggleCheckboxGroup}
-                  fieldErrors={fieldErrors}
+                  fieldErrors={visibleFieldErrors}
                   clearFieldError={clearFieldError}
                 />
               ) : null}
@@ -887,7 +898,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                     {steps.map((step, index) => {
                       const selected = index === stepIndex;
                       const hasError = step.fieldNames.some(
-                        (name) => fieldErrors[name],
+                        (name) => visibleFieldErrors[name],
                       );
                       return (
                         <button
@@ -920,7 +931,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                 values={values}
                 setValues={setValues}
                 toggleCheckboxGroup={toggleCheckboxGroup}
-                fieldErrors={fieldErrors}
+                fieldErrors={visibleFieldErrors}
                 clearFieldError={clearFieldError}
                 font={currentStep.font}
                 title=""
@@ -930,7 +941,7 @@ export function PublicFormBlock({ form, preview = false }: Props) {
             <div className="grid gap-4 md:grid-cols-2">
               {form.fields.map((field) => {
                 const value = values[field.name];
-                const invalid = Boolean(fieldErrors[field.name]);
+                const invalid = Boolean(visibleFieldErrors[field.name]);
                 const commonTextClass = `w-full text-sm outline-none transition ${inputStyleClass(field.style, invalid)}`;
 
                 return (
@@ -943,9 +954,9 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                         ) : null}
                         <FieldSuggestionIcon text={field.helpText} />
                       </span>
-                      {fieldErrors[field.name] ? (
+                      {visibleFieldErrors[field.name] ? (
                         <p className="mb-1.5 text-xs text-red-600">
-                          {fieldErrors[field.name]}
+                          {visibleFieldErrors[field.name]}
                         </p>
                       ) : null}
 
@@ -1176,28 +1187,45 @@ export function PublicFormBlock({ form, preview = false }: Props) {
             </div>
           )}
 
-          {state.type === "error" || stepError ? (
+          {visibleStepError || visibleFormError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {stepError || (state.type === "error" ? state.message : null)}
+              {visibleStepError || visibleFormError}
             </div>
           ) : null}
 
           <div className="flex flex-wrap items-center gap-3">
             {multiStep ? (
               <>
-                <button
-                  type="button"
-                  onClick={goBack}
-                  disabled={state.type === "submitting" || stepIndex === 0}
-                  className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-foreground transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Previous
-                </button>
+                {stepIndex > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (actionsDisabled) return;
+                      goBack();
+                    }}
+                    aria-disabled={actionsDisabled ? true : undefined}
+                    className={
+                      actionsDisabled
+                        ? "cursor-not-allowed rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-foreground opacity-40"
+                        : "rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-foreground transition hover:bg-gray-50"
+                    }
+                  >
+                    Previous
+                  </button>
+                ) : null}
                 {isLastStep ? (
                   <button
-                    type="submit"
-                    disabled={state.type === "submitting"}
-                    className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:opacity-60"
+                    type="button"
+                    onClick={() => {
+                      if (actionsDisabled) return;
+                      void submitForm();
+                    }}
+                    aria-disabled={actionsDisabled ? true : undefined}
+                    className={
+                      actionsDisabled
+                        ? "cursor-not-allowed rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white opacity-60"
+                        : "rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+                    }
                   >
                     {state.type === "submitting"
                       ? "Sending..."
@@ -1206,9 +1234,18 @@ export function PublicFormBlock({ form, preview = false }: Props) {
                 ) : (
                   <button
                     type="button"
-                    onClick={goNext}
-                    disabled={state.type === "submitting"}
-                    className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:opacity-60"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (actionsDisabled) return;
+                      goNext();
+                    }}
+                    aria-disabled={actionsDisabled ? true : undefined}
+                    className={
+                      actionsDisabled
+                        ? "cursor-not-allowed rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white opacity-60"
+                        : "rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+                    }
                   >
                     Next
                   </button>
@@ -1216,9 +1253,17 @@ export function PublicFormBlock({ form, preview = false }: Props) {
               </>
             ) : (
               <button
-                type="submit"
-                disabled={state.type === "submitting"}
-                className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black disabled:opacity-60"
+                type="button"
+                onClick={() => {
+                  if (actionsDisabled) return;
+                  void submitForm();
+                }}
+                aria-disabled={actionsDisabled ? true : undefined}
+                className={
+                  actionsDisabled
+                    ? "cursor-not-allowed rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white opacity-60"
+                    : "rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-black"
+                }
               >
                 {state.type === "submitting"
                   ? "Sending..."

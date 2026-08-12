@@ -11,6 +11,7 @@ import type { AppLocale } from "@/i18n/routing";
 import { TemplateLayoutRenderer } from "@/components/portal/blocks/template-layout-renderer";
 import { GalleryPageView } from "@/components/portal/gallery-page-view";
 import { HtmlContent } from "@/components/portal/html-content";
+import { PageFontScope } from "@/components/portal/page-font-scope";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { pageHref } from "@/lib/locale-hrefs";
 import { Link } from "@/i18n/navigation";
@@ -90,7 +91,7 @@ export default async function CmsPage({ params }: Props) {
 
   if (templateKey === "gallery") {
     return (
-      <>
+      <PageFontScope fontFamily={page.fontFamily}>
         <SetLocaleAlternates
           vi={vi.slug ? pageHref(vi.slug) : null}
           en={en.slug ? pageHref(en.slug) : null}
@@ -101,7 +102,7 @@ export default async function CmsPage({ params }: Props) {
           </div>
         ) : null}
         <GalleryPageView images={galleryImages} title={content.title} />
-      </>
+      </PageFontScope>
     );
   }
 
@@ -116,21 +117,23 @@ export default async function CmsPage({ params }: Props) {
 
   if (!hasBlocks) {
     return (
-      <article className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
-        <SetLocaleAlternates
-          vi={vi.slug ? pageHref(vi.slug) : null}
-          en={en.slug ? pageHref(en.slug) : null}
-        />
-        <Link href="/" className="text-sm text-accent hover:underline">
-          {t("backHome")}
-        </Link>
-        <header className="mt-6 border-b border-border pb-8">
-          <h1 className="font-display text-4xl leading-tight text-foreground md:text-5xl">
-            {content.title}
-          </h1>
-        </header>
-        <HtmlContent html={content.content} />
-      </article>
+      <PageFontScope fontFamily={page.fontFamily}>
+        <article className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
+          <SetLocaleAlternates
+            vi={vi.slug ? pageHref(vi.slug) : null}
+            en={en.slug ? pageHref(en.slug) : null}
+          />
+          <Link href="/" className="text-sm text-accent hover:underline">
+            {t("backHome")}
+          </Link>
+          <header className="mt-6 border-b border-border pb-8">
+            <h1 className="font-display text-4xl leading-tight text-foreground md:text-5xl">
+              {content.title}
+            </h1>
+          </header>
+          <HtmlContent html={content.content} />
+        </article>
+      </PageFontScope>
     );
   }
 
@@ -144,7 +147,10 @@ export default async function CmsPage({ params }: Props) {
   );
 
   return (
-    <div className={startsWithHero ? "" : "py-10 md:py-14"}>
+    <PageFontScope
+      fontFamily={page.fontFamily}
+      className={startsWithHero ? "" : "py-10 md:py-14"}
+    >
       <SetLocaleAlternates
         vi={vi.slug ? pageHref(vi.slug) : null}
         en={en.slug ? pageHref(en.slug) : null}
@@ -171,6 +177,6 @@ export default async function CmsPage({ params }: Props) {
           next: tHome("nextSlide"),
         }}
       />
-    </div>
+    </PageFontScope>
   );
 }
