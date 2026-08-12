@@ -103,18 +103,10 @@ Public CMS reads (branding, menus, pages, articles, categories, templates) use c
 ```bash
 kubectl create namespace varc
 
-# Edit values first, then apply (or create the secret manually)
-cp deploy/docs/secret.example.yaml /tmp/varc-portal-secrets.yaml
-# edit /tmp/varc-portal-secrets.yaml
-kubectl apply -f /tmp/varc-portal-secrets.yaml
-
-# If the GHCR package is private (required for pull):
-kubectl create secret docker-registry ghcr-pull \
-  --namespace varc \
-  --docker-server=ghcr.io \
-  --docker-username=YOUR_GITHUB_USER \
-  --docker-password=YOUR_GITHUB_PAT \
-  --docker-email=YOUR_EMAIL
+# App + GHCR + (optional) Argo repo secrets — see comments in the example file
+cp deploy/docs/secret.example.yaml /tmp/varc-secrets.yaml
+# edit /tmp/varc-secrets.yaml  (or create ghcr-pull via kubectl as documented there)
+kubectl apply -f /tmp/varc-secrets.yaml
 
 kubectl apply -f deploy/argocd/application.yaml
 ```
