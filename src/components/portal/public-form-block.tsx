@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Children,
   createContext,
   useContext,
   useMemo,
@@ -17,6 +18,7 @@ import {
   FORM_FIELD_LINK_PREFIX,
   formStepFontStyle,
   preprocessFormSchemaMarkdown,
+  remarkDisableIndentedCode,
   splitFormMarkdownSteps,
   type FormMarkdownToken,
 } from "@/lib/form-markdown";
@@ -288,8 +290,22 @@ function FormMarkdownParagraph({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="my-[1em] whitespace-pre-wrap [tab-size:4]">{children}</div>
+    <div className="form-md-p my-[1em] min-w-0">
+      {children}
+    </div>
   );
+}
+
+/** Drop whitespace-only text nodes so list markers stay on the label line. */
+function FormMarkdownListItem({
+  children,
+  ...props
+}: ComponentPropsWithoutRef<"li">) {
+  const cleaned = Children.toArray(children).filter((child) => {
+    if (typeof child === "string") return child.trim().length > 0;
+    return true;
+  });
+  return <li {...props}>{cleaned}</li>;
 }
 
 /** Keep markdown list numbers (e.g. `9. abc` → start at 9, not reset to 1). */
@@ -335,14 +351,17 @@ function FormMarkdownFieldImage({ src }: { src?: string | Blob }) {
     field != null &&
     isFillWidthFieldType(field.type) &&
     field.width !== "full-width";
+  const block = field?.type === "textarea";
   return (
     <span
       className={
-        fill
-          ? "not-prose form-field-slot"
-          : sized
-            ? "not-prose form-field-sized"
-            : "not-prose form-field-inline"
+        block
+          ? "not-prose form-field-block"
+          : fill
+            ? "not-prose form-field-slot"
+            : sized
+              ? "not-prose form-field-sized"
+              : "not-prose form-field-inline"
       }
     >
       {renderFormFieldToken(tokenIndex, ctx)}
@@ -373,6 +392,7 @@ function FormMarkdownChoiceInput({
 const formMarkdownComponents = {
   // Avoid <p> wrapping fields — invalid nesting with controls breaks hydration.
   p: FormMarkdownParagraph,
+  li: FormMarkdownListItem,
   ol: FormMarkdownOrderedList,
   img: FormMarkdownFieldImage,
   input: FormMarkdownChoiceInput,
@@ -386,26 +406,37 @@ function withSuggestion(
   const inline = options?.inline ?? true;
   const showMeta = options?.showMeta ?? true;
   const fill = options?.fill ?? false;
+  const showFieldMeta =
+    showMeta && field.type !== "image" && field.type !== "file";
+  const meta = showFieldMeta ? (
+    <>
+      {field.required ? (
+        <span className="shrink-0 text-xs text-red-600">*</span>
+      ) : null}
+      <FieldSuggestionIcon text={field.helpText} />
+    </>
+  ) : null;
+
+  // Block controls (textarea): keep * / help in the label line, control below.
+  if (!inline && !fill) {
+    return (
+      <>
+        {meta}
+        {control}
+      </>
+    );
+  }
+
   return (
     <span
       className={
         fill
           ? "flex w-full min-w-0 items-center gap-1"
-          : inline
-            ? "inline-flex items-center gap-1 align-middle"
-            : "block"
+          : "inline-flex items-center gap-1 align-middle"
       }
     >
+      {meta}
       {control}
-      {showMeta && field.type !== "image" && field.type !== "file" ? (
-        <FieldSuggestionIcon text={field.helpText} />
-      ) : null}
-      {showMeta &&
-      field.required &&
-      field.type !== "image" &&
-      field.type !== "file" ? (
-        <span className="shrink-0 text-xs text-red-600">*</span>
-      ) : null}
     </span>
   );
 }
@@ -504,7 +535,7 @@ function renderFormFieldToken(
             [field.name]: e.target.value,
           }));
         }}
-        className={`${inputClass} my-1 ${sizeClass} align-baseline`}
+        className={`${inputClass} my-1 ${fillRemaining ? "min-w-0 flex-1" : sizeClass} align-baseline`}
       >
         <option value="">{ctx.selectPlaceholder}</option>
         {field.options.map((option) => (
@@ -649,7 +680,7 @@ function renderFormFieldToken(
     <span
       className={
         fillRemaining
-          ? "flex w-full min-w-0 flex-col align-baseline"
+          ? "flex min-w-0 flex-1 flex-col align-baseline"
           : `inline-flex ${sizeClass} min-w-0 flex-col align-baseline`
       }
     >
@@ -751,14 +782,14 @@ function FormMarkdownLayout({
   return (
     <FormFieldRenderContext.Provider value={ctx}>
       <div
-        className="prose-article-wide max-w-none whitespace-pre-wrap text-foreground [tab-size:4]"
+        className="prose-article-wide max-w-none text-foreground"
         style={formStepFontStyle(font)}
       >
         {title ? (
           <h3 className="!mt-0 font-display text-xl text-foreground">{title}</h3>
         ) : null}
         <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkBreaks]}
+          remarkPlugins={[remarkDisableIndentedCode, remarkGfm, remarkBreaks]}
           urlTransform={allowFormFieldUrl}
           components={formMarkdownComponents}
         >

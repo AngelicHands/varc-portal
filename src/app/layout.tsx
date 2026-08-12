@@ -1,5 +1,11 @@
 import type { Metadata } from "next";
-import { Courier_Prime, Newsreader, Outfit, Special_Elite } from "next/font/google";
+import {
+  Courier_Prime,
+  Newsreader,
+  Outfit,
+  Special_Elite,
+  Xanh_Mono,
+} from "next/font/google";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -25,6 +31,13 @@ const courierPrime = Courier_Prime({
   weight: ["400", "700"],
   subsets: ["latin"],
   variable: "--font-courier",
+  display: "swap",
+});
+
+const xanhMono = Xanh_Mono({
+  weight: "400",
+  subsets: ["latin", "latin-ext", "vietnamese"],
+  variable: "--font-xanh",
   display: "swap",
 });
 
@@ -68,7 +81,7 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
-      className={`${outfit.variable} ${newsreader.variable} ${specialElite.variable} ${courierPrime.variable}`}
+      className={`${outfit.variable} ${newsreader.variable} ${specialElite.variable} ${courierPrime.variable} ${xanhMono.variable}`}
     >
       <body className="min-h-[100dvh] antialiased">{children}</body>
     </html>

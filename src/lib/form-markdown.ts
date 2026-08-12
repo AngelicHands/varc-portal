@@ -25,6 +25,22 @@ export type FormMarkdownToken = ParsedMarkdownFieldToken & {
   raw: string;
 };
 
+/**
+ * Form authors indent nested list lines with 4 spaces. CommonMark treats
+ * 4-space-indented lines as code blocks (gray pre) when they are not
+ * recognized as list items — e.g. `2.Technical` (missing space after `.`).
+ * Disable indented code so nesting indent stays normal prose/lists.
+ */
+export function remarkDisableIndentedCode(this: {
+  data: (key?: string, value?: unknown) => unknown;
+}) {
+  const data = this.data() as {
+    micromarkExtensions?: Array<{ disable?: { null?: string[] } }>;
+  };
+  const list = data.micromarkExtensions || (data.micromarkExtensions = []);
+  list.push({ disable: { null: ["codeIndented"] } });
+}
+
 export type FormMarkdownStep = {
   title: string;
   font: string;
@@ -146,14 +162,15 @@ export function splitFormMarkdownSteps(markdown: string): FormMarkdownLayout {
   };
 }
 
-export function unescapeFormMarkdownText(markdown: string): string {
-  // Convert authoring escapes in prose: \n → newline, \t → tab, \\ → \.
-  // Do not touch unknown sequences (keep `\x` as written).
-  return markdown.replace(/\\([nt\\])/g, (_, ch: string) => {
-    if (ch === "n") return "\n";
-    if (ch === "t") return "\t";
-    return "\\";
-  });
+/**
+ * CommonMark requires a space after list markers (`1. Foo`, `- Foo`).
+ * Authors often write `1.Foo` / `2.Technical` at the same indent as valid
+ * siblings; without the space those lines leave the nested list and misalign.
+ */
+export function normalizeFormMarkdownListMarkers(markdown: string): string {
+  return markdown
+    .replace(/^(\s*)(\d{1,9})\.(\S)/gm, "$1$2. $3")
+    .replace(/^(\s*)([-+])(\S)/gm, "$1$2 $3");
 }
 
 export function preprocessFormSchemaMarkdown(markdown: string): {
@@ -161,8 +178,9 @@ export function preprocessFormSchemaMarkdown(markdown: string): {
   tokens: FormMarkdownToken[];
 } {
   const tokens: FormMarkdownToken[] = [];
+  const normalized = normalizeFormMarkdownListMarkers(markdown);
 
-  const withFields = replaceMarkdownFieldTokens(markdown, (raw, tokenIndex) => {
+  const withFields = replaceMarkdownFieldTokens(normalized, (raw, tokenIndex) => {
     const parsed = parseMarkdownFieldToken(raw);
     if (!parsed) return raw;
     tokens.push({
@@ -173,6 +191,5 @@ export function preprocessFormSchemaMarkdown(markdown: string): {
     return `![](${FORM_FIELD_LINK_PREFIX}${tokenIndex})`;
   });
 
-  // Unescape after field tokens are replaced so attrs like placeholder stay intact.
-  return { markdown: unescapeFormMarkdownText(withFields), tokens };
+  return { markdown: withFields, tokens };
 }

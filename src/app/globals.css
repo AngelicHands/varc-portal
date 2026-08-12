@@ -161,18 +161,19 @@ button:disabled,
 .prose-article li,
 .prose-article-wide li {
   position: relative;
-  margin: 0.75em 0;
-  padding-left: 1.5rem;
+  margin: 0.5em 0;
+  padding-left: 1.75rem;
 }
 
-/* Custom markers so numbers/bullets still show when li is display:flex
-   (form fields on the same line force flex and hide native ::marker). */
+/* Custom markers (native ::marker hides when li is flex for form fields). */
 .prose-article ul > li::before,
 .prose-article-wide ul > li::before {
   content: "•";
   position: absolute;
   left: 0;
+  top: 0;
   width: 1.25rem;
+  line-height: inherit;
   text-align: left;
 }
 
@@ -197,9 +198,12 @@ button:disabled,
   content: counter(prose-ol) ".";
   position: absolute;
   left: 0;
-  width: 1.35rem;
+  top: 0;
+  width: 1.5rem;
   font-variant-numeric: tabular-nums;
-  text-align: left;
+  line-height: inherit;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .prose-article li > ul,
@@ -214,10 +218,22 @@ button:disabled,
   counter-reset: prose-ol;
 }
 
-/* Markdown form: keep label text on the same line, input fills the rest. */
+/* Nested paragraphs must not push text below the marker. */
+.prose-article li > :where(p, div):first-child,
+.prose-article-wide li > :where(p, div):first-child,
+.prose-article-wide li > .form-md-p:first-child {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* Label + input on the same line.
+   Do NOT flex every li that merely contains a nested slot — markdown often
+   inserts leading/trailing "\\n" text nodes, which become empty flex items and
+   push the label onto the next row while the ::before marker stays alone. */
 .prose-article-wide p:has(.form-field-slot),
-.prose-article-wide li:has(.form-field-slot),
-.prose-article-wide div:has(> .form-field-slot) {
+.prose-article-wide div:has(> .form-field-slot),
+.prose-article-wide .form-md-p:has(.form-field-slot),
+.prose-article-wide li:has(> .form-field-slot) {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -227,11 +243,11 @@ button:disabled,
 
 .prose-article-wide .form-field-slot {
   display: inline-flex;
-  flex: 1 1 12rem;
+  flex: 1 1 8rem;
   min-width: 0;
   max-width: 100%;
   align-items: center;
-  vertical-align: middle;
+  vertical-align: baseline;
 }
 
 .prose-article-wide .form-field-slot > * {
@@ -249,6 +265,13 @@ button:disabled,
 .prose-article-wide .form-field-inline {
   display: inline;
   vertical-align: middle;
+}
+
+/* Textareas: meta (*) stays on the label line; control stacks below. */
+.prose-article-wide .form-field-block {
+  display: inline;
+  max-width: 100%;
+  vertical-align: baseline;
 }
 
 .prose-article-wide .form-field-sized {
