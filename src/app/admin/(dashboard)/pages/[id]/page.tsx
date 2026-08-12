@@ -85,7 +85,6 @@ export default async function EditPagePage({ params }: Props) {
           fontFamily: page.fontFamily?.trim() || "default",
           layoutOverride: parseLayout(page.layoutOverride) ?? null,
           galleryItems,
-          showInNav: Boolean(page.showInNav),
           sortOrder: page.sortOrder ?? 0,
           locales: {
             vi: {

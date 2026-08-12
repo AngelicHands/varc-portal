@@ -153,14 +153,6 @@ async function requireSiteManager() {
   return session;
 }
 
-async function markNavigationMenuInitialized() {
-  await SiteSettings.findOneAndUpdate(
-    { key: SITE_SETTINGS_KEY },
-    { $set: { menuNavImported: true } },
-    { upsert: true },
-  );
-}
-
 /** Next.js path revalidation + Valkey generation bump / tag flush for public CMS reads. */
 async function refreshPortal(...extraTags: CmsCacheTag[]) {
   // Generation bump makes prior Valkey entries unreachable even if tag sets
@@ -947,7 +939,6 @@ export async function savePageAction(
       existing.set("fontFamily", data.fontFamily?.trim() || "default");
       existing.layoutOverride = layoutOverride;
       existing.galleryItems = data.galleryItems;
-      existing.showInNav = data.showInNav;
       existing.sortOrder = data.sortOrder;
       existing.locales = locales;
       await existing.save();
@@ -962,7 +953,6 @@ export async function savePageAction(
       fontFamily: data.fontFamily?.trim() || "default",
       layoutOverride,
       galleryItems: data.galleryItems,
-      showInNav: data.showInNav,
       sortOrder: data.sortOrder,
       locales,
     });
@@ -1431,9 +1421,6 @@ export async function saveMenuItemAction(
       existing.enabled = data.enabled;
       existing.openInNewTab = data.openInNewTab;
       await existing.save();
-      if (data.location === "navigation") {
-        await markNavigationMenuInitialized();
-      }
       await refreshPortal();
       return { ok: true, id: String(existing._id) };
     }
@@ -1499,9 +1486,6 @@ export async function saveMenuItemAction(
         { $set: { parentId } },
       );
     }
-    if (data.location === "navigation") {
-      await markNavigationMenuInitialized();
-    }
     await refreshPortal();
     return { ok: true, id: String(created._id) };
   } catch (error) {
@@ -1530,9 +1514,6 @@ export async function deleteMenuItemAction(
         },
       },
     );
-    if (existing.location === "navigation") {
-      await markNavigationMenuInitialized();
-    }
     await refreshPortal();
     return { ok: true };
   } catch (error) {
@@ -1569,9 +1550,6 @@ export async function permanentlyDeleteMenuItemAction(
     if (!existing) {
       return { ok: false, error: "Trashed menu item not found" };
     }
-    if (existing.location === "navigation") {
-      await markNavigationMenuInitialized();
-    }
     await MenuItem.updateMany(
       { parentId: existing._id },
       {
@@ -1596,13 +1574,6 @@ export async function emptyMenuTrashAction(): Promise<
   try {
     await requireSiteManager();
     await connectDb();
-    const hadNavTrash = await MenuItem.exists({
-      location: "navigation",
-      ...deletedFilter,
-    });
-    if (hadNavTrash) {
-      await markNavigationMenuInitialized();
-    }
     const result = await MenuItem.deleteMany(deletedFilter);
     await refreshPortal();
     return { ok: true, deleted: result.deletedCount };

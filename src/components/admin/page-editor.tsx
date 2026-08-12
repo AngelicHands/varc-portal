@@ -349,26 +349,7 @@ export function PageEditor({
       </div>
 
       <div className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 md:grid-cols-2">
-        <div className="space-y-2 text-sm">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.showInNav}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, showInNav: e.target.checked }))
-              }
-            />
-            Legacy: include in navigation import
-          </label>
-          <p className="text-gray-500">
-            Prefer{" "}
-            <Link href="/admin/menu" className="underline">
-              Menus
-            </Link>{" "}
-            to manage Navigation and Footer order.
-          </p>
-        </div>
-        <label className="block text-sm">
+        <label className="block text-sm md:col-span-1">
           <span className="mb-1 block font-medium">Sort order</span>
           <input
             type="number"
@@ -381,6 +362,13 @@ export function PageEditor({
             }
             className="w-full rounded border border-gray-300 px-3 py-2"
           />
+          <span className="mt-1 block text-xs text-gray-500">
+            Controls order in the admin pages list. Navigation is managed in{" "}
+            <Link href="/admin/menu" className="underline">
+              Menus
+            </Link>
+            .
+          </span>
         </label>
       </div>
 
@@ -408,7 +396,6 @@ export const emptyPageForm: PageFormValues = {
   fontFamily: "default",
   layoutOverride: null,
   galleryItems: [],
-  showInNav: false,
   sortOrder: 0,
   locales: {
     vi: { ...emptyLocale },

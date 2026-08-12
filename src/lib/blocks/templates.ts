@@ -105,7 +105,6 @@ export async function ensureDefaultHomePage(): Promise<PageDocument> {
       templateKey: "home",
       layoutOverride: null,
       galleryItems: [],
-      showInNav: false,
       sortOrder: -1000,
       deletedAt: null,
       locales: HOME_PAGE_LOCALES,

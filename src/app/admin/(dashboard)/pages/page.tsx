@@ -151,7 +151,6 @@ export default async function AdminPagesPage({ searchParams }: Props) {
                       viReady={pageLocaleReady(vi)}
                       enReady={pageLocaleReady(en)}
                     />
-                    <span>Nav: {page.showInNav ? "Yes" : "No"}</span>
                     <span className="text-gray-500">
                       {trash ? "Deleted" : "Updated"}{" "}
                       {formatAdminDateShort(dateValue)}
@@ -171,7 +170,6 @@ export default async function AdminPagesPage({ searchParams }: Props) {
                   <th className="px-4 py-3 font-medium">Slug</th>
                   <th className="px-4 py-3 font-medium">Template</th>
                   <th className="px-4 py-3 font-medium">Languages</th>
-                  <th className="px-4 py-3 font-medium">Nav</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">
                     {trash ? "Deleted" : "Updated"}
@@ -210,9 +208,6 @@ export default async function AdminPagesPage({ searchParams }: Props) {
                           viReady={pageLocaleReady(vi)}
                           enReady={pageLocaleReady(en)}
                         />
-                      </td>
-                      <td className="px-4 py-3">
-                        {page.showInNav ? "Yes" : "No"}
                       </td>
                       <td className="px-4 py-3">
                         <span

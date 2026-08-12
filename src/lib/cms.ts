@@ -312,26 +312,6 @@ function categoryNavFields(
   return null;
 }
 
-/** Legacy fallback while menus are still empty. */
-export async function listNavPages(locale: AppLocale): Promise<NavPageItem[]> {
-  await connectDb();
-  const pages = await Page.find({
-    ...notDeletedFilter,
-    status: "published",
-    showInNav: true,
-  })
-    .sort({ sortOrder: 1, updatedAt: -1 })
-    .lean<PageDocument[]>();
-
-  const items: NavPageItem[] = [];
-  for (const page of pages) {
-    const fields = pageNavFields(page, locale);
-    if (!fields) continue;
-    items.push({ id: String(page._id), ...fields });
-  }
-  return items;
-}
-
 export async function listMenuItemsAdmin(
   options?: { location?: MenuLocation; trash?: boolean },
 ): Promise<AdminMenuItem[]> {
@@ -445,18 +425,6 @@ async function loadPublicMenuLinks(
     .sort({ sortOrder: 1, updatedAt: -1 })
     .lean<MenuItemDocument[]>();
 
-  if (items.length === 0 && location === "navigation") {
-    const legacy = await listNavPages(locale);
-    return legacy.map((page) => ({
-      id: page.id,
-      label: page.title,
-      kind: "page" as const,
-      slug: page.slug,
-      linkLocale: page.linkLocale,
-      openInNewTab: false,
-    }));
-  }
-
   const pageIds = items
     .filter((item) => item.type === "page" && item.pageId)
     .map((item) => item.pageId!);
@@ -566,58 +534,6 @@ async function loadPublicMenuLinks(
   }
 
   return buildLinks(null, 0);
-}
-
-/**
- * Import published showInNav pages into the Navigation menu on first setup only.
- * Does not run again after the admin has created, imported, or trashed menu items.
- */
-export async function importNavPagesIntoMenuIfEmpty(): Promise<number> {
-  await connectDb();
-
-  if (await MenuItem.exists({ location: "navigation" })) {
-    await SiteSettings.findOneAndUpdate(
-      { key: SITE_SETTINGS_KEY },
-      { $set: { menuNavImported: true } },
-      { upsert: true },
-    );
-    return 0;
-  }
-
-  const settings = await SiteSettings.findOne({ key: SITE_SETTINGS_KEY }).lean();
-  if (settings?.menuNavImported) {
-    return 0;
-  }
-
-  const pages = await Page.find({
-    ...notDeletedFilter,
-    status: "published",
-    showInNav: true,
-  })
-    .sort({ sortOrder: 1, updatedAt: -1 })
-    .lean<PageDocument[]>();
-
-  if (pages.length === 0) return 0;
-
-  await MenuItem.insertMany(
-    pages.map((page, index) => ({
-      location: "navigation",
-      type: "page",
-      pageId: page._id,
-      locales: { vi: { label: "", url: "" }, en: { label: "", url: "" } },
-      enabled: true,
-      openInNewTab: false,
-      sortOrder: index,
-    })),
-  );
-
-  await SiteSettings.findOneAndUpdate(
-    { key: SITE_SETTINGS_KEY },
-    { $set: { menuNavImported: true } },
-    { upsert: true },
-  );
-
-  return pages.length;
 }
 
 export async function listPublishedPagesForSitemap() {

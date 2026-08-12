@@ -1,7 +1,6 @@
 import {
   categorySelectOptions,
   getPageLocale,
-  importNavPagesIntoMenuIfEmpty,
   listCategories,
   listMenuItemsAdmin,
   listPages,
@@ -23,7 +22,6 @@ export default async function AdminMenuPage({ searchParams }: Props) {
 
   const { tab } = await searchParams;
   const trash = tab === "trash";
-  const imported = trash ? 0 : await importNavPagesIntoMenuIfEmpty();
   const [activeItems, trashItems, pages, categories] = await Promise.all([
     listMenuItemsAdmin(),
     listMenuItemsAdmin({ trash: true }),
@@ -59,9 +57,6 @@ export default async function AdminMenuPage({ searchParams }: Props) {
         {trash
           ? "Restore or permanently delete trashed menu items."
           : "Manage Navigation Menu and Footer Menu items, including order."}
-        {!trash && imported > 0
-          ? ` Imported ${imported} existing nav page${imported === 1 ? "" : "s"}.`
-          : null}
       </p>
 
       <AdminListTabs

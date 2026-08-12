@@ -153,7 +153,6 @@ export const pageFormSchema = z
     /** When set, page uses this layout instead of the template's layout. */
     layoutOverride: z.unknown().nullable().optional(),
     galleryItems: z.array(pageGalleryItemSchema).max(500),
-    showInNav: z.boolean(),
     sortOrder: z.number().int().min(-10_000).max(10_000),
     locales: z.object({
       vi: pageLocaleSchema,

@@ -28,8 +28,6 @@ const SiteSettingsSchema = new Schema(
     homeTemplateKey: { type: String, default: "home", trim: true },
     articleTemplateKey: { type: String, default: "article", trim: true },
     categoryTemplateKey: { type: String, default: "category", trim: true },
-    /** Set after nav menu is first seeded or manually edited — prevents re-import. */
-    menuNavImported: { type: Boolean, default: false },
     locales: {
       vi: { type: SiteLocaleSchema, required: true },
       en: { type: SiteLocaleSchema, required: true },

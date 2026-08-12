@@ -54,7 +54,6 @@ const PageSchema = new Schema(
     /** When set, overrides the assigned template layout for this page only. */
     layoutOverride: { type: Schema.Types.Mixed, default: null },
     galleryItems: { type: [GalleryItemSchema], default: [] },
-    showInNav: { type: Boolean, default: false },
     sortOrder: { type: Number, default: 0 },
     deletedAt: { type: Date, default: null, index: true },
     locales: {
@@ -124,7 +123,6 @@ export type PageDocument = {
   fontFamily?: string;
   layoutOverride?: TemplateLayout | null;
   galleryItems: PageGalleryItem[];
-  showInNav: boolean;
   sortOrder: number;
   deletedAt?: Date | null;
   locales: {
