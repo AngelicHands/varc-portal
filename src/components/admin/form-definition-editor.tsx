@@ -169,15 +169,23 @@ function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
               <code>{`#![type:{name}:{properties}]`}</code>. If the markdown box
               is filled, it becomes the source of truth for fields.
             </p>
+            <p>
+              Separate property groups with <code>;</code>. Use commas only
+              inside a value (for example{" "}
+              <code>allowed_extensions:.pdf,.doc,.docx</code>).
+            </p>
             <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
 {`#![text|email|phone|textarea|select|checkbox|radio|date|time|date_time|image|file:{field_name}:{
-  required:true,
-  placeholder:"…",
-  maxLength:80,
-  size:medium,
-  dateFormat:dd/mm/yyyy,
-  timeFormat:HH:mm,
-  style:underline,
+  required:true;
+  placeholder:"…";
+  maxLength:80;
+  size:medium;
+  dateFormat:dd/mm/yyyy;
+  timeFormat:HH:mm;
+  style:underline;
+  typing_alignment:center;
+  typing_style:bold;
+  allowed_extensions:.pdf,.doc,.docx;
   suggestion:"…"
 }]`}
             </pre>
@@ -186,20 +194,20 @@ function MarkdownHelpModal({ onClose }: { onClose: () => void }) {
           <section className="space-y-2">
             <h3 className="font-semibold text-gray-900">Examples</h3>
             <pre className="overflow-x-auto rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-800">
-{`Your name: #![text:{full_name}:{required:true,placeholder:"Your name",style:underline,size:wide,maxLength:80,suggestion:"Enter your legal name"}]
-Notes: #![textarea:{notes}:{required:true,maxLength:500,size:full-width}]
-Email: #![email:{email}:{required:true,placeholder:"name@example.com",size:medium}]
-Birthday: #![date:{birthday}:{required:true,dateFormat:dd/mm/yyyy}]
-Start time: #![time:{start_time}:{required:true,timeFormat:HH:mm}]
-Meeting: #![date_time:{meeting_at}:{required:true,dateFormat:dd/mm/yyyy,timeFormat:hh:mm a}]
+{`Your name: #![text:{full_name}:{required:true; placeholder:"Your name"; style:underline; size:wide; maxLength:80; suggestion:"Enter your legal name"}]
+Notes: #![textarea:{notes}:{required:true; maxLength:500; size:full-width}]
+Email: #![email:{email}:{required:true; placeholder:"name@example.com"; size:medium}]
+Birthday: #![date:{birthday}:{required:true; dateFormat:dd/mm/yyyy}]
+Start time: #![time:{start_time}:{required:true; timeFormat:HH:mm}]
+Meeting: #![date_time:{meeting_at}:{required:true; dateFormat:dd/mm/yyyy; timeFormat:hh:mm a}]
 Prefer contact by:
-#![radio:{contact}:{options:[{value:"email",label:"Email",checked:true},{value:"phone",label:"Phone"}],suggestion:"Choose one"}]
+#![radio:{contact}:{options:[{value:"email",label:"Email",checked:true},{value:"phone",label:"Phone"}]; suggestion:"Choose one"}]
 Topics:
-#![checkbox:{topics}:{options:[{value:"dx",label:"DX",checked:true},{value:"comms",label:"Emergency comms"}],suggestion:"Select all that apply"}]
-Agree: #![checkbox:{agree}:{checked:true,placeholder:"I agree to the terms"}]
-ID photo: #![image:{id_photo}:{required:true,suggestion:"JPEG or PNG"}]
-Resume: #![file:{resume}:{suggestion:"PDF preferred"}]
-Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}],size:medium}]`}
+#![checkbox:{topics}:{options:[{value:"dx",label:"DX",checked:true},{value:"comms",label:"Emergency comms"}]; suggestion:"Select all that apply"}]
+Agree: #![checkbox:{agree}:{checked:true; placeholder:"I agree to the terms"}]
+ID photo: #![image:{id_photo}:{required:true; suggestion:"JPEG or PNG"}]
+Resume: #![file:{resume}:{suggestion:"PDF preferred"; allowed_extensions:.pdf,.doc,.docx}]
+Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}]; size:medium}]`}
             </pre>
             <p>
               Use <code>size:full-width</code> when a text / email / phone /
@@ -251,7 +259,8 @@ Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value
               </li>
               <li>
                 <code>typing_alignment:left|center|right</code> — text alignment
-                while typing (<code>typing_alligment</code> accepted as alias)
+                while typing (<code>typing_alligment</code> /{" "}
+                <code>typing_aligments</code> accepted as aliases)
               </li>
               <li>
                 <code>allowed_extensions:.pdf,.docx,.xlsx</code> — limit upload
@@ -269,11 +278,11 @@ Choose region: #![select:{region}:{options:[{value:"north",label:"North"},{value
 {`#![checkbox:{topics}:{options:[
   {value:"dx",label:"DX",checked:true},
   {value:"comms",label:"Emergency comms"}
-],suggestion:"Select all that apply"}]
+]; suggestion:"Select all that apply"}]
 
 #![radio:{contact}:{options:[{value:"email",label:"Email",checked:true},{value:"phone",label:"Phone"}]}]
 
-#![checkbox:{agree}:{checked:true,placeholder:"I agree"}]
+#![checkbox:{agree}:{checked:true; placeholder:"I agree"}]
 
 #![select:{region}:{options:[{value:"north",label:"North"},{value:"south",label:"South"}]}]`}
                 </pre>

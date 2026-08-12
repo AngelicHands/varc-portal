@@ -1196,7 +1196,7 @@ function extractOptionsFromAttrs(raw: string): {
   options: FormFieldOption[];
   attrs: string;
 } {
-  const optionsKey = /(?:^|[,{])\s*options\s*:/i;
+  const optionsKey = /(?:^|[;{])\s*options\s*:/i;
   const match = optionsKey.exec(`{${raw}}`);
   if (!match) {
     return { options: [], attrs: raw };
@@ -1213,12 +1213,12 @@ function extractOptionsFromAttrs(raw: string): {
   if (end < 0) return { options: [], attrs: raw };
 
   const options = parseOptionsArray(raw.slice(i, end + 1));
-  const before = raw.slice(0, local).replace(/,\s*$/, "");
-  const after = raw.slice(end + 1).replace(/^\s*,/, "");
+  const before = raw.slice(0, local).replace(/[;\s]*$/, "");
+  const after = raw.slice(end + 1).replace(/^[;\s]*/, "");
   const attrs = [before, after]
-    .map((part) => part.trim().replace(/^,|,$/g, "").trim())
+    .map((part) => part.trim().replace(/^;+|;+$/g, "").trim())
     .filter(Boolean)
-    .join(",");
+    .join(";");
   return { options, attrs };
 }
 
@@ -1227,14 +1227,17 @@ export function parseAttrBlock(raw: string): Record<string, string> {
   let i = 0;
 
   while (i < raw.length) {
-    while (i < raw.length && /[\s,]/.test(raw[i] ?? "")) i += 1;
+    while (i < raw.length && /[\s;]/.test(raw[i] ?? "")) i += 1;
     if (i >= raw.length) break;
 
     const keyStart = i;
     while (i < raw.length && /[a-zA-Z0-9_]/.test(raw[i] ?? "")) i += 1;
     const key = raw.slice(keyStart, i);
     while (i < raw.length && /\s/.test(raw[i] ?? "")) i += 1;
-    if ((raw[i] ?? "") !== ":") continue;
+    if ((raw[i] ?? "") !== ":") {
+      i = Math.max(i, keyStart) + 1;
+      continue;
+    }
     i += 1;
     while (i < raw.length && /\s/.test(raw[i] ?? "")) i += 1;
 
@@ -1260,7 +1263,7 @@ export function parseAttrBlock(raw: string): Record<string, string> {
       i = quoted.end;
     } else {
       const valueStart = i;
-      while (i < raw.length && raw[i] !== ",") i += 1;
+      while (i < raw.length && raw[i] !== ";") i += 1;
       value = raw.slice(valueStart, i).trim();
     }
 
@@ -1347,7 +1350,9 @@ export function parseMarkdownFieldToken(
   typingAlignment = normalizeFormFieldTypingAlignment(
     attrs.typing_alignment ??
       attrs.typingAlignment ??
-      attrs.typing_alligment,
+      attrs.typing_alligment ??
+      attrs.typing_aligments ??
+      attrs.typing_alignments,
   );
   allowedExtensions = normalizeFormFieldAllowedExtensions(
     attrs.allowed_extensions ?? attrs.allowedExtensions,
