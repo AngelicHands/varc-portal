@@ -4,14 +4,16 @@ import {
   listPublishedPagesForSitemap,
   getPageLocale,
 } from "@/lib/cms";
+import { listCallsignsForSitemap } from "@/lib/callsigns";
 
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3099";
-  const [articles, pages] = await Promise.all([
+  const [articles, pages, callsigns] = await Promise.all([
     listPublishedForSitemap().catch(() => []),
     listPublishedPagesForSitemap().catch(() => []),
+    listCallsignsForSitemap().catch(() => []),
   ]);
 
   const entries: MetadataRoute.Sitemap = [
@@ -27,6 +29,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       alternates: {
         languages: { vi: `${siteUrl}/vi`, en: `${siteUrl}/en` },
+      },
+    },
+    {
+      url: `${siteUrl}/vi/callsigns`,
+      lastModified: new Date(),
+      alternates: {
+        languages: {
+          vi: `${siteUrl}/vi/callsigns`,
+          en: `${siteUrl}/en/callsigns`,
+        },
+      },
+    },
+    {
+      url: `${siteUrl}/en/callsigns`,
+      lastModified: new Date(),
+      alternates: {
+        languages: {
+          vi: `${siteUrl}/vi/callsigns`,
+          en: `${siteUrl}/en/callsigns`,
+        },
       },
     },
   ];
@@ -95,6 +117,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         },
       });
     }
+  }
+
+  for (const sign of callsigns) {
+    entries.push({
+      url: `${siteUrl}/vi/callsigns/${sign}`,
+      lastModified: new Date(),
+      alternates: {
+        languages: {
+          vi: `${siteUrl}/vi/callsigns/${sign}`,
+          en: `${siteUrl}/en/callsigns/${sign}`,
+        },
+      },
+    });
+    entries.push({
+      url: `${siteUrl}/en/callsigns/${sign}`,
+      lastModified: new Date(),
+      alternates: {
+        languages: {
+          vi: `${siteUrl}/vi/callsigns/${sign}`,
+          en: `${siteUrl}/en/callsigns/${sign}`,
+        },
+      },
+    });
   }
 
   return entries;

@@ -12,6 +12,7 @@ import {
   canManageUsers,
 } from "@/lib/roles";
 import { User } from "@/models/User";
+import { Callsign } from "@/models/Callsign";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,12 @@ const CARD_ICONS = {
       <path d="M5 7h14M5 12h14M5 17h14" />
     </CardIcon>
   ),
+  callsigns: (
+    <CardIcon>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M5 12h3M16 12h3M12 5v3M12 16v3" />
+    </CardIcon>
+  ),
   users: (
     <CardIcon>
       <circle cx="12" cy="8" r="3.5" />
@@ -93,7 +100,7 @@ export default async function AdminDashboardPage() {
   const showRoles = canManageRoles(role);
 
   await connectDb();
-  const [articles, categories, pages, menuItems, users, mediaCount] =
+  const [articles, categories, pages, menuItems, users, mediaCount, callsigns] =
     await Promise.all([
       showEditorial ? listAllArticles() : Promise.resolve([]),
       showEditorial ? listCategories() : Promise.resolve([]),
@@ -101,6 +108,7 @@ export default async function AdminDashboardPage() {
       showSite ? listMenuItemsAdmin() : Promise.resolve([]),
       showUsers ? User.countDocuments() : Promise.resolve(0),
       showEditorial ? countMedia() : Promise.resolve(0),
+      showSite ? Callsign.countDocuments() : Promise.resolve(0),
     ]);
 
   const cards = [
@@ -147,6 +155,15 @@ export default async function AdminDashboardPage() {
           count: pages.length,
           hint: "Static site pages",
           icon: CARD_ICONS.pages,
+        }
+      : null,
+    showSite
+      ? {
+          href: "/admin/callsigns",
+          title: "Callsigns",
+          count: callsigns,
+          hint: "Import, create, and edit hô hiệu",
+          icon: CARD_ICONS.callsigns,
         }
       : null,
     showSite

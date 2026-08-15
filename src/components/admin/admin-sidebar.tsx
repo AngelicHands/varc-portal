@@ -188,6 +188,18 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
+        href: "/admin/callsigns",
+        label: "Callsigns",
+        flag: "site",
+        icon: (
+          <Icon>
+            <circle cx="12" cy="12" r="3" />
+            <path d="M5 12h3M16 12h3M12 5v3M12 16v3" />
+            <path d="m7.8 7.8 2.1 2.1M14.1 14.1l2.1 2.1M7.8 16.2l2.1-2.1M14.1 9.9l2.1-2.1" />
+          </Icon>
+        ),
+      },
+      {
         href: "/admin/forms",
         label: "Forms",
         flag: "site",

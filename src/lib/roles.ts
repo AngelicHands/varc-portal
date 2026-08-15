@@ -123,6 +123,10 @@ export function canManageSite(role?: string | null): boolean {
   return key === "setup_admin" || key === "administrator";
 }
 
+export function canManageCallsigns(role?: string | null): boolean {
+  return canManageSite(role);
+}
+
 /**
  * Who may change whose role:
  * - Setup Admin: anyone (including self)

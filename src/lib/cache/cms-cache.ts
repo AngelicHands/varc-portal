@@ -18,9 +18,11 @@ export const CmsCacheTags = {
   categories: "categories",
   forms: "forms",
   templates: "templates",
+  callsigns: "callsigns",
   page: (id: string) => `page:${id}`,
   article: (id: string) => `article:${id}`,
   form: (id: string) => `form:${id}`,
+  callsign: (sign: string) => `callsign:${sign}`,
 } as const;
 
 export type CmsCacheTag = string;
@@ -43,6 +45,9 @@ export const CmsCacheKeys = {
     `cms:featured:${locale}:${limit}`,
   categories: () => "cms:categories",
   templateByKey: (key: string) => `cms:tpl:${key}`,
+  callsignSearch: (queryHash: string) => `callsigns:search:${queryHash}`,
+  callsignBySign: (sign: string) => `callsigns:sign:${sign}`,
+  callsignStats: () => "callsigns:stats",
 };
 
 export function hashExcludeIds(ids: string[] | undefined): string {

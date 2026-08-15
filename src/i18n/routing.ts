@@ -14,6 +14,8 @@ export const routing = defineRouting({
     "/news/[slug]": "/news/[slug]",
     "/pages/[slug]": "/pages/[slug]",
     "/categories/[slug]": "/categories/[slug]",
+    "/callsigns": "/callsigns",
+    "/callsigns/[sign]": "/callsigns/[sign]",
   },
 });
 

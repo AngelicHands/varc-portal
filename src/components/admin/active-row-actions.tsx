@@ -27,6 +27,8 @@ type Props = {
   deleteLabel?: string;
   deleteConfirmTitle?: string;
   deleteConfirmMessage?: string;
+  deleteConfirmLabel?: string;
+  deleteSuccessMessage?: string;
 };
 
 export function ActiveRowActions({
@@ -39,6 +41,8 @@ export function ActiveRowActions({
   deleteLabel = "Move to trash",
   deleteConfirmTitle = "Move to trash",
   deleteConfirmMessage = "Move this item to trash?",
+  deleteConfirmLabel = "Move to trash",
+  deleteSuccessMessage = "Moved to trash",
 }: Props) {
   const router = useRouter();
   const { ask, modal } = useConfirm();
@@ -80,14 +84,14 @@ export function ActiveRowActions({
               const confirmed = await ask({
                 title: deleteConfirmTitle,
                 message: deleteConfirmMessage,
-                confirmLabel: "Move to trash",
+                confirmLabel: deleteConfirmLabel,
                 variant: "danger",
               });
               if (!confirmed) return;
               setError(null);
               startTransition(async () => {
                 const result = await deleteAction();
-                if (!notifyAction(result, "Moved to trash")) {
+                if (!notifyAction(result, deleteSuccessMessage)) {
                   setError(result.error);
                   return;
                 }

@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { AppLocale } from "@/i18n/routing";
 import type { LocaleHref } from "@/lib/locale-hrefs";
+import { localeHrefKey } from "@/lib/locale-hrefs";
 
 export type { LocaleHref };
 
@@ -55,10 +56,8 @@ export function SetLocaleAlternates({
   en?: LocaleHref | null;
 }) {
   const setAlternates = useContext(LocaleAlternatesContext)?.setAlternates;
-  const viSlug =
-    vi && typeof vi === "object" ? vi.params.slug : vi ? "home" : "";
-  const enSlug =
-    en && typeof en === "object" ? en.params.slug : en ? "home" : "";
+  const viSlug = vi ? localeHrefKey(vi) : "";
+  const enSlug = en ? localeHrefKey(en) : "";
 
   useEffect(() => {
     if (!setAlternates) return;

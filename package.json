@@ -9,7 +9,8 @@
     "start": "next start --port 3099",
     "lint": "eslint",
     "seed": "tsx --env-file=.env scripts/seed-admin.ts",
-    "seed:templates": "tsx --env-file=.env scripts/seed-templates.ts"
+    "seed:templates": "tsx --env-file=.env scripts/seed-templates.ts",
+    "import:callsigns": "tsx --env-file=.env scripts/import-callsigns.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1103.0",
@@ -37,6 +38,7 @@
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
     "isomorphic-dompurify": "^3.21.0",
     "lodash.throttle": "^4.1.1",
     "mongoose": "^9.9.1",

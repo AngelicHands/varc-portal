@@ -6,6 +6,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  serverExternalPackages: ["exceljs"],
   async redirects() {
     return [
       // Prefer CMS favicon over any leftover static /favicon.ico from older images.

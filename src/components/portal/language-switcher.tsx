@@ -79,6 +79,13 @@ function buildHref(
     Object.entries(params).filter(([key]) => key !== "locale"),
   );
 
+  if (pathname === "/callsigns") return "/callsigns";
+
+  const sign = dynamicParams.sign;
+  if (pathname === "/callsigns/[sign]" && typeof sign === "string") {
+    return { pathname: "/callsigns/[sign]", params: { sign } };
+  }
+
   if (Object.keys(dynamicParams).length === 0) {
     return "/";
   }
