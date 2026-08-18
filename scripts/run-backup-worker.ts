@@ -5,10 +5,7 @@
  */
 import { connectDb } from "@/lib/db";
 import { logServerError } from "@/lib/safe-error";
-import {
-  claimNextBackupJob,
-  listBackupJobs,
-} from "@/lib/backup/jobs";
+import { claimNextBackupJob } from "@/lib/backup/jobs";
 import {
   failStaleRunningBackupJobs,
   processBackupJob,

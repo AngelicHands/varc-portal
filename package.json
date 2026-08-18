@@ -6,12 +6,13 @@
   "scripts": {
     "dev": "next dev --port 3099",
     "build": "next build",
+    "build:worker": "node scripts/build-backup-worker.mjs",
     "start": "next start --port 3099",
     "lint": "eslint",
     "seed": "tsx --env-file=.env scripts/seed-admin.ts",
     "seed:templates": "tsx --env-file=.env scripts/seed-templates.ts",
     "import:callsigns": "tsx --env-file=.env scripts/import-callsigns.ts",
-    "worker:backup": "tsx --env-file=.env scripts/run-backup-worker.ts"
+    "worker:backup": "pnpm build:worker && node --env-file=.env dist/worker/run-backup-worker.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1103.0",
@@ -70,6 +71,7 @@
     "@types/react-dom": "^19",
     "@types/unzipper": "^0.10.11",
     "class-variance-authority": "^0.7.1",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
     "sass": "^1.102.0",

@@ -35,11 +35,12 @@ jobs:
           echo "version=${RAW}" >> "$GITHUB_OUTPUT"
           echo "tag=v${RAW}" >> "$GITHUB_OUTPUT"
 
-      - name: Set image name
+      - name: Set image names
         id: image
         run: |
           OWNER_REPO="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          echo "name=ghcr.io/${OWNER_REPO}" >> "$GITHUB_OUTPUT"
+          echo "web=ghcr.io/${OWNER_REPO}" >> "$GITHUB_OUTPUT"
+          echo "worker=ghcr.io/${OWNER_REPO}-backup-worker" >> "$GITHUB_OUTPUT"
 
       - name: Verify GitHub Release exists
         env:
@@ -48,47 +49,59 @@ jobs:
           gh release view "${{ steps.version.outputs.tag }}" \
             --repo "${{ github.repository }}"
 
-      - name: Verify GHCR image tag exists
+      - name: Verify GHCR image tags exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          IMAGE="${{ steps.image.outputs.name }}"
           TAG="${{ steps.version.outputs.tag }}"
-          # Package name is the repo name (second path segment)
-          PKG="$(basename "${IMAGE}")"
-          OWNER="$(dirname "${IMAGE#ghcr.io/}")"
-          echo "Checking package ${OWNER}/${PKG} tag ${TAG}"
-          gh api \
-            -H "Accept: application/vnd.github+json" \
-            "/orgs/${OWNER}/packages/container/${PKG}/versions" \
-            --jq ".[] | select(.metadata.container.tags[]? == \"${TAG}\") | .id" \
-            | grep -q . \
-            || gh api \
+          check_image() {
+            local image="$1"
+            local pkg owner
+            pkg="$(basename "${image}")"
+            owner="$(dirname "${image#ghcr.io/}")"
+            echo "Checking package ${owner}/${pkg} tag ${TAG}"
+            gh api \
               -H "Accept: application/vnd.github+json" \
-              "/users/${OWNER}/packages/container/${PKG}/versions" \
+              "/orgs/${owner}/packages/container/${pkg}/versions" \
               --jq ".[] | select(.metadata.container.tags[]? == \"${TAG}\") | .id" \
-              | grep -q .
+              | grep -q . \
+              || gh api \
+                -H "Accept: application/vnd.github+json" \
+                "/users/${owner}/packages/container/${pkg}/versions" \
+                --jq ".[] | select(.metadata.container.tags[]? == \"${TAG}\") | .id" \
+                | grep -q .
+          }
+
+          check_image "${{ steps.image.outputs.web }}"
+          check_image "${{ steps.image.outputs.worker }}"
 
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Update deployment image
+      - name: Update deployment images
         run: |
-          IMAGE="${{ steps.image.outputs.name }}:${{ steps.version.outputs.tag }}"
-          for FILE in deploy/k8s/deployment.yaml deploy/k8s/backup-worker.yaml; do
-            if [[ ! -f "${FILE}" ]]; then
-              echo "Skipping ${FILE} (not found)"
-              continue
+          update_file() {
+            local file="$1"
+            local image="$2"
+            if [[ ! -f "${file}" ]]; then
+              echo "Skipping ${file} (not found)"
+              return
             fi
-            if ! grep -q 'image: ' "${FILE}"; then
-              echo "::error::No image field in ${FILE}"
+            if ! grep -q 'image: ' "${file}"; then
+              echo "::error::No image field in ${file}"
               exit 1
             fi
-            sed -i.bak -E "s|image:[[:space:]]*.*$|image: ${IMAGE}|" "${FILE}"
-            rm -f "${FILE}.bak"
-            echo "Updated ${FILE} to ${IMAGE}"
-            grep -n 'image:' "${FILE}"
-          done
+            sed -i.bak -E "s|image:[[:space:]]*.*$|image: ${image}|" "${file}"
+            rm -f "${file}.bak"
+            echo "Updated ${file} to ${image}"
+            grep -n 'image:' "${file}"
+          }
+
+          FILE="deploy/k8s/deployment.yaml"
+          update_file "${FILE}" "${{ steps.image.outputs.web }}:${{ steps.version.outputs.tag }}"
+
+          FILE="deploy/k8s/backup-worker.yaml"
+          update_file "${FILE}" "${{ steps.image.outputs.worker }}:${{ steps.version.outputs.tag }}"
 
       - name: Commit and push
         run: |
@@ -96,7 +109,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add deploy/k8s/deployment.yaml deploy/k8s/backup-worker.yaml
           if git diff --staged --quiet; then
-            echo "Image already set to ${{ steps.image.outputs.name }}:${{ steps.version.outputs.tag }}; nothing to commit."
+            echo "Images already set to ${{ steps.version.outputs.tag }}; nothing to commit."
             exit 0
           fi
           git commit -m "chore: deploy ${{ steps.version.outputs.tag }}"

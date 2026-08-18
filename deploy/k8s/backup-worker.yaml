@@ -19,14 +19,8 @@ spec:
         - name: ghcr-pull
       containers:
         - name: worker
-          image: ghcr.io/varc-vietnam/varc-portal:v0.0.37
+          image: ghcr.io/varc-vietnam/varc-portal-backup-worker:v0.0.37
           imagePullPolicy: Always
-          command:
-            - tsx
-            - scripts/run-backup-worker.ts
-          env:
-            - name: BACKUP_WORKER_ENABLED
-              value: "1"
           envFrom:
             - secretRef:
                 name: varc-portal-secrets

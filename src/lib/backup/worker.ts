@@ -77,6 +77,8 @@ async function throwIfJobCancelled(id: string) {
 }
 
 function getAppVersion(): string {
+  const fromEnv = process.env.APP_VERSION?.trim();
+  if (fromEnv) return fromEnv;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return String(require("../../../package.json").version || "0.0.0");
