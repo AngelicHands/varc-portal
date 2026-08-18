@@ -170,6 +170,13 @@ export async function updateBackupJobProgress(
   });
 }
 
+export async function isBackupJobCancelled(id: string): Promise<boolean> {
+  if (!id) return false;
+  await connectDb();
+  const doc = await BackupJob.findById(id, { status: 1 }).lean();
+  return doc?.status === "cancelled";
+}
+
 export async function markBackupJobSucceeded(params: {
   id: string;
   artifactKey?: string;
@@ -212,6 +219,49 @@ export async function markBackupJobFailed(
       error: error.slice(0, 500),
     },
   });
+}
+
+export async function cancelBackupJob(
+  id: string,
+  message = "Cancelled by admin",
+): Promise<AdminBackupJob | null> {
+  if (!id) return null;
+  await connectDb();
+  const doc = await BackupJob.findOneAndUpdate(
+    {
+      _id: id,
+      status: { $in: ["queued", "running"] },
+    },
+    {
+      $set: {
+        status: "cancelled",
+        finishedAt: new Date(),
+        lockedBy: "",
+        phase: "cancelled",
+        message,
+        error: "",
+      },
+    },
+    { returnDocument: "after" },
+  ).lean();
+  return doc ? toAdminJob(doc as BackupJobDocument) : null;
+}
+
+export async function deleteBackupJob(id: string): Promise<boolean> {
+  if (!id) return false;
+  await connectDb();
+  const doc = await BackupJob.findById(id).lean();
+  if (!doc || doc.status === "running") return false;
+
+  try {
+    if (doc.artifactKey) await deleteBackupArtifact(doc.artifactKey);
+    if (doc.sourceArtifactKey) await deleteBackupArtifact(doc.sourceArtifactKey);
+  } catch (error) {
+    logServerError("backup-job-delete", error);
+  }
+
+  const result = await BackupJob.deleteOne({ _id: id, status: { $ne: "running" } });
+  return result.deletedCount === 1;
 }
 
 export async function markBackupEmailSent(id: string): Promise<void> {

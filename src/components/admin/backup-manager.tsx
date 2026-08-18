@@ -31,6 +31,7 @@ function formatDate(value: string | null) {
 function statusClass(status: string) {
   if (status === "succeeded") return "text-green-700";
   if (status === "failed") return "text-red-700";
+  if (status === "cancelled") return "text-gray-500";
   if (status === "running") return "text-amber-700";
   return "text-gray-600";
 }
@@ -44,6 +45,7 @@ export function BackupManager({
   const [jobs, setJobs] = useState(initialJobs);
   const [backupPending, setBackupPending] = useState(false);
   const [restorePending, setRestorePending] = useState(false);
+  const [actionJobId, setActionJobId] = useState<string | null>(null);
   const [sourceType, setSourceType] = useState<"upload" | "remote">("upload");
   const [remoteUrl, setRemoteUrl] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -69,6 +71,10 @@ export function BackupManager({
     () => jobs.some((job) => job.status === "queued" || job.status === "running"),
     [jobs],
   );
+
+  function replaceJob(nextJob: AdminBackupJob) {
+    setJobs((current) => current.map((job) => (job.id === nextJob.id ? nextJob : job)));
+  }
 
   async function createBackup() {
     setBackupPending(true);
@@ -131,6 +137,50 @@ export function BackupManager({
       if (fileInput) fileInput.value = "";
     } finally {
       setRestorePending(false);
+    }
+  }
+
+  async function cancelJob(jobId: string) {
+    setActionJobId(jobId);
+    try {
+      const response = await fetch(`/api/admin/backup/jobs/${jobId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel" }),
+      });
+      const payload = (await response.json()) as { error?: string; job?: AdminBackupJob };
+      if (!response.ok || !payload.job) {
+        notifyAction(
+          { ok: false, error: payload.error || "Failed to cancel backup job" },
+          "",
+        );
+        return;
+      }
+      replaceJob(payload.job);
+      notifyAction({ ok: true }, "Job cancelled");
+    } finally {
+      setActionJobId(null);
+    }
+  }
+
+  async function deleteJob(jobId: string) {
+    setActionJobId(jobId);
+    try {
+      const response = await fetch(`/api/admin/backup/jobs/${jobId}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        notifyAction(
+          { ok: false, error: payload.error || "Failed to delete backup job" },
+          "",
+        );
+        return;
+      }
+      setJobs((current) => current.filter((job) => job.id !== jobId));
+      notifyAction({ ok: true }, "Job deleted");
+    } finally {
+      setActionJobId(null);
     }
   }
 
@@ -277,7 +327,7 @@ export function BackupManager({
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Progress</th>
                   <th className="px-4 py-3 font-medium">Requested by</th>
-                  <th className="px-4 py-3 font-medium text-right">Download</th>
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -306,16 +356,36 @@ export function BackupManager({
                       <div className="text-xs">{job.requestedByEmail}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {job.canDownload ? (
-                        <a
-                          href={`/api/admin/backup/artifacts/${job.id}`}
-                          className="text-sm font-medium hover:underline"
-                        >
-                          {job.artifactFileName || "Download"}
-                        </a>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
+                      <div className="flex justify-end gap-3">
+                        {job.canDownload ? (
+                          <a
+                            href={`/api/admin/backup/artifacts/${job.id}`}
+                            className="text-sm font-medium hover:underline"
+                          >
+                            {job.artifactFileName || "Download"}
+                          </a>
+                        ) : null}
+                        {job.status === "queued" || job.status === "running" ? (
+                          <button
+                            type="button"
+                            disabled={actionJobId === job.id}
+                            onClick={() => void cancelJob(job.id)}
+                            className="text-sm font-medium text-amber-700 hover:underline disabled:opacity-60"
+                          >
+                            {actionJobId === job.id ? "Cancelling…" : "Cancel"}
+                          </button>
+                        ) : null}
+                        {job.status !== "running" ? (
+                          <button
+                            type="button"
+                            disabled={actionJobId === job.id}
+                            onClick={() => void deleteJob(job.id)}
+                            className="text-sm font-medium text-red-700 hover:underline disabled:opacity-60"
+                          >
+                            {actionJobId === job.id ? "Deleting…" : "Delete"}
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}

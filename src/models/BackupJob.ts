@@ -6,6 +6,7 @@ export type BackupJobKind = (typeof BACKUP_JOB_KINDS)[number];
 export const BACKUP_JOB_STATUSES = [
   "queued",
   "running",
+  "cancelled",
   "succeeded",
   "failed",
 ] as const;

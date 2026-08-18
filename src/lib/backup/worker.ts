@@ -19,6 +19,7 @@ import {
 } from "@/lib/backup/artifact-storage";
 import {
   cleanupBackupArtifacts,
+  isBackupJobCancelled,
   markBackupEmailSent,
   markBackupJobFailed,
   markBackupJobSucceeded,
@@ -61,6 +62,19 @@ type BackupMediaEntry = {
   contentType: string;
   size: number;
 };
+
+class BackupJobCancelledError extends Error {
+  constructor() {
+    super("Backup job cancelled");
+    this.name = "BackupJobCancelledError";
+  }
+}
+
+async function throwIfJobCancelled(id: string) {
+  if (await isBackupJobCancelled(id)) {
+    throw new BackupJobCancelledError();
+  }
+}
 
 function getAppVersion(): string {
   try {
@@ -189,6 +203,7 @@ async function buildBackupArchive(job: BackupJobDocument): Promise<{
   const missingMedia: string[] = [];
 
   try {
+    await throwIfJobCancelled(String(job._id));
     await updateBackupJobProgress(String(job._id), {
       phase: "collecting",
       message: "Collecting media references",
@@ -205,6 +220,7 @@ async function buildBackupArchive(job: BackupJobDocument): Promise<{
 
     let collectionsDone = 0;
     for (const collectionName of BACKUP_COLLECTION_NAMES) {
+      await throwIfJobCancelled(String(job._id));
       await updateBackupJobProgress(String(job._id), {
         phase: "dumping-mongo",
         message: `Exporting ${collectionName}`,
@@ -244,6 +260,7 @@ async function buildBackupArchive(job: BackupJobDocument): Promise<{
       }
 
       for (const media of mediaEntries) {
+        await throwIfJobCancelled(String(job._id));
         try {
           const object = await getObjectStream(media.key);
           archive.append(object.stream, {
@@ -470,6 +487,7 @@ async function restoreMediaEntries(params: {
   });
 
   for (const entry of mediaEntries) {
+    await throwIfJobCancelled(params.jobId);
     const key = entry.path.slice("media/".length);
     await putObjectStream(
       key,
@@ -504,6 +522,7 @@ async function removeOldManagedKeys(
 async function restoreBackupArchive(job: BackupJobDocument): Promise<void> {
   const tempDir = await mkdtemp(path.join(tmpdir(), "varc-restore-"));
   try {
+    await throwIfJobCancelled(String(job._id));
     const currentKeys = await collectCurrentManagedKeys();
     const zipPath = await downloadSourceZip(job, tempDir);
     const directory = await unzipper.Open.file(zipPath);
@@ -539,6 +558,7 @@ async function restoreBackupArchive(job: BackupJobDocument): Promise<void> {
 
     let collectionsDone = 0;
     for (const collectionName of BACKUP_COLLECTION_NAMES) {
+      await throwIfJobCancelled(String(job._id));
       const entry = collectionEntries.find(
         (item) => item.path === `mongo/${collectionName}.jsonl`,
       );
@@ -583,41 +603,46 @@ export async function processBackupJob(job: BackupJobDocument): Promise<void> {
   try {
     if (job.kind === "backup") {
       const built = await buildBackupArchive(job);
-      const archiveInfo = await stat(built.filePath);
-      const artifactKey = buildBackupArtifactKey(built.fileName);
-      const stored = await putBackupArtifactFile(
-        artifactKey,
-        built.filePath,
-        "application/zip",
-      );
-      await markBackupJobSucceeded({
-        id: String(job._id),
-        artifactKey,
-        artifactFileName: built.fileName,
-        artifactContentType: "application/zip",
-        artifactSize: stored.size || archiveInfo.size,
-        message:
-          built.manifest.missingMedia.length > 0
-            ? `Completed with ${built.manifest.missingMedia.length} missing media file(s)`
-            : "Backup ready",
-      });
+      try {
+        await throwIfJobCancelled(String(job._id));
+        const archiveInfo = await stat(built.filePath);
+        const artifactKey = buildBackupArtifactKey(built.fileName);
+        const stored = await putBackupArtifactFile(
+          artifactKey,
+          built.filePath,
+          "application/zip",
+        );
+        await markBackupJobSucceeded({
+          id: String(job._id),
+          artifactKey,
+          artifactFileName: built.fileName,
+          artifactContentType: "application/zip",
+          artifactSize: stored.size || archiveInfo.size,
+          message:
+            built.manifest.missingMedia.length > 0
+              ? `Completed with ${built.manifest.missingMedia.length} missing media file(s)`
+              : "Backup ready",
+        });
 
-      const downloadUrl = `${getPublicBaseUrl()}/api/admin/backup/artifacts/${String(
-        job._id,
-      )}`;
-      await sendBackupReadyEmail({
-        to: job.requestedByEmail,
-        downloadUrl,
-        fileName: built.fileName,
-        clientKey: `backup:${job.requestedByEmail}`,
-      });
-      await markBackupEmailSent(String(job._id));
-      await cleanupBackupArtifacts();
-      await rm(path.dirname(built.filePath), { recursive: true, force: true });
+        const downloadUrl = `${getPublicBaseUrl()}/api/admin/backup/artifacts/${String(
+          job._id,
+        )}`;
+        await sendBackupReadyEmail({
+          to: job.requestedByEmail,
+          downloadUrl,
+          fileName: built.fileName,
+          clientKey: `backup:${job.requestedByEmail}`,
+        });
+        await markBackupEmailSent(String(job._id));
+        await cleanupBackupArtifacts();
+      } finally {
+        await rm(path.dirname(built.filePath), { recursive: true, force: true });
+      }
       return;
     }
 
     await restoreBackupArchive(job);
+    await throwIfJobCancelled(String(job._id));
     if (job.sourceArtifactKey) {
       try {
         await deleteBackupArtifact(job.sourceArtifactKey);
@@ -631,6 +656,9 @@ export async function processBackupJob(job: BackupJobDocument): Promise<void> {
     });
     await cleanupBackupArtifacts();
   } catch (error) {
+    if (error instanceof BackupJobCancelledError) {
+      return;
+    }
     await markBackupJobFailed(
       String(job._id),
       publicErrorMessage(error, "Backup job failed"),
