@@ -116,6 +116,18 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
+        href: "/admin/backup",
+        label: "Backup/Restore",
+        flag: "site",
+        icon: (
+          <Icon>
+            <path d="M12 3v10" />
+            <path d="m8.5 9.5 3.5 3.5 3.5-3.5" />
+            <rect x="4" y="15" width="16" height="6" rx="1.5" />
+          </Icon>
+        ),
+      },
+      {
         href: "/admin/users",
         label: "Users",
         flag: "users",

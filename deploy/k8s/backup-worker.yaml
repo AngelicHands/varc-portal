@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: varc-portal-backup-worker
+  namespace: varc
+  labels:
+    app: varc-portal-backup-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: varc-portal-backup-worker
+  template:
+    metadata:
+      labels:
+        app: varc-portal-backup-worker
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: worker
+          image: ghcr.io/varc-vietnam/varc-portal:v0.0.34
+          imagePullPolicy: Always
+          env:
+            - name: BACKUP_WORKER_ENABLED
+              value: "1"
+          envFrom:
+            - secretRef:
+                name: varc-portal-secrets
+            - configMapRef:
+                name: varc-portal-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1024Mi

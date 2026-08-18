@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { createReadStream, existsSync } from "node:fs";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { createReadStream, createWriteStream, existsSync } from "node:fs";
+import { mkdir, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -55,6 +56,14 @@ function s3PublicUrl(config: Extract<MediaConfig, { driver: "s3" }>, key: string
   return `${config.publicUrl}/${key}`;
 }
 
+export function publicUrlForObjectKey(key: string): string {
+  const safeKey = assertSafeKey(key);
+  const config = getMediaConfig();
+  return config.driver === "local"
+    ? localPublicUrl(config, safeKey)
+    : s3PublicUrl(config, safeKey);
+}
+
 function createS3Client(config: Extract<MediaConfig, { driver: "s3" }>) {
   return new S3Client({
     region: config.region,
@@ -105,6 +114,45 @@ export async function putObject(
   };
 }
 
+export async function putObjectStream(
+  key: string,
+  body: Readable,
+  contentType: string,
+): Promise<StoredObject> {
+  const safeKey = assertSafeKey(key);
+  const config = getMediaConfig();
+
+  if (config.driver === "local") {
+    const absolute = path.join(config.uploadDir, safeKey);
+    await mkdir(path.dirname(absolute), { recursive: true });
+    await pipeline(body, createWriteStream(absolute));
+    const info = await stat(absolute);
+    return {
+      key: safeKey,
+      url: localPublicUrl(config, safeKey),
+      contentType,
+      size: info.size,
+    };
+  }
+
+  const client = createS3Client(config);
+  await client.send(
+    new PutObjectCommand({
+      Bucket: config.bucket,
+      Key: safeKey,
+      Body: body,
+      ContentType: contentType,
+    }),
+  );
+
+  return {
+    key: safeKey,
+    url: s3PublicUrl(config, safeKey),
+    contentType,
+    size: 0,
+  };
+}
+
 export type MediaReadResult = {
   stream: Readable;
   contentType: string;
@@ -130,7 +178,7 @@ export async function getObjectStream(key: string): Promise<MediaReadResult> {
     }
     return {
       stream: createReadStream(resolvedFile),
-      contentType: guessContentType(safeKey),
+      contentType: contentTypeForObjectKey(safeKey),
     };
   }
 
@@ -146,7 +194,7 @@ export async function getObjectStream(key: string): Promise<MediaReadResult> {
 
   return {
     stream: result.Body as Readable,
-    contentType: result.ContentType || guessContentType(safeKey),
+    contentType: result.ContentType || contentTypeForObjectKey(safeKey),
     size: result.ContentLength,
   };
 }
@@ -180,7 +228,7 @@ export async function deleteObject(key: string): Promise<void> {
   );
 }
 
-function guessContentType(key: string): string {
+export function contentTypeForObjectKey(key: string): string {
   const ext = path.extname(key).toLowerCase();
   switch (ext) {
     case ".jpg":

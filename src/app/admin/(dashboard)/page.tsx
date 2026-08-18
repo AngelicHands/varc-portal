@@ -42,6 +42,13 @@ const CARD_ICONS = {
       <path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
     </CardIcon>
   ),
+  backup: (
+    <CardIcon>
+      <path d="M12 3v10" />
+      <path d="m8.5 9.5 3.5 3.5 3.5-3.5" />
+      <rect x="4" y="15" width="16" height="6" rx="1.5" />
+    </CardIcon>
+  ),
   articles: (
     <CardIcon>
       <path d="M7 4h10a2 2 0 0 1 2 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 0 1 2-2Z" />
@@ -146,6 +153,15 @@ export default async function AdminDashboardPage() {
           count: mediaCount,
           hint: "Pictures and videos",
           icon: CARD_ICONS.media,
+        }
+      : null,
+    showSite
+      ? {
+          href: "/admin/backup",
+          title: "Backup/Restore",
+          count: "•",
+          hint: "Back up or restore portal data",
+          icon: CARD_ICONS.backup,
         }
       : null,
     showSite

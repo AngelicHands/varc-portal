@@ -94,6 +94,7 @@ export default async function proxy(req: NextRequest) {
       const adminHome = new URL("/admin", origin);
       if (
         (pathMatches(pathname, "/admin/settings") ||
+          pathMatches(pathname, "/admin/backup") ||
           pathMatches(pathname, "/admin/pages") ||
           pathMatches(pathname, "/admin/menu") ||
           pathMatches(pathname, "/admin/mailbox") ||

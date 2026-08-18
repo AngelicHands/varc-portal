@@ -6,7 +6,7 @@ metadata:
   labels:
     classq.io/ingress-kind: default
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: 50m
+    nginx.ingress.kubernetes.io/proxy-body-size: 512m
     # SSL terminates at Cloudflare / Nginx Proxy Manager. NPM forwards plain
     # HTTP to MetalLB, so do not force HTTPS redirects here.
     # Do not use configuration-snippet: this cluster disables ingress snippets.

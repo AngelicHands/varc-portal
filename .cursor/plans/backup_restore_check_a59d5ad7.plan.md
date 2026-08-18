@@ -1,18 +1,18 @@
 ---
 name: Backup restore check
-overview: Add an admin Backup page for site managers to download a streaming ZIP of MongoDB plus media, and restore by replacing those collections and files. Valkey is invalidated, not archived.
+overview: Add an admin Backup page backed by a dedicated worker/queue: backups run in the background, produce a ZIP containing MongoDB plus media, and email the initiating admin a download link; restores can use an uploaded ZIP or a remote URL and replace the site.
 todos:
   - id: archive-lib
-    content: "Add streaming ZIP archive helpers (EJSON collections + media files) and storage list/put-stream APIs"
+    content: "Add archive helpers plus storage list/stream APIs for Mongo EJSON, media blobs, and backup artifact files"
     status: pending
-  - id: backup-download
-    content: "GET /api/admin/backup streams the archive; estimate size on the admin page"
+  - id: backup-jobs
+    content: "Add queued backup jobs, worker processing, progress/status tracking, ZIP artifact generation, and email delivery"
     status: pending
-  - id: restore-upload
-    content: "POST restore with typed confirmation, replace known collections + media, rewrite public URLs, bump Valkey gen"
+  - id: restore-jobs
+    content: "Add queued restore jobs from uploaded ZIP or remote URL, replace known collections + media, rewrite public URLs, bump Valkey gen"
     status: pending
   - id: admin-ui
-    content: "Add /admin/backup page, sidebar, dashboard card, proxy gate, README, raise ingress body size"
+    content: "Add /admin/backup page, sidebar, dashboard card, proxy gate, README, and large upload limits"
     status: pending
   - id: lint
     content: Run pnpm lint and npx tsc --noEmit until clean
@@ -22,26 +22,38 @@ isProject: false
 
 # Admin site backup and restore
 
-Site managers (Setup Admin + Administrator) get **Admin → Backup**: download a ZIP, upload it to replace the site. Restore is destructive and replace-only (not merge).
+Site managers (Setup Admin + Administrator) get **Admin → Backup** backed by a dedicated queue worker. Backups no longer stream directly in the request: an admin starts a job, the worker builds the ZIP in the background, stores it as an artifact, and emails the initiating admin a download link. Restore is also an async job and can start from either an uploaded ZIP or a remote URL.
 
 ```mermaid
 flowchart TB
   ui["Admin Backup page"]
-  getApi["GET /api/admin/backup"]
-  postApi["POST /api/admin/backup/restore"]
+  startBackup["POST start backup job"]
+  queue["Job queue"]
+  backupWorker["Backup worker"]
+  artifact["Backup ZIP artifact"]
+  email["Email current admin download link"]
+  startRestore["POST start restore job"]
+  restoreWorker["Restore worker"]
   mongo["Mongo collections"]
   media["Local uploads or S3"]
   valkey["Valkey cms:gen bump"]
-  zip["varc-backup-timestamp.zip"]
-  ui --> getApi
-  getApi --> mongo
-  getApi --> media
-  getApi --> zip
-  ui --> postApi
-  zip --> postApi
-  postApi --> mongo
-  postApi --> media
-  postApi --> valkey
+  remoteUrl["Remote ZIP URL"]
+  upload["Uploaded ZIP"]
+  ui --> startBackup
+  startBackup --> queue
+  queue --> backupWorker
+  backupWorker --> mongo
+  backupWorker --> media
+  backupWorker --> artifact
+  artifact --> email
+  ui --> startRestore
+  upload --> startRestore
+  remoteUrl --> startRestore
+  startRestore --> queue
+  queue --> restoreWorker
+  restoreWorker --> mongo
+  restoreWorker --> media
+  restoreWorker --> valkey
 ```
 
 ## Archive format
@@ -62,39 +74,75 @@ Media files to include:
 
 Do not archive Valkey, `.env`, or k8s secrets.
 
-## Backup download
+## Job model
+
+Add a dedicated Mongo-backed job model such as [`src/models/BackupJob.ts`](src/models/BackupJob.ts) to track:
+
+- `kind`: `backup` or `restore`
+- `status`: `queued`, `running`, `succeeded`, `failed`
+- `requestedBy`: current admin user id + email
+- `progress`: phase + counts (`collectionsDone`, `mediaDone`, `bytesDone`)
+- `source`: for restore, either uploaded artifact key or remote URL
+- `artifact`: for backup, stored ZIP key + signed/public download URL metadata
+- `error`: sanitized failure summary
+
+This plan now assumes a **real worker/queue** instead of app-local background work:
+
+- start a job in an API route / server action
+- persist job state in Mongo immediately
+- enqueue work for a dedicated worker process / pod
+- worker updates progress in Mongo as each phase completes
+- enforce a single active backup/restore at a time with a DB-backed lock or queue concurrency of `1`
+
+Use Valkey as the queue backend if possible, since the project already runs it in-cluster; if not, keep the queue abstraction narrow so it can fall back to Mongo-backed polling without changing the admin UI contract.
+
+## Backup flow
 
 - New page [`src/app/admin/(dashboard)/backup/page.tsx`](src/app/admin/(dashboard)/backup/page.tsx) behind `requireSitePage()`.
-- **Download backup** hits [`src/app/api/admin/backup/route.ts`](src/app/api/admin/backup/route.ts) (`GET`). Auth in the route (proxy skips `/api/`).
-- Stream the ZIP with `archiver` (add to `serverExternalPackages` next to `exceljs`). Cursor Mongo dumps collection-by-collection; pipe each media object via existing [`getObjectStream`](src/lib/media/storage.ts). Do not buffer the archive in memory (pod limit is 512Mi).
-- In-process lock so backup and restore cannot run together.
-- Page shows estimated size (sum of `Media.size` + known form uploads) and a warning if it is larger than the restore upload cap.
+- **Create backup** starts a queued job via [`src/app/api/admin/backup/jobs/route.ts`](src/app/api/admin/backup/jobs/route.ts) or equivalent server action. The request returns quickly with a job id.
+- The backup worker uses `archiver` (add to `serverExternalPackages` next to `exceljs`) to build the ZIP from Mongo EJSON plus media streams from existing [`getObjectStream`](src/lib/media/storage.ts). Do not buffer the archive in memory.
+- Store the finished ZIP as a backup artifact:
+  - local dev: under a dedicated directory such as `.backup-artifacts/`
+  - deployed env: in object storage, ideally a dedicated prefix/bucket rather than the public media namespace
+- Email the **current signed-in admin** when the backup succeeds. Reuse the existing Cloudflare email path in [`src/lib/mail/cloudflare-mail.ts`](src/lib/mail/cloudflare-mail.ts); add a backup-email helper and record the message in the mailbox if that pattern is already used elsewhere.
+- The email contains a download link to a new authenticated artifact route such as [`src/app/api/admin/backup/artifacts/[id]/route.ts`](src/app/api/admin/backup/artifacts/[id]/route.ts).
+- Page shows recent jobs, current status/progress, estimated size, and failure messages.
 
-## Restore upload
+## Restore flow
 
-- Multipart POST [`src/app/api/admin/backup/restore/route.ts`](src/app/api/admin/backup/restore/route.ts).
-- UI: file input + type `RESTORE` to enable the button; confirm modal that this **replaces** current content, users, and files.
-- Validate `manifest.formatVersion === 1` and that collection files match the whitelist.
-- Replace only whitelisted collections: `deleteMany({})` then insert EJSON docs. Leave unknown collections in the same Mongo DB untouched.
-- Write media from the ZIP using a new **streaming** `putObject` (today [`putObject`](src/lib/media/storage.ts) takes a `Buffer` — large videos must not load fully).
-- Rewrite `Media.url` (and stored public URL prefix from the manifest) to the **current** local `/media/...` or `S3_PUBLIC_URL` so a prod backup works locally and vice versa.
-- After success: `invalidateCmsTags` / bump `cms:gen` so public pages are not stale.
-- Auth stays JWT ([`src/auth.config.ts`](src/auth.config.ts)); warn that if the backup’s users do not include the current account, the next request will require login as a restored admin.
+- Restore can start from either:
+  - an uploaded ZIP file
+  - a remote HTTPS URL to a ZIP file
+- UI offers a source toggle: **Upload file** or **Remote link**.
+- `Upload file` posts multipart data to a start-restore endpoint, which first stores the uploaded ZIP as a temporary artifact, then enqueues the restore job.
+- `Remote link` stores the URL in the job and lets the worker fetch the ZIP server-side. Restrict this to HTTPS and reject localhost/private-network targets.
+- UI still requires typed confirmation `RESTORE` and warns that this replaces current content, users, and files.
+- Worker validates `manifest.formatVersion === 1` and the collection whitelist.
+- Replace only whitelisted collections: `deleteMany({})` then insert EJSON docs. Leave unknown collections untouched.
+- Write media from the ZIP using a new **streaming** object-write API (today [`putObject`](src/lib/media/storage.ts) takes a `Buffer`; large videos must not load fully).
+- Rewrite `Media.url` and any stored public media prefixes to the **current** `/media/...` or `S3_PUBLIC_URL` so prod backups restore locally and vice versa.
+- After success: `invalidateCmsTags` / bump `cms:gen`.
+- Auth stays JWT ([`src/auth.config.ts`](src/auth.config.ts)); warn that if restored users do not include the current account, the next request may require a new login.
 
-Failure: if restore dies mid-way the site may be partial. Keep the operation ordered (collections then media then cache) and return a clear error; no automatic rollback (too large for the pod).
+Failure: if a restore dies mid-way the site may be partial. Keep the operation ordered (collections then media then cache), persist progress/error on the job, and return clear admin-visible failure states. No automatic rollback in this pass.
 
 ## Limits and infra
 
-Production Ingress is [`proxy-body-size: 50m`](deploy/k8s/ingress.yaml) — too small for a media ZIP. Raise to **512m** (still bounded; page warns if estimate exceeds it). Local Next route handlers have no 50MB cap.
+Production Ingress is [`proxy-body-size: 50m`](deploy/k8s/ingress.yaml) — too small for uploaded restore ZIPs. Raise it to **512m** or **1g** depending on the largest practical admin upload size. Remote-link restore avoids this limit for very large backups.
 
-Do not add a CronJob or CLI in this pass.
+Add conservative cleanup for old backup artifacts and temporary uploaded ZIPs, for example a max age / max retained count enforced by the worker or a small maintenance task. No public CLI in this pass.
 
 ## Admin chrome
 
 - Sidebar System group: **Backup** next to Site Settings (`flag: "site"`) in [`src/components/admin/admin-sidebar.tsx`](src/components/admin/admin-sidebar.tsx).
 - Dashboard card linking to `/admin/backup`.
 - Gate `/admin/backup` in [`src/proxy.ts`](src/proxy.ts) with the other `canManageSite` paths.
-- Short README section: what is in the ZIP, who can restore, Valkey not included.
+- Backup page includes:
+  - create-backup action
+  - recent jobs table with status/progress
+  - restore form with source mode: upload or remote link
+  - typed confirmation modal for restore
+- Short README section: async backup email flow, what is in the ZIP, restore modes, Valkey not included.
 
 ## Out of scope
 

@@ -110,5 +110,6 @@ export async function getMailMessageById(
 
 export function mailKindLabel(kind: MailMessageKind): string {
   if (kind === "form_submission_copy") return "Form submission copy";
+  if (kind === "backup_artifact") return "Backup artifact";
   return kind;
 }

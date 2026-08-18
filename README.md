@@ -100,6 +100,18 @@ CF_MAIL_RATE_LIMIT_WINDOW=1h     # window: 30s, 5m, 1h, 1d, etc.
 
 Uses the Cloudflare Email Sending REST API (`POST /accounts/{account_id}/email/sending/send`). If any mail variable is unset, submissions still succeed and no mail is sent. Add secrets to the Kubernetes secret (see `deploy/docs/secret.example.yaml`); rate-limit keys can go in the ConfigMap.
 
+## Admin backup and restore
+
+Site managers can use **Admin → Backup** to queue a background backup or restore job.
+
+- **Backup** creates a ZIP with MongoDB collections plus managed media/form-upload files
+- the finished ZIP is stored as an artifact and emailed to the admin who started the job
+- **Restore** can start from either an uploaded ZIP or a remote HTTPS URL
+- restore replaces current CMS content, users, callsigns, and managed files
+- Valkey is **not** included; cache is rebuilt after restore
+
+Backup artifacts use local disk (`BACKUP_ARTIFACT_DIR`) in local development or S3-compatible object storage (`BACKUP_S3_BUCKET` / `BACKUP_S3_PREFIX`) when `STORAGE_DRIVER=s3`.
+
 ## Docker Compose (app + Mongo)
 
 ```bash
@@ -112,11 +124,13 @@ docker compose up --build web
 
 ## Kubernetes / Argo CD
 
-Manifests for Argo CD live in `deploy/k8s/` (Deployment, Service, Ingress, ConfigMap, Valkey). App secrets are **not** synced by Argo — create them once in the cluster.
+Manifests for Argo CD live in `deploy/k8s/` (web Deployment, backup-worker Deployment, Service, Ingress, ConfigMap, Valkey). App secrets are **not** synced by Argo — create them once in the cluster.
 
 Valkey (`deploy/k8s/valkey.yaml`) is a single in-cluster cache (`VALKEY_URL=redis://valkey:6379` in the ConfigMap). It requires `VALKEY_PASSWORD` in `varc-portal-secrets` (`--requirepass`, probes use `REDISCLI_AUTH`). It is not on the Ingress; data is ephemeral (LRU, no AOF).
 
 Public CMS reads (branding, menus, pages, articles, categories, templates) use cache-aside with tag invalidation on every admin save. If `VALKEY_URL` is unset or Valkey is down, the app falls back to Mongo. Locally you can run Valkey with a password and set `VALKEY_URL` + `VALKEY_PASSWORD` (see `.env.example`).
+
+The backup worker runs as a separate deployment (`deploy/k8s/backup-worker.yaml`) with `BACKUP_WORKER_ENABLED=1`. Uploaded restore ZIPs rely on a larger ingress body limit (`512m` by default), while remote-link restore avoids that upload limit.
 
 ### One-time bootstrap
 

@@ -36,6 +36,7 @@ yarn-error.log*
 
 # local media uploads
 /uploads
+/.backup-artifacts
 
 # vercel
 .vercel

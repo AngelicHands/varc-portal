@@ -10,7 +10,8 @@
     "lint": "eslint",
     "seed": "tsx --env-file=.env scripts/seed-admin.ts",
     "seed:templates": "tsx --env-file=.env scripts/seed-templates.ts",
-    "import:callsigns": "tsx --env-file=.env scripts/import-callsigns.ts"
+    "import:callsigns": "tsx --env-file=.env scripts/import-callsigns.ts",
+    "worker:backup": "tsx --env-file=.env scripts/run-backup-worker.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1103.0",
@@ -35,7 +36,9 @@
     "@tiptap/pm": "^3.29.2",
     "@tiptap/react": "^3.29.2",
     "@tiptap/starter-kit": "^3.29.2",
+    "archiver": "^8.0.0",
     "bcryptjs": "^3.0.3",
+    "bson": "^7.3.2",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
@@ -54,15 +57,18 @@
     "remark-gfm": "^4.0.1",
     "slugify": "^1.6.9",
     "sonner": "^2.0.7",
+    "unzipper": "^0.12.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",
     "@tailwindcss/postcss": "^4",
+    "@types/archiver": "^8.0.0",
     "@types/lodash.throttle": "^4.1.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/unzipper": "^0.10.11",
     "class-variance-authority": "^0.7.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
