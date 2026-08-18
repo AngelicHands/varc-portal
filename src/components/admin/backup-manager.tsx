@@ -36,6 +36,15 @@ function statusClass(status: string) {
   return "text-gray-600";
 }
 
+async function readActionPayload(response: Response): Promise<{ error?: string }> {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return (await response.json()) as { error?: string };
+  }
+  const text = (await response.text()).trim();
+  return { error: text || undefined };
+}
+
 export function BackupManager({
   initialJobs,
   estimatedBytes,
@@ -85,7 +94,10 @@ export function BackupManager({
         method: "POST",
         body: form,
       });
-      const payload = (await response.json()) as { error?: string; job?: AdminBackupJob };
+      const payload = (await readActionPayload(response)) as {
+        error?: string;
+        job?: AdminBackupJob;
+      };
       if (!response.ok || !payload.job) {
         notifyAction(
           { ok: false, error: payload.error || "Failed to create backup job" },
@@ -104,6 +116,17 @@ export function BackupManager({
     event.preventDefault();
     setRestorePending(true);
     try {
+      if (sourceType === "upload" && file && file.size > uploadLimitBytes) {
+        notifyAction(
+          {
+            ok: false,
+            error: `Backup ZIP is too large.\nChoose a file under ${formatBytes(uploadLimitBytes)} or use a remote link instead.`,
+          },
+          "",
+        );
+        return;
+      }
+
       const form = new FormData();
       form.set("kind", "restore");
       form.set("sourceType", sourceType);
@@ -118,10 +141,17 @@ export function BackupManager({
         method: "POST",
         body: form,
       });
-      const payload = (await response.json()) as { error?: string; job?: AdminBackupJob };
+      const payload = (await readActionPayload(response)) as {
+        error?: string;
+        job?: AdminBackupJob;
+      };
       if (!response.ok || !payload.job) {
+        const fallbackError =
+          sourceType === "upload"
+            ? `Failed to create restore job.\nIf this is an uploaded ZIP, make sure it is under ${formatBytes(uploadLimitBytes)} or use a remote link instead.`
+            : "Failed to create restore job";
         notifyAction(
-          { ok: false, error: payload.error || "Failed to create restore job" },
+          { ok: false, error: payload.error || fallbackError },
           "",
         );
         return;

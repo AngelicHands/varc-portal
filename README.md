@@ -112,6 +112,14 @@ Site managers can use **Admin → Backup** to queue a background backup or resto
 
 Backup artifacts use local disk (`BACKUP_ARTIFACT_DIR`) in local development or S3-compatible object storage (`BACKUP_S3_BUCKET` / `BACKUP_S3_PREFIX`) when `STORAGE_DRIVER=s3`.
 
+To run both the app and the local backup worker together during development:
+
+```bash
+pnpm dev:all
+```
+
+That starts `next dev` on port `3099` and the compiled Node.js backup worker in the same terminal session.
+
 ## Docker Compose (app + Mongo)
 
 ```bash
