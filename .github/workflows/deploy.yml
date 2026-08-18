@@ -75,21 +75,26 @@ jobs:
       - name: Update deployment image
         run: |
           IMAGE="${{ steps.image.outputs.name }}:${{ steps.version.outputs.tag }}"
-          FILE="deploy/k8s/deployment.yaml"
-          if ! grep -q 'image: ' "${FILE}"; then
-            echo "::error::No image field in ${FILE}"
-            exit 1
-          fi
-          sed -i.bak -E "s|image:[[:space:]]*.*$|image: ${IMAGE}|" "${FILE}"
-          rm -f "${FILE}.bak"
-          echo "Updated image to ${IMAGE}"
-          grep -n 'image:' "${FILE}"
+          for FILE in deploy/k8s/deployment.yaml deploy/k8s/backup-worker.yaml; do
+            if [[ ! -f "${FILE}" ]]; then
+              echo "Skipping ${FILE} (not found)"
+              continue
+            fi
+            if ! grep -q 'image: ' "${FILE}"; then
+              echo "::error::No image field in ${FILE}"
+              exit 1
+            fi
+            sed -i.bak -E "s|image:[[:space:]]*.*$|image: ${IMAGE}|" "${FILE}"
+            rm -f "${FILE}.bak"
+            echo "Updated ${FILE} to ${IMAGE}"
+            grep -n 'image:' "${FILE}"
+          done
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/k8s/deployment.yaml
+          git add deploy/k8s/deployment.yaml deploy/k8s/backup-worker.yaml
           if git diff --staged --quiet; then
             echo "Image already set to ${{ steps.image.outputs.name }}:${{ steps.version.outputs.tag }}; nothing to commit."
             exit 0
