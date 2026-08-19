@@ -955,6 +955,7 @@ export async function savePageAction(
       existing.template = legacyTemplate;
       existing.templateKey = templateKey;
       existing.set("fontFamily", data.fontFamily?.trim() || "default");
+      existing.ogImageUrl = data.ogImageUrl.trim();
       existing.layoutOverride = layoutOverride;
       existing.galleryItems = data.galleryItems;
       existing.sortOrder = data.sortOrder;
@@ -969,6 +970,7 @@ export async function savePageAction(
       template: legacyTemplate,
       templateKey,
       fontFamily: data.fontFamily?.trim() || "default",
+      ogImageUrl: data.ogImageUrl.trim(),
       layoutOverride,
       galleryItems: data.galleryItems,
       sortOrder: data.sortOrder,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deletePageAction, savePageAction } from "@/lib/actions";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/blocks/types";
 import { RichTextEditor } from "@/components/admin/rich-text-editor";
 import { PageGalleryField } from "@/components/admin/page-gallery-field";
+import { ImageSourceField } from "@/components/admin/image-source-field";
 import { TemplateLayoutBuilder } from "@/components/admin/template-builder/template-layout-builder";
 import { useConfirm } from "@/components/admin/use-confirm";
 import { notifyAction } from "@/components/admin/admin-toast";
@@ -42,6 +43,46 @@ const emptyLocale = {
   metaTitle: "",
   metaDescription: "",
 };
+
+function ExpandableSection({
+  title,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-3 text-left text-sm font-semibold text-gray-900 hover:bg-gray-50"
+      >
+        <span>{title}</span>
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4 shrink-0 text-gray-500"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          {expanded ? <path d="m6 14 6-6 6 6" /> : <path d="m6 10 6 6 6-6" />}
+        </svg>
+      </button>
+      {expanded ? (
+        <div className="grid gap-4 border-t border-gray-200 p-5">{children}</div>
+      ) : null}
+    </div>
+  );
+}
 
 function layoutFromTemplate(
   templateKey: string,
@@ -74,6 +115,8 @@ export function PageEditor({
     };
   });
   const [tab, setTab] = useState<"vi" | "en">("vi");
+  const [templatesExpanded, setTemplatesExpanded] = useState(true);
+  const [propertiesExpanded, setPropertiesExpanded] = useState(true);
   const customize = form.layoutOverride != null;
 
   const previewSlug = useMemo(
@@ -189,7 +232,11 @@ export function PageEditor({
         </div>
       </div>
 
-      <div className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5">
+      <ExpandableSection
+        title="Templates"
+        expanded={templatesExpanded}
+        onToggle={() => setTemplatesExpanded((open) => !open)}
+      >
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block text-sm">
             <span className="mb-1 block font-medium">Template</span>
@@ -256,6 +303,7 @@ export function PageEditor({
             onChange={(e) => {
               if (e.target.checked) {
                 const existing = form.layoutOverride as TemplateLayout | null;
+                setTemplatesExpanded(true);
                 setForm((prev) => ({
                   ...prev,
                   layoutOverride: existing
@@ -281,7 +329,13 @@ export function PageEditor({
             formOptions={formOptions}
           />
         ) : null}
+      </ExpandableSection>
 
+      <ExpandableSection
+        title="Page properties"
+        expanded={propertiesExpanded}
+        onToggle={() => setPropertiesExpanded((open) => !open)}
+      >
         <label className="block text-sm">
           <span className="mb-1 block font-medium">Title ({tab.toUpperCase()})</span>
           <input
@@ -327,6 +381,29 @@ export function PageEditor({
           />
         </div>
         <div className="grid gap-4 md:grid-cols-2">
+          <label className="block text-sm md:col-span-2">
+            <span className="mb-1 block font-medium">Sort order</span>
+            <input
+              type="number"
+              value={form.sortOrder}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  sortOrder: Number(e.target.value) || 0,
+                }))
+              }
+              className="w-full rounded border border-gray-300 px-3 py-2"
+            />
+            <span className="mt-1 block text-xs text-gray-500">
+              Controls order in the admin pages list. Navigation is managed in{" "}
+              <Link href="/admin/menu" className="underline">
+                Menus
+              </Link>
+              .
+            </span>
+          </label>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
           <label className="block text-sm">
             <span className="mb-1 block font-medium">Meta title</span>
             <input
@@ -346,31 +423,29 @@ export function PageEditor({
             />
           </label>
         </div>
-      </div>
-
-      <div className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 md:grid-cols-2">
-        <label className="block text-sm md:col-span-1">
-          <span className="mb-1 block font-medium">Sort order</span>
-          <input
-            type="number"
-            value={form.sortOrder}
-            onChange={(e) =>
+        <ImageSourceField
+          label="OG image"
+          description="Social link previews. Empty falls back to the first gallery image on gallery pages."
+          value={form.ogImageUrl ?? ""}
+          onChange={(ogImageUrl) =>
+            setForm((prev) => ({ ...prev, ogImageUrl }))
+          }
+        />
+        {isGallery && form.galleryItems[0]?.url && !form.ogImageUrl ? (
+          <button
+            type="button"
+            onClick={() =>
               setForm((prev) => ({
                 ...prev,
-                sortOrder: Number(e.target.value) || 0,
+                ogImageUrl: prev.galleryItems[0]?.url ?? "",
               }))
             }
-            className="w-full rounded border border-gray-300 px-3 py-2"
-          />
-          <span className="mt-1 block text-xs text-gray-500">
-            Controls order in the admin pages list. Navigation is managed in{" "}
-            <Link href="/admin/menu" className="underline">
-              Menus
-            </Link>
-            .
-          </span>
-        </label>
-      </div>
+            className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-50"
+          >
+            Use first gallery image as OG image
+          </button>
+        ) : null}
+      </ExpandableSection>
 
       {pageId ? (
         <div className="flex justify-end">
@@ -394,6 +469,7 @@ export const emptyPageForm: PageFormValues = {
   status: "draft",
   templateKey: "custom",
   fontFamily: "default",
+  ogImageUrl: "",
   layoutOverride: null,
   galleryItems: [],
   sortOrder: 0,

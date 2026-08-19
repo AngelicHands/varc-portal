@@ -83,6 +83,7 @@ export default async function EditPagePage({ params }: Props) {
           status: page.status === "published" ? "published" : "draft",
           templateKey,
           fontFamily: page.fontFamily?.trim() || "default",
+          ogImageUrl: page.ogImageUrl?.trim() ?? "",
           layoutOverride: parseLayout(page.layoutOverride) ?? null,
           galleryItems,
           sortOrder: page.sortOrder ?? 0,

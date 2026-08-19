@@ -51,7 +51,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const en = getPageLocale(page, "en");
   const vi = getPageLocale(page, "vi");
   const galleryImages = galleryImagesFromPage(page);
-  const ogImage = galleryImages[0]?.url;
+  const ogImage =
+    page.ogImageUrl?.trim() || galleryImages[0]?.url || undefined;
 
   return {
     title: pageName,

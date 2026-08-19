@@ -51,6 +51,7 @@ const PageSchema = new Schema(
       default: "default",
       trim: true,
     },
+    ogImageUrl: { type: String, default: "" },
     /** When set, overrides the assigned template layout for this page only. */
     layoutOverride: { type: Schema.Types.Mixed, default: null },
     galleryItems: { type: [GalleryItemSchema], default: [] },
@@ -121,6 +122,7 @@ export type PageDocument = {
   template?: PageTemplateLegacy;
   templateKey: string;
   fontFamily?: string;
+  ogImageUrl?: string;
   layoutOverride?: TemplateLayout | null;
   galleryItems: PageGalleryItem[];
   sortOrder: number;

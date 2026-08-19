@@ -150,6 +150,7 @@ export const pageFormSchema = z
       .max(200)
       .optional()
       .transform((value) => value || "default"),
+    ogImageUrl: safeUrlSchema,
     /** When set, page uses this layout instead of the template's layout. */
     layoutOverride: z.unknown().nullable().optional(),
     galleryItems: z.array(pageGalleryItemSchema).max(500),
