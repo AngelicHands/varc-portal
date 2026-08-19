@@ -1,12 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import {
-  EditorContent,
-  EditorContext,
-  useEditor,
-  type Editor,
-} from "@tiptap/react"
+import { EditorContent, EditorContext, useEditor, useEditorState, type Editor } from "@tiptap/react"
 
 // --- Tiptap Core Extensions ---
 import { StarterKit } from "@tiptap/starter-kit"
@@ -55,6 +50,11 @@ import { FileUploadButton } from "@/components/tiptap-ui/file-upload-button"
 import { ImageUploadButton } from "@/components/tiptap-ui/image-upload-button"
 import { MediaLibraryButton } from "@/components/tiptap-ui/media-library-button"
 import { ImageSizeMenu } from "@/components/tiptap-ui/image-size-menu"
+import {
+  getTableControlState,
+  TableControlsMenu,
+  TableEditButtons,
+} from "@/components/tiptap-ui/table-controls-menu"
 import { ListDropdownMenu } from "@/components/tiptap-ui/list-dropdown-menu"
 import { BlockquoteButton } from "@/components/tiptap-ui/blockquote-button"
 import { CodeBlockButton } from "@/components/tiptap-ui/code-block-button"
@@ -80,12 +80,7 @@ import {
 import { ArrowLeftIcon } from "@/components/tiptap-icons/arrow-left-icon"
 import { HighlighterIcon } from "@/components/tiptap-icons/highlighter-icon"
 import { LinkIcon } from "@/components/tiptap-icons/link-icon"
-import { TableColumnAddIcon } from "@/components/tiptap-icons/table-column-add-icon"
-import { TableColumnRemoveIcon } from "@/components/tiptap-icons/table-column-remove-icon"
 import { TableIcon } from "@/components/tiptap-icons/table-icon"
-import { TableRemoveIcon } from "@/components/tiptap-icons/table-remove-icon"
-import { TableRowAddIcon } from "@/components/tiptap-icons/table-row-add-icon"
-import { TableRowRemoveIcon } from "@/components/tiptap-icons/table-row-remove-icon"
 
 // --- Hooks ---
 import { useIsBreakpoint } from "@/hooks/use-is-breakpoint"
@@ -129,15 +124,12 @@ const MainToolbarContent = ({
   searchAndReplaceButtonRef: React.RefObject<HTMLButtonElement | null>
   isMobile: boolean
 }) => {
-  const inTable = editor?.isActive("table") ?? false
-  const canInsertTable =
-    editor?.can().chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() ??
-    false
-  const canAddRow = editor?.can().chain().focus().addRowAfter().run() ?? false
-  const canAddColumn = editor?.can().chain().focus().addColumnAfter().run() ?? false
-  const canDeleteRow = editor?.can().chain().focus().deleteRow().run() ?? false
-  const canDeleteColumn = editor?.can().chain().focus().deleteColumn().run() ?? false
-  const canDeleteTable = editor?.can().chain().focus().deleteTable().run() ?? false
+  const tableUi = useEditorState({
+    editor,
+    selector: ({ editor: current }) => getTableControlState(current),
+  })
+  const inTable = tableUi?.inTable ?? false
+  const canInsertTable = tableUi?.canInsertTable ?? false
 
   return (
     <>
@@ -216,59 +208,8 @@ const MainToolbarContent = ({
         >
           <TableIcon className="tiptap-button-icon" />
         </Button>
-        {inTable ? (
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!canAddRow}
-              data-disabled={!canAddRow}
-              onClick={() => editor?.chain().focus().addRowAfter().run()}
-              tooltip="Add row"
-            >
-              <TableRowAddIcon className="tiptap-button-icon" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!canAddColumn}
-              data-disabled={!canAddColumn}
-              onClick={() => editor?.chain().focus().addColumnAfter().run()}
-              tooltip="Add column"
-            >
-              <TableColumnAddIcon className="tiptap-button-icon" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!canDeleteRow}
-              data-disabled={!canDeleteRow}
-              onClick={() => editor?.chain().focus().deleteRow().run()}
-              tooltip="Delete row"
-            >
-              <TableRowRemoveIcon className="tiptap-button-icon" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!canDeleteColumn}
-              data-disabled={!canDeleteColumn}
-              onClick={() => editor?.chain().focus().deleteColumn().run()}
-              tooltip="Delete column"
-            >
-              <TableColumnRemoveIcon className="tiptap-button-icon" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={!canDeleteTable}
-              data-disabled={!canDeleteTable}
-              onClick={() => editor?.chain().focus().deleteTable().run()}
-              tooltip="Delete table"
-            >
-              <TableRemoveIcon className="tiptap-button-icon" />
-            </Button>
-          </>
+        {inTable && editor && tableUi ? (
+          <TableEditButtons editor={editor} state={tableUi} />
         ) : null}
       </ToolbarGroup>
 
@@ -488,6 +429,7 @@ function SimpleEditorClient({
         />
 
         <ImageSizeMenu editor={editor} />
+        <TableControlsMenu editor={editor} />
 
         <EditorContent
           editor={editor}
