@@ -67,6 +67,8 @@ export function sanitizeHtml(html: string): string {
       "colwidth",
       "colspan",
       "rowspan",
+      "align",
+      "valign",
     ],
     FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input"],
     ALLOW_UNKNOWN_PROTOCOLS: false,

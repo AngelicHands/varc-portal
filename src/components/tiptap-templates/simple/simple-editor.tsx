@@ -16,10 +16,9 @@ import { FindAndReplace } from "@tiptap/extension-find-and-replace"
 import { FileHandler } from "@tiptap/extension-file-handler"
 import {
   Table,
-  TableCell,
-  TableHeader,
   TableRow,
 } from "@tiptap/extension-table"
+import { AlignedTableCell, AlignedTableHeader } from "@/components/tiptap-node/table-node/aligned-table-cell"
 import { Selection } from "@tiptap/extensions"
 
 // --- UI Primitives ---
@@ -322,8 +321,8 @@ function SimpleEditorClient({
         renderWrapper: true,
       }),
       TableRow,
-      TableHeader,
-      TableCell,
+      AlignedTableHeader,
+      AlignedTableCell,
       Typography,
       Superscript,
       Subscript,

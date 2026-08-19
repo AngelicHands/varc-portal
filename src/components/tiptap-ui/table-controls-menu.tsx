@@ -25,6 +25,11 @@ import { TableRowMoveUpIcon } from "@/components/tiptap-icons/table-row-move-up-
 import { TableRowRemoveIcon } from "@/components/tiptap-icons/table-row-remove-icon"
 import { TableSplitCellIcon } from "@/components/tiptap-icons/table-split-cell-icon"
 import { TableSplitCellVerticalIcon } from "@/components/tiptap-icons/table-split-cell-vertical-icon"
+import {
+  getCellVerticalAlign,
+  TableCellVerticalAlignButtons,
+  type CellVerticalAlign,
+} from "@/components/tiptap-ui/table-cell-align-buttons"
 
 export type TableControlState = {
   inTable: boolean
@@ -43,6 +48,7 @@ export type TableControlState = {
   showSplitCell: boolean
   canSplitCellHorizontally: boolean
   canSplitCellVertically: boolean
+  cellVerticalAlign: CellVerticalAlign
 }
 
 const EMPTY_TABLE_CONTROL_STATE: TableControlState = {
@@ -62,6 +68,7 @@ const EMPTY_TABLE_CONTROL_STATE: TableControlState = {
   showSplitCell: false,
   canSplitCellHorizontally: false,
   canSplitCellVertically: false,
+  cellVerticalAlign: "top",
 }
 
 function getSelectedTableRect(editor: Editor) {
@@ -329,6 +336,7 @@ export function getTableControlState(editor: Editor | null): TableControlState {
     showSplitCell: selectedCellCount === 1,
     canSplitCellHorizontally: canSplitCell,
     canSplitCellVertically: canSplitCell,
+    cellVerticalAlign: inTable ? getCellVerticalAlign(editor) : "top",
   }
 }
 
@@ -433,6 +441,12 @@ export function TableEditButtons({
           ) : null}
         </>
       ) : null}
+      <span className="table-controls-menu__separator" aria-hidden />
+      <TableCellVerticalAlignButtons
+        editor={editor}
+        verticalAlign={state.cellVerticalAlign}
+        size={size}
+      />
       <span className="table-controls-menu__separator" aria-hidden />
       <Button
         type="button"
