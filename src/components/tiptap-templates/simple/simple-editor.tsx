@@ -52,7 +52,6 @@ import { MediaLibraryButton } from "@/components/tiptap-ui/media-library-button"
 import { ImageSizeMenu } from "@/components/tiptap-ui/image-size-menu"
 import {
   getTableControlState,
-  TableControlsMenu,
   TableEditButtons,
 } from "@/components/tiptap-ui/table-controls-menu"
 import { ListDropdownMenu } from "@/components/tiptap-ui/list-dropdown-menu"
@@ -429,7 +428,6 @@ function SimpleEditorClient({
         />
 
         <ImageSizeMenu editor={editor} />
-        <TableControlsMenu editor={editor} />
 
         <EditorContent
           editor={editor}

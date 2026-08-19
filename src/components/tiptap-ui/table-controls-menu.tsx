@@ -1,6 +1,5 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useState } from "react"
 import type { Editor } from "@tiptap/react"
 import {
   isInTable,
@@ -10,25 +9,15 @@ import {
 } from "@tiptap/pm/tables"
 
 import { Button } from "@/components/tiptap-ui-primitive/button"
-import { ArrowLeftIcon } from "@/components/tiptap-icons/arrow-left-icon"
-import { ArrowRightIcon } from "@/components/tiptap-icons/arrow-right-icon"
-import { ChevronDownIcon } from "@/components/tiptap-icons/chevron-down-icon"
-import { ChevronUpIcon } from "@/components/tiptap-icons/chevron-up-icon"
 import { TableColumnAddIcon } from "@/components/tiptap-icons/table-column-add-icon"
+import { TableColumnMoveLeftIcon } from "@/components/tiptap-icons/table-column-move-left-icon"
+import { TableColumnMoveRightIcon } from "@/components/tiptap-icons/table-column-move-right-icon"
 import { TableColumnRemoveIcon } from "@/components/tiptap-icons/table-column-remove-icon"
 import { TableRemoveIcon } from "@/components/tiptap-icons/table-remove-icon"
 import { TableRowAddIcon } from "@/components/tiptap-icons/table-row-add-icon"
+import { TableRowMoveDownIcon } from "@/components/tiptap-icons/table-row-move-down-icon"
+import { TableRowMoveUpIcon } from "@/components/tiptap-icons/table-row-move-up-icon"
 import { TableRowRemoveIcon } from "@/components/tiptap-icons/table-row-remove-icon"
-
-type Props = {
-  editor: Editor | null
-}
-
-type MenuPosition = {
-  top: number
-  left: number
-  placeAbove: boolean
-}
 
 export type TableControlState = {
   inTable: boolean
@@ -56,11 +45,6 @@ const EMPTY_TABLE_CONTROL_STATE: TableControlState = {
   canMoveRowDown: false,
   canMoveColumnLeft: false,
   canMoveColumnRight: false,
-}
-
-export function isSelectionInTable(editor: Editor | null): boolean {
-  if (!editor || editor.isDestroyed) return false
-  return isInTable(editor.state)
 }
 
 function getSelectedTableRect(editor: Editor) {
@@ -133,17 +117,6 @@ export function getTableControlState(editor: Editor | null): TableControlState {
   }
 }
 
-function getTableAnchor(editor: Editor): HTMLElement | null {
-  const { from } = editor.state.selection
-  const { node } = editor.view.domAtPos(from)
-  const el = node instanceof HTMLElement ? node : node.parentElement
-  if (!el) return null
-  const table = el.closest("table")
-  if (table instanceof HTMLElement) return table
-  const wrapper = el.closest(".tableWrapper")
-  return wrapper instanceof HTMLElement ? wrapper : null
-}
-
 type TableEditButtonsProps = {
   editor: Editor
   state: TableControlState
@@ -166,7 +139,7 @@ export function TableEditButtons({
         tooltip="Move row up"
         onClick={() => moveCurrentTableRow(editor, -1)}
       >
-        <ChevronUpIcon className="tiptap-button-icon" />
+        <TableRowMoveUpIcon className="tiptap-button-icon" />
       </Button>
       <Button
         type="button"
@@ -177,7 +150,7 @@ export function TableEditButtons({
         tooltip="Move row down"
         onClick={() => moveCurrentTableRow(editor, 1)}
       >
-        <ChevronDownIcon className="tiptap-button-icon" />
+        <TableRowMoveDownIcon className="tiptap-button-icon" />
       </Button>
       <Button
         type="button"
@@ -188,7 +161,7 @@ export function TableEditButtons({
         tooltip="Move column left"
         onClick={() => moveCurrentTableColumn(editor, -1)}
       >
-        <ArrowLeftIcon className="tiptap-button-icon" />
+        <TableColumnMoveLeftIcon className="tiptap-button-icon" />
       </Button>
       <Button
         type="button"
@@ -199,7 +172,7 @@ export function TableEditButtons({
         tooltip="Move column right"
         onClick={() => moveCurrentTableColumn(editor, 1)}
       >
-        <ArrowRightIcon className="tiptap-button-icon" />
+        <TableColumnMoveRightIcon className="tiptap-button-icon" />
       </Button>
       <span className="table-controls-menu__separator" aria-hidden />
       <Button
@@ -258,105 +231,5 @@ export function TableEditButtons({
         <TableRemoveIcon className="tiptap-button-icon" />
       </Button>
     </>
-  )
-}
-
-export function TableControlsMenu({ editor }: Props) {
-  const [visible, setVisible] = useState(false)
-  const [position, setPosition] = useState<MenuPosition>({
-    top: 0,
-    left: 0,
-    placeAbove: true,
-  })
-  const [state, setState] = useState<TableControlState>(EMPTY_TABLE_CONTROL_STATE)
-
-  const syncMenu = useCallback(() => {
-    if (!editor || editor.isDestroyed || !editor.isEditable) {
-      setVisible(false)
-      return
-    }
-
-    if (!isSelectionInTable(editor)) {
-      setVisible(false)
-      return
-    }
-
-    const anchor = getTableAnchor(editor)
-    if (!anchor) {
-      setVisible(false)
-      return
-    }
-
-    const rect = anchor.getBoundingClientRect()
-    const menuWidth = 360
-    const menuHeight = 44
-    const gap = 8
-    const placeAbove = rect.top >= menuHeight + gap + 56
-    const top = placeAbove ? rect.top - gap : rect.top + gap
-    const left = Math.min(
-      Math.max(8 + menuWidth / 2, rect.right - menuWidth / 2),
-      window.innerWidth - 8 - menuWidth / 2,
-    )
-
-    setPosition({ top, left, placeAbove })
-    setState(getTableControlState(editor))
-    setVisible(true)
-  }, [editor])
-
-  useLayoutEffect(() => {
-    syncMenu()
-  }, [syncMenu])
-
-  useEffect(() => {
-    if (!editor) return
-
-    const onUpdate = () => {
-      requestAnimationFrame(() => syncMenu())
-    }
-
-    editor.on("selectionUpdate", onUpdate)
-    editor.on("transaction", onUpdate)
-    editor.on("focus", onUpdate)
-
-    const scrollParents: EventTarget[] = [window]
-    const content = editor.view.dom.closest(".simple-editor-content")
-    if (content) scrollParents.push(content)
-
-    scrollParents.forEach((target) => {
-      target.addEventListener("scroll", onUpdate, true)
-    })
-    window.addEventListener("resize", onUpdate)
-
-    return () => {
-      editor.off("selectionUpdate", onUpdate)
-      editor.off("transaction", onUpdate)
-      editor.off("focus", onUpdate)
-      scrollParents.forEach((target) => {
-        target.removeEventListener("scroll", onUpdate, true)
-      })
-      window.removeEventListener("resize", onUpdate)
-    }
-  }, [editor, syncMenu])
-
-  if (!editor || !visible) return null
-
-  return (
-    <div
-      className="table-controls-menu"
-      role="toolbar"
-      aria-label="Table options"
-      style={{
-        position: "fixed",
-        top: position.top,
-        left: position.left,
-        transform: position.placeAbove
-          ? "translate(-50%, -100%)"
-          : "translate(-50%, 0)",
-        zIndex: 80,
-      }}
-      onMouseDown={(event) => event.preventDefault()}
-    >
-      <TableEditButtons editor={editor} state={state} size="small" />
-    </div>
   )
 }
