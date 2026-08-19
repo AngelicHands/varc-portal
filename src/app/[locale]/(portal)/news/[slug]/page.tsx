@@ -15,7 +15,7 @@ import {
 import { canManageArticles } from "@/lib/roles";
 import type { AppLocale } from "@/i18n/routing";
 import { ArticleBody } from "@/components/portal/article-body";
-import { ArticleEditLink } from "@/components/portal/article-edit-link";
+import { PageEditButton } from "@/components/portal/page-edit-button";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { TemplateLayoutRenderer } from "@/components/portal/blocks/template-layout-renderer";
 import { newsHref } from "@/lib/locale-hrefs";
@@ -100,6 +100,12 @@ export default async function ArticlePage({ params }: Props) {
     Boolean(userId) &&
     (canManageArticles(session?.user) ||
       (authorId !== "" && authorId === userId));
+  const editButton = canEdit ? (
+    <PageEditButton
+      href={`/admin/articles/${articleId}`}
+      label={t("edit")}
+    />
+  ) : null;
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -132,7 +138,8 @@ export default async function ArticlePage({ params }: Props) {
         },
       );
       return (
-        <div className="py-10 md:py-14">
+        <div className="relative py-10 md:py-14">
+          {editButton}
           <SetLocaleAlternates
             vi={vi.slug ? newsHref(vi.slug) : null}
             en={en.slug ? newsHref(en.slug) : null}
@@ -141,19 +148,13 @@ export default async function ArticlePage({ params }: Props) {
             type="application/ld+json"
             dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
           />
-          <div className="mx-auto mb-6 flex max-w-6xl items-center justify-between gap-3 px-4 md:px-6">
+          <div className="mx-auto mb-6 max-w-6xl px-4 md:px-6">
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 text-sm text-accent transition hover:underline"
             >
               {t("backToNews")}
             </Link>
-            {canEdit ? (
-              <ArticleEditLink
-                href={`/admin/articles/${articleId}`}
-                label={t("edit")}
-              />
-            ) : null}
           </div>
           <TemplateLayoutRenderer
             layout={layout}
@@ -177,7 +178,9 @@ export default async function ArticlePage({ params }: Props) {
   }
 
   return (
-    <article className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
+    <div className="relative">
+      {editButton}
+      <article className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
       <SetLocaleAlternates
         vi={vi.slug ? newsHref(vi.slug) : null}
         en={en.slug ? newsHref(en.slug) : null}
@@ -186,32 +189,24 @@ export default async function ArticlePage({ params }: Props) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className="flex items-center justify-between gap-3">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-accent transition hover:underline"
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1.5 text-sm text-accent transition hover:underline"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
         >
-          <svg
-            viewBox="0 0 24 24"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M15 18 9 12l6-6" />
-          </svg>
-          {t("backToNews")}
-        </Link>
-        {canEdit ? (
-          <ArticleEditLink
-            href={`/admin/articles/${articleId}`}
-            label={t("edit")}
-          />
-        ) : null}
-      </div>
+          <path d="M15 18 9 12l6-6" />
+        </svg>
+        {t("backToNews")}
+      </Link>
       <header className="mt-6 border-b border-border pb-8">
         <h1 className="font-display text-4xl leading-tight text-foreground md:text-5xl">
           {content.title}
@@ -253,5 +248,6 @@ export default async function ArticlePage({ params }: Props) {
         />
       ) : null}
     </article>
+    </div>
   );
 }
