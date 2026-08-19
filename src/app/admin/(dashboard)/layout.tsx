@@ -1,6 +1,7 @@
 import { auth, signOut } from "@/auth";
 import {
   canManageEditorial,
+  canManagePages,
   canManageRoles,
   canManageSite,
   canManageUsers,
@@ -14,11 +15,12 @@ export default async function AdminDashboardLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  const role = session?.user?.role;
-  const showEditorial = canManageEditorial(role);
-  const showSite = canManageSite(role);
-  const showUsers = canManageUsers(role);
-  const showRoles = canManageRoles(role);
+  const user = session?.user;
+  const showEditorial = canManageEditorial(user);
+  const showPages = canManagePages(user);
+  const showSite = canManageSite(user);
+  const showUsers = canManageUsers(user);
+  const showRoles = canManageRoles(user);
 
   async function signOutAction() {
     "use server";
@@ -29,6 +31,7 @@ export default async function AdminDashboardLayout({
     <div className="min-h-[100dvh] bg-[var(--admin-bg)] text-[var(--admin-ink)] lg:flex">
       <AdminSidebar
         showEditorial={showEditorial}
+        showPages={showPages}
         showSite={showSite}
         showUsers={showUsers}
         showRoles={showRoles}

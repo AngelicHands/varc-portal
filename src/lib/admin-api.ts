@@ -3,7 +3,7 @@ import { canManageSite } from "@/lib/roles";
 
 export async function requireSiteAdminApi() {
   const session = await auth();
-  if (!session?.user?.id || !canManageSite(session.user.role)) {
+  if (!session?.user?.id || !canManageSite(session.user)) {
     return null;
   }
   return session;

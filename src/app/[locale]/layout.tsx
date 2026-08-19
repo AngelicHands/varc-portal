@@ -73,7 +73,7 @@ export default async function LocaleLayout({ children, params }: Props) {
     ? {
         name: session.user.name ?? null,
         email: session.user.email ?? null,
-        isAdmin: isAdminRole(session.user.role),
+        isAdmin: isAdminRole(session.user),
       }
     : null;
 

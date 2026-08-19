@@ -9,9 +9,17 @@ import {
   getGoogleClientSecret,
   isGoogleAuthConfigured,
 } from "@/lib/google-auth";
-import { isAdminRole, normalizeRoleKey, type Role } from "@/lib/roles";
+import {
+  defaultCapabilitiesFor,
+  normalizeRoleKey,
+  pickRoleCapabilities,
+  resolveCapabilities,
+  type Role,
+  type RoleCapabilityFlags,
+} from "@/lib/roles";
+import type { JWT } from "next-auth/jwt";
 import { User } from "@/models/User";
-import { ensureDefaultRoles } from "@/lib/app-roles";
+import { ensureDefaultRoles, getRoleCapabilities } from "@/lib/app-roles";
 
 declare module "next-auth" {
   interface User {
@@ -24,8 +32,30 @@ declare module "next-auth" {
       name?: string | null;
       image?: string | null;
       role: Role;
-    };
+    } & RoleCapabilityFlags;
   }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id?: string;
+    role?: Role;
+    canAccessAdmin?: boolean;
+    canManageContent?: boolean;
+    canManagePages?: boolean;
+    canManageSite?: boolean;
+    canManageUsers?: boolean;
+    canManageRoles?: boolean;
+  }
+}
+
+function applyCapabilitiesToToken(token: JWT, caps: RoleCapabilityFlags) {
+  token.canAccessAdmin = caps.canAccessAdmin;
+  token.canManageContent = caps.canManageContent;
+  token.canManagePages = caps.canManagePages;
+  token.canManageSite = caps.canManageSite;
+  token.canManageUsers = caps.canManageUsers;
+  token.canManageRoles = caps.canManageRoles;
 }
 
 const googleClientId = getGoogleClientId();
@@ -59,7 +89,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           user.role = role;
           await user.save();
         }
-        if (!isAdminRole(role)) return null;
+        const caps = await getRoleCapabilities(role);
+        if (!caps.canAccessAdmin) return null;
 
         return {
           id: String(user._id),
@@ -145,12 +176,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = normalizeRoleKey(token.role as string);
       }
 
+      try {
+        applyCapabilitiesToToken(
+          token,
+          await getRoleCapabilities(token.role as string | undefined),
+        );
+      } catch {
+        applyCapabilitiesToToken(
+          token,
+          defaultCapabilitiesFor(token.role as string | undefined),
+        );
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = String(token.id ?? "");
         session.user.role = normalizeRoleKey(token.role as string | undefined);
+        const caps = resolveCapabilities({
+          role: session.user.role,
+          ...pickRoleCapabilities(token),
+        });
+        session.user.canAccessAdmin = caps.canAccessAdmin;
+        session.user.canManageContent = caps.canManageContent;
+        session.user.canManagePages = caps.canManagePages;
+        session.user.canManageSite = caps.canManageSite;
+        session.user.canManageUsers = caps.canManageUsers;
+        session.user.canManageRoles = caps.canManageRoles;
       }
       return session;
     },

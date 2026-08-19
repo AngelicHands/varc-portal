@@ -11,7 +11,7 @@ import { AdminLocaleStatus } from "@/components/admin/admin-locale-status";
 import { ActiveRowActions } from "@/components/admin/active-row-actions";
 import { TrashRowActions } from "@/components/admin/trash-row-actions";
 import { EmptyTrashButton } from "@/components/admin/empty-trash-button";
-import { requireSitePage } from "@/lib/admin-access";
+import { requirePagesPage } from "@/lib/admin-access";
 import { PORTAL_TIMEZONE } from "@/lib/datetime-local";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ function formatAdminDateShort(value: Date | string | null | undefined) {
 }
 
 export default async function AdminPagesPage({ searchParams }: Props) {
-  await requireSitePage();
+  await requirePagesPage();
 
   const { tab } = await searchParams;
   const trash = tab === "trash";

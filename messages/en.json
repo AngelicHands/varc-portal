@@ -43,7 +43,8 @@
     "galleryKeyboardHint": "Use ← → arrow keys to browse",
     "galleryEmpty": "No images in this gallery yet.",
     "galleryClose": "Close",
-    "galleryLoading": "Opening gallery…"
+    "galleryLoading": "Opening gallery…",
+    "edit": "Edit page"
   },
   "footer": {
     "rights": "Vietnam Amateur Radio Club.",

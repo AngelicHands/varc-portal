@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { listAllMediaAdmin, listMediaAdmin } from "@/lib/media/library";
 import { logServerError, publicErrorMessage } from "@/lib/safe-error";
-import { isAdminRole } from "@/lib/roles";
+import { canManageEditorial } from "@/lib/roles";
 
 export const runtime = "nodejs";
 
@@ -10,7 +10,7 @@ const MAX_QUERY_LEN = 100;
 export async function GET(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user?.id || !isAdminRole(session.user.role)) {
+    if (!session?.user?.id || !canManageEditorial(session.user)) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -1,5 +1,5 @@
 import { PageEditor, emptyPageForm } from "@/components/admin/page-editor";
-import { requireSitePage } from "@/lib/admin-access";
+import { requirePagesPage } from "@/lib/admin-access";
 import { getLocaleContent, listAllArticles } from "@/lib/articles";
 import {
   listPageTemplateOptions,
@@ -11,7 +11,7 @@ import { categorySelectOptions, listCategories } from "@/lib/cms";
 import { listFormOptions } from "@/lib/forms";
 
 export default async function NewPagePage() {
-  await requireSitePage();
+  await requirePagesPage();
   const [templateOptions, templateDocs, articles, categories, forms] =
     await Promise.all([
       listPageTemplateOptions(),

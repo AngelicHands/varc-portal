@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import {
   canManageEditorial,
+  canManagePages,
   canManageSite,
   canManageUsers,
   canManageRoles,
@@ -10,7 +11,7 @@ import {
 
 export async function requireAdminPage() {
   const session = await auth();
-  if (!session?.user?.id || !isAdminRole(session.user.role)) {
+  if (!session?.user?.id || !isAdminRole(session.user)) {
     redirect("/admin/login");
   }
   return session;
@@ -18,7 +19,15 @@ export async function requireAdminPage() {
 
 export async function requireEditorialPage() {
   const session = await requireAdminPage();
-  if (!canManageEditorial(session.user.role)) {
+  if (!canManageEditorial(session.user)) {
+    redirect("/admin");
+  }
+  return session;
+}
+
+export async function requirePagesPage() {
+  const session = await requireAdminPage();
+  if (!canManagePages(session.user)) {
     redirect("/admin");
   }
   return session;
@@ -26,7 +35,7 @@ export async function requireEditorialPage() {
 
 export async function requireSitePage() {
   const session = await requireAdminPage();
-  if (!canManageSite(session.user.role)) {
+  if (!canManageSite(session.user)) {
     redirect("/admin");
   }
   return session;
@@ -34,7 +43,7 @@ export async function requireSitePage() {
 
 export async function requireUsersPage() {
   const session = await requireAdminPage();
-  if (!canManageUsers(session.user.role)) {
+  if (!canManageUsers(session.user)) {
     redirect("/admin");
   }
   return session;
@@ -42,7 +51,7 @@ export async function requireUsersPage() {
 
 export async function requireRolesPage() {
   const session = await requireAdminPage();
-  if (!canManageRoles(session.user.role)) {
+  if (!canManageRoles(session.user)) {
     redirect("/admin");
   }
   return session;

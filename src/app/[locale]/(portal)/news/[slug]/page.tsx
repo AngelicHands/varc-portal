@@ -98,7 +98,7 @@ export default async function ArticlePage({ params }: Props) {
   const userId = session?.user?.id ? String(session.user.id) : "";
   const canEdit =
     Boolean(userId) &&
-    (canManageArticles(session?.user?.role) ||
+    (canManageArticles(session?.user) ||
       (authorId !== "" && authorId === userId));
 
   const jsonLd = {

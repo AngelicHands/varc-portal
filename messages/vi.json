@@ -43,7 +43,8 @@
     "galleryKeyboardHint": "Dùng phím ← → để xem ảnh",
     "galleryEmpty": "Gallery chưa có ảnh.",
     "galleryClose": "Đóng",
-    "galleryLoading": "Đang mở gallery…"
+    "galleryLoading": "Đang mở gallery…",
+    "edit": "Sửa trang"
   },
   "footer": {
     "rights": "Hiệp hội Vô tuyến Nghiệp dư Việt Nam.",

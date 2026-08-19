@@ -37,7 +37,7 @@ function setExpandedPreference(next: boolean) {
   window.dispatchEvent(new Event(SIDEBAR_EVENT));
 }
 
-type NavFlag = "always" | "editorial" | "site" | "users" | "roles";
+type NavFlag = "always" | "editorial" | "pages" | "site" | "users" | "roles";
 
 type NavItem = {
   href: string;
@@ -191,7 +191,7 @@ const navGroups: NavGroup[] = [
       {
         href: "/admin/pages",
         label: "Pages",
-        flag: "site",
+        flag: "pages",
         icon: (
           <Icon>
             <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
@@ -269,12 +269,14 @@ function isLinkVisible(
   link: NavItem,
   flags: {
     showEditorial: boolean;
+    showPages: boolean;
     showSite: boolean;
     showUsers: boolean;
     showRoles: boolean;
   },
 ) {
   if (link.flag === "editorial") return flags.showEditorial;
+  if (link.flag === "pages") return flags.showPages;
   if (link.flag === "site") return flags.showSite;
   if (link.flag === "users") return flags.showUsers;
   if (link.flag === "roles") return flags.showRoles;
@@ -283,6 +285,7 @@ function isLinkVisible(
 
 type Props = {
   showEditorial: boolean;
+  showPages: boolean;
   showSite: boolean;
   showUsers: boolean;
   showRoles: boolean;
@@ -292,6 +295,7 @@ type Props = {
 
 export function AdminSidebar({
   showEditorial,
+  showPages,
   showSite,
   showUsers,
   showRoles,
@@ -316,6 +320,7 @@ export function AdminSidebar({
       items: group.items.filter((link) =>
         isLinkVisible(link, {
           showEditorial,
+          showPages,
           showSite,
           showUsers,
           showRoles,

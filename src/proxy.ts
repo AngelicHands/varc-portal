@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import createMiddleware from "next-intl/middleware";
-import { isAdminRole, canManageSite, canManageUsers, canManageRoles, type Role } from "@/lib/roles";
+import { isAdminRole, canManageSite, canManagePages, canManageUsers, canManageRoles, pickRoleCapabilities, type Role } from "@/lib/roles";
 import { routing } from "@/i18n/routing";
 
 const intlMiddleware = createMiddleware(routing);
@@ -71,7 +71,11 @@ export default async function proxy(req: NextRequest) {
       ),
     });
     const role = token?.role as Role | undefined;
-    const allowed = isAdminRole(role);
+    const caps = {
+      role,
+      ...pickRoleCapabilities(token ?? undefined),
+    };
+    const allowed = isAdminRole(caps);
     const origin = publicOrigin(req);
     const homeUrl = new URL(`/${routing.defaultLocale}`, origin);
 
@@ -95,20 +99,22 @@ export default async function proxy(req: NextRequest) {
       if (
         (pathMatches(pathname, "/admin/settings") ||
           pathMatches(pathname, "/admin/backup") ||
-          pathMatches(pathname, "/admin/pages") ||
           pathMatches(pathname, "/admin/menu") ||
           pathMatches(pathname, "/admin/mailbox") ||
           pathMatches(pathname, "/admin/callsigns") ||
           pathMatches(pathname, "/admin/forms") ||
           pathMatches(pathname, "/admin/templates")) &&
-        !canManageSite(role)
+        !canManageSite(caps)
       ) {
         return NextResponse.redirect(adminHome);
       }
-      if (pathMatches(pathname, "/admin/users") && !canManageUsers(role)) {
+      if (pathMatches(pathname, "/admin/pages") && !canManagePages(caps)) {
         return NextResponse.redirect(adminHome);
       }
-      if (pathMatches(pathname, "/admin/roles") && !canManageRoles(role)) {
+      if (pathMatches(pathname, "/admin/users") && !canManageUsers(caps)) {
+        return NextResponse.redirect(adminHome);
+      }
+      if (pathMatches(pathname, "/admin/roles") && !canManageRoles(caps)) {
         return NextResponse.redirect(adminHome);
       }
     }

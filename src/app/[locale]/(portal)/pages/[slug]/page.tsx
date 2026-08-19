@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { getTranslations } from "next-intl/server";
+import { auth } from "@/auth";
 import {
   getPageLocale,
   getPublishedPageBySlug,
@@ -11,11 +12,13 @@ import type { AppLocale } from "@/i18n/routing";
 import { TemplateLayoutRenderer } from "@/components/portal/blocks/template-layout-renderer";
 import { GalleryPageView } from "@/components/portal/gallery-page-view";
 import { HtmlContent } from "@/components/portal/html-content";
+import { PageEditButton } from "@/components/portal/page-edit-button";
 import { PageFontScope } from "@/components/portal/page-font-scope";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { pageHref } from "@/lib/locale-hrefs";
 import { Link } from "@/i18n/navigation";
 import { isEmptyHtml } from "@/lib/html";
+import { canManagePages } from "@/lib/roles";
 import {
   resolvePageLayout,
   resolvePageTemplateKey,
@@ -77,11 +80,20 @@ export default async function CmsPage({ params }: Props) {
 
   const t = await getTranslations("page");
   const tHome = await getTranslations("home");
-  const page = await getPublishedPageBySlug(locale, slug);
+  const [page, session] = await Promise.all([
+    getPublishedPageBySlug(locale, slug),
+    auth(),
+  ]);
   const content = page ? getPageLocale(page, locale) : null;
   if (!page || !content?.slug || !content.title) {
     notFound();
   }
+
+  const canEdit = canManagePages(session?.user);
+  const editHref = `/admin/pages/${String(page._id)}`;
+  const editButton = canEdit ? (
+    <PageEditButton href={editHref} label={t("edit")} />
+  ) : null;
 
   const vi = getPageLocale(page, "vi");
   const en = getPageLocale(page, "en");
@@ -94,7 +106,9 @@ export default async function CmsPage({ params }: Props) {
 
   if (templateKey === "gallery") {
     return (
-      <PageFontScope fontFamily={page.fontFamily}>
+      <div className="relative">
+        {editButton}
+        <PageFontScope fontFamily={page.fontFamily}>
         <SetLocaleAlternates
           vi={vi.slug ? pageHref(vi.slug) : null}
           en={en.slug ? pageHref(en.slug) : null}
@@ -112,7 +126,8 @@ export default async function CmsPage({ params }: Props) {
           </div>
         ) : null}
         <GalleryPageView images={galleryImages} title={content.title} />
-      </PageFontScope>
+        </PageFontScope>
+      </div>
     );
   }
 
@@ -126,7 +141,9 @@ export default async function CmsPage({ params }: Props) {
 
   if (!hasBlocks) {
     return (
-      <PageFontScope fontFamily={page.fontFamily}>
+      <div className="relative">
+        {editButton}
+        <PageFontScope fontFamily={page.fontFamily}>
         <article className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
           <SetLocaleAlternates
             vi={vi.slug ? pageHref(vi.slug) : null}
@@ -139,7 +156,8 @@ export default async function CmsPage({ params }: Props) {
           </header>
           <HtmlContent html={content.content} />
         </article>
-      </PageFontScope>
+        </PageFontScope>
+      </div>
     );
   }
 
@@ -153,7 +171,9 @@ export default async function CmsPage({ params }: Props) {
   );
 
   return (
-    <PageFontScope
+    <div className="relative">
+      {editButton}
+      <PageFontScope
       fontFamily={page.fontFamily}
       className={startsWithHero ? "" : "py-10 md:py-14"}
     >
@@ -177,6 +197,7 @@ export default async function CmsPage({ params }: Props) {
           backHome: t("backHome"),
         }}
       />
-    </PageFontScope>
+      </PageFontScope>
+    </div>
   );
 }

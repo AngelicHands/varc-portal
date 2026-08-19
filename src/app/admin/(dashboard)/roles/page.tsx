@@ -14,7 +14,7 @@ export default async function AdminRolesPage() {
       <h1 className="text-2xl font-semibold">Roles</h1>
       <p className="mt-2 text-sm text-gray-600">
         Built-in application roles. Click a card to edit display name,
-        description, or assignment availability.
+        description, assignment availability, and permission categories.
       </p>
 
       <RolesBoard roles={roles} />

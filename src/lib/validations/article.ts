@@ -226,6 +226,12 @@ export const roleFormSchema = z.object({
   label: z.string().trim().min(1, "Label is required").max(200),
   description: z.string().trim().max(MAX_TEXT_CHARS),
   enabled: z.boolean(),
+  canAccessAdmin: z.boolean(),
+  canManageContent: z.boolean(),
+  canManagePages: z.boolean(),
+  canManageSite: z.boolean(),
+  canManageUsers: z.boolean(),
+  canManageRoles: z.boolean(),
 });
 
 export type RoleFormValues = z.infer<typeof roleFormSchema>;

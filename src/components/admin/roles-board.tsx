@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { saveRoleAction } from "@/lib/actions";
 import type { PublicRole } from "@/lib/app-roles";
 import { notifyAction } from "@/components/admin/admin-toast";
+import {
+  ROLE_PERMISSION_CATEGORIES,
+  type RoleCapabilityFlags,
+  type RoleCapabilityKey,
+} from "@/lib/roles";
 
 type Props = {
   roles: PublicRole[];
@@ -14,6 +19,7 @@ function capabilityBadges(role: PublicRole) {
   const items: string[] = [];
   if (role.canAccessAdmin) items.push("Admin");
   if (role.canManageContent) items.push("Articles & Categories");
+  if (role.canManagePages) items.push("Pages");
   if (role.canManageSite) items.push("Site");
   if (role.canManageUsers) items.push("Users");
   if (role.canManageRoles) items.push("Roles");
@@ -107,7 +113,41 @@ function RoleEditModal({
   const [label, setLabel] = useState(role.label);
   const [description, setDescription] = useState(role.description);
   const [enabled, setEnabled] = useState(role.enabled);
+  const [permissions, setPermissions] = useState<RoleCapabilityFlags>({
+    canAccessAdmin: role.canAccessAdmin,
+    canManageContent: role.canManageContent,
+    canManagePages: role.canManagePages,
+    canManageSite: role.canManageSite,
+    canManageUsers: role.canManageUsers,
+    canManageRoles: role.canManageRoles,
+  });
   const lockedEnable = role.key === "setup_admin";
+  const lockedPermissions = new Set<RoleCapabilityKey>(
+    role.key === "setup_admin" ? ["canAccessAdmin", "canManageRoles"] : [],
+  );
+
+  function setPermission(key: RoleCapabilityKey, value: boolean) {
+    if (lockedPermissions.has(key)) return;
+    setPermissions((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === "canAccessAdmin" && !value) {
+        return {
+          canAccessAdmin: false,
+          canManageContent: false,
+          canManagePages: false,
+          canManageSite: false,
+          canManageUsers: false,
+          canManageRoles: lockedPermissions.has("canManageRoles")
+            ? prev.canManageRoles
+            : false,
+        };
+      }
+      if (key !== "canAccessAdmin" && value) {
+        next.canAccessAdmin = true;
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -132,7 +172,7 @@ function RoleEditModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-lg rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
+        className="w-full max-w-xl rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
@@ -189,10 +229,47 @@ function RoleEditModal({
             />
             <span>Enabled for assignment</span>
           </label>
-          <p className="text-xs text-gray-500">
-            Capability flags are fixed for built-in roles. Editor can manage
-            articles and categories only.
-          </p>
+          <fieldset className="rounded-lg border border-gray-200 p-3">
+            <legend className="px-1 text-sm font-medium">Permissions</legend>
+            <div className="grid gap-2">
+              {ROLE_PERMISSION_CATEGORIES.map((category) => {
+                const locked = lockedPermissions.has(category.key);
+                return (
+                  <label
+                    key={category.key}
+                    className="flex items-start gap-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={permissions[category.key]}
+                      disabled={locked}
+                      onChange={(e) =>
+                        setPermission(category.key, e.target.checked)
+                      }
+                    />
+                    <span>
+                      <span className="font-medium">{category.label}</span>
+                      <span className="block text-xs text-gray-500">
+                        {category.description}
+                        {locked ? " (required)" : ""}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+          {role.key === "setup_admin" ? (
+            <p className="text-xs text-gray-500">
+              Setup Admin must keep Admin and Roles enabled so the system can
+              still be administered.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500">
+              Changes apply after users refresh or sign in again.
+            </p>
+          )}
         </div>
 
         <div className="mt-6 flex justify-end gap-2">
@@ -213,6 +290,7 @@ function RoleEditModal({
                   label,
                   description,
                   enabled,
+                  ...permissions,
                 });
                 if (!notifyAction(result, "Role saved")) {
                   setError(result.error);

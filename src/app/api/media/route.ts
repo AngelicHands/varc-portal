@@ -3,7 +3,7 @@ import { connectDb } from "@/lib/db";
 import { getMediaConfig } from "@/lib/media/config";
 import { buildObjectKey, putObject } from "@/lib/media/storage";
 import { logServerError, publicErrorMessage } from "@/lib/safe-error";
-import { isAdminRole } from "@/lib/roles";
+import { canManageEditorial } from "@/lib/roles";
 import { Media, mediaKindFromContentType } from "@/models/Media";
 import mongoose from "mongoose";
 
@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (!session?.user?.id || !isAdminRole(session.user.role)) {
+    if (!session?.user?.id || !canManageEditorial(session.user)) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 

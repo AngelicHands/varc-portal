@@ -1,4 +1,5 @@
 import { getTranslations, setRequestLocale } from "next-intl/server";
+import { auth } from "@/auth";
 import {
   getPageById,
   getPageLocale,
@@ -7,6 +8,7 @@ import {
 } from "@/lib/cms";
 import type { AppLocale } from "@/i18n/routing";
 import { TemplateLayoutRenderer } from "@/components/portal/blocks/template-layout-renderer";
+import { PageEditButton } from "@/components/portal/page-edit-button";
 import { PageFontScope } from "@/components/portal/page-font-scope";
 import {
   ensureDefaultHomePage,
@@ -16,6 +18,7 @@ import {
   pageContextFromPage,
   resolveLayoutBlocks,
 } from "@/lib/blocks/resolve";
+import { canManagePages } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +33,11 @@ export default async function HomePage({ params }: Props) {
 
   const t = await getTranslations("home");
   const tPage = await getTranslations("page");
-  const [branding, settings, defaultHome] = await Promise.all([
+  const [branding, settings, defaultHome, session] = await Promise.all([
     getPublicSiteBranding(locale),
     getSiteSettingsDocument(),
     ensureDefaultHomePage(),
+    auth(),
   ]);
 
   const homeLabels = {
@@ -64,7 +68,14 @@ export default async function HomePage({ params }: Props) {
   );
 
   return (
-    <PageFontScope fontFamily={page.fontFamily}>
+    <div className="relative">
+      {canManagePages(session?.user) ? (
+        <PageEditButton
+          href={`/admin/pages/${String(page._id)}`}
+          label={tPage("edit")}
+        />
+      ) : null}
+      <PageFontScope fontFamily={page.fontFamily}>
       <TemplateLayoutRenderer
         layout={layout}
         resolved={resolved}
@@ -73,6 +84,7 @@ export default async function HomePage({ params }: Props) {
         pageTitle={content.title || branding.siteName}
         labels={homeLabels}
       />
-    </PageFontScope>
+      </PageFontScope>
+    </div>
   );
 }

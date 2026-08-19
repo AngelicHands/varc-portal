@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { PageEditor, emptyPageForm } from "@/components/admin/page-editor";
-import { requireSitePage } from "@/lib/admin-access";
+import { requirePagesPage } from "@/lib/admin-access";
 import { getLocaleContent, listAllArticles } from "@/lib/articles";
 import {
   resolvePageTemplateKey,
@@ -25,7 +25,7 @@ type Props = {
 };
 
 export default async function EditPagePage({ params }: Props) {
-  await requireSitePage();
+  await requirePagesPage();
 
   const { id } = await params;
   const [page, templateOptions, templateDocs, articles, categories, forms] =

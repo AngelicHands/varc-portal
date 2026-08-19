@@ -9,6 +9,8 @@ import {
   canChangeUserRole,
   canManageArticles,
   canManageCategories,
+  canManagePages,
+  canManageRoles,
   canManageSite,
   canManageUsers,
   isAdminRole,
@@ -59,7 +61,7 @@ import {
   getPageTemplateById,
   HOME_PAGE_KEY,
 } from "@/lib/blocks/templates";
-import { ensureDefaultRoles, isValidRoleKey } from "@/lib/app-roles";
+import { ensureDefaultRoles, invalidateRoleCapabilitiesCache, isValidRoleKey } from "@/lib/app-roles";
 import {
   MAX_MENU_DEPTH,
   canPlaceUnderParent,
@@ -107,7 +109,7 @@ async function loadCategoryParentRefs() {
 
 async function requireAdmin() {
   const session = await auth();
-  if (!session?.user?.id || !isAdminRole(session.user.role)) {
+  if (!session?.user?.id || !isAdminRole(session.user)) {
     throw new Error("Unauthorized");
   }
   return session;
@@ -121,9 +123,17 @@ async function requireSystemAdmin() {
   return session;
 }
 
+async function requireRoleManager() {
+  const session = await requireAdmin();
+  if (!canManageRoles(session.user)) {
+    throw new Error("Forbidden");
+  }
+  return session;
+}
+
 async function requireUserManager() {
   const session = await requireAdmin();
-  if (!canManageUsers(session.user.role)) {
+  if (!canManageUsers(session.user)) {
     throw new Error("Forbidden");
   }
   return session;
@@ -131,7 +141,7 @@ async function requireUserManager() {
 
 async function requireArticleManager() {
   const session = await requireAdmin();
-  if (!canManageArticles(session.user.role)) {
+  if (!canManageArticles(session.user)) {
     throw new Error("Forbidden");
   }
   return session;
@@ -139,7 +149,15 @@ async function requireArticleManager() {
 
 async function requireCategoryManager() {
   const session = await requireAdmin();
-  if (!canManageCategories(session.user.role)) {
+  if (!canManageCategories(session.user)) {
+    throw new Error("Forbidden");
+  }
+  return session;
+}
+
+async function requirePageManager() {
+  const session = await requireAdmin();
+  if (!canManagePages(session.user)) {
     throw new Error("Forbidden");
   }
   return session;
@@ -147,7 +165,7 @@ async function requireCategoryManager() {
 
 async function requireSiteManager() {
   const session = await requireAdmin();
-  if (!canManageSite(session.user.role)) {
+  if (!canManageSite(session.user)) {
     throw new Error("Forbidden");
   }
   return session;
@@ -879,7 +897,7 @@ export async function savePageAction(
   raw: unknown,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   try {
-    await requireSiteManager();
+    await requirePageManager();
     const parsed = pageFormSchema.safeParse(raw);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
@@ -967,7 +985,7 @@ export async function deletePageAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await requireSiteManager();
+    await requirePageManager();
     await connectDb();
     const existing = await Page.findOne({ _id: id, ...notDeletedFilter });
     if (!existing) return { ok: false, error: "Page not found" };
@@ -987,7 +1005,7 @@ export async function restorePageAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await requireSiteManager();
+    await requirePageManager();
     await connectDb();
     const existing = await Page.findById(id);
     if (!existing?.deletedAt) {
@@ -1006,7 +1024,7 @@ export async function permanentlyDeletePageAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await requireSiteManager();
+    await requirePageManager();
     await connectDb();
     const existing = await Page.findOne({ _id: id, ...deletedFilter });
     if (!existing) {
@@ -1027,7 +1045,7 @@ export async function emptyPagesTrashAction(): Promise<
   { ok: true; deleted: number } | { ok: false; error: string }
 > {
   try {
-    await requireSiteManager();
+    await requirePageManager();
     await connectDb();
     const result = await Page.deleteMany({
       ...deletedFilter,
@@ -1799,7 +1817,7 @@ export async function saveRoleAction(
   raw: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await requireSystemAdmin();
+    const session = await requireRoleManager();
     const parsed = roleFormSchema.safeParse(raw);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
@@ -1810,17 +1828,31 @@ export async function saveRoleAction(
     const role = await AppRole.findById(id);
     if (!role) return { ok: false, error: "Role not found" };
 
-    // Setup Admin must stay enabled
-    if (role.key === "setup_admin" && !parsed.data.enabled) {
-      return { ok: false, error: "Setup Admin cannot be disabled" };
+    if (role.key === "setup_admin" && !isSystemAdmin(session.user.role)) {
+      return { ok: false, error: "Only Setup Admin can edit the Setup Admin role" };
     }
 
-    role.label = parsed.data.label.trim();
-    role.description = parsed.data.description.trim();
-    role.enabled = parsed.data.enabled;
+    const data = { ...parsed.data };
+    if (role.key === "setup_admin") {
+      data.enabled = true;
+      data.canAccessAdmin = true;
+      data.canManageRoles = true;
+    }
+
+    role.label = data.label.trim();
+    role.description = data.description.trim();
+    role.enabled = data.enabled;
+    role.canAccessAdmin = data.canAccessAdmin;
+    role.canManageContent = data.canManageContent;
+    role.canManagePages = data.canManagePages;
+    role.canManageSite = data.canManageSite;
+    role.canManageUsers = data.canManageUsers;
+    role.canManageRoles = data.canManageRoles;
     await role.save();
+    invalidateRoleCapabilitiesCache();
     revalidatePath("/admin/roles");
     revalidatePath("/admin/users");
+    revalidatePath("/admin", "layout");
     return { ok: true };
   } catch (error) {
     return failAction(error, "Failed to save role");

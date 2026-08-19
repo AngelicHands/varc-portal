@@ -19,7 +19,7 @@ export default async function AdminUsersPage() {
 
   const actorRole = session.user.role;
   const actorUserId = session.user.id ?? "";
-  const canManage = canManageUsers(actorRole);
+  const canManage = canManageUsers(session.user);
   const canCreate = isSystemAdmin(actorRole);
   const allRoles = await listAssignableRoles();
   const rolesForActor = assignableRolesForActor(actorRole, allRoles);

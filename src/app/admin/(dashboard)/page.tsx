@@ -7,6 +7,7 @@ import { countMedia } from "@/lib/media/library";
 import { connectDb } from "@/lib/db";
 import {
   canManageEditorial,
+  canManagePages,
   canManageRoles,
   canManageSite,
   canManageUsers,
@@ -100,18 +101,19 @@ const CARD_ICONS = {
 
 export default async function AdminDashboardPage() {
   const session = await auth();
-  const role = session?.user?.role;
-  const showEditorial = canManageEditorial(role);
-  const showSite = canManageSite(role);
-  const showUsers = canManageUsers(role);
-  const showRoles = canManageRoles(role);
+  const user = session?.user;
+  const showEditorial = canManageEditorial(user);
+  const showPages = canManagePages(user);
+  const showSite = canManageSite(user);
+  const showUsers = canManageUsers(user);
+  const showRoles = canManageRoles(user);
 
   await connectDb();
   const [articles, categories, pages, menuItems, users, mediaCount, callsigns] =
     await Promise.all([
       showEditorial ? listAllArticles() : Promise.resolve([]),
       showEditorial ? listCategories() : Promise.resolve([]),
-      showSite ? listPages() : Promise.resolve([]),
+      showPages ? listPages() : Promise.resolve([]),
       showSite ? listMenuItemsAdmin() : Promise.resolve([]),
       showUsers ? User.countDocuments() : Promise.resolve(0),
       showEditorial ? countMedia() : Promise.resolve(0),
@@ -164,7 +166,7 @@ export default async function AdminDashboardPage() {
           icon: CARD_ICONS.backup,
         }
       : null,
-    showSite
+    showPages
       ? {
           href: "/admin/pages",
           title: "Pages",

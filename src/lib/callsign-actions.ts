@@ -15,10 +15,10 @@ import { failAction } from "@/lib/safe-error";
 
 async function requireCallsignManager() {
   const session = await auth();
-  if (!session?.user?.id || !isAdminRole(session.user.role)) {
+  if (!session?.user?.id || !isAdminRole(session.user)) {
     throw new Error("Unauthorized");
   }
-  if (!canManageSite(session.user.role)) {
+  if (!canManageSite(session.user)) {
     throw new Error("Forbidden");
   }
   return session;

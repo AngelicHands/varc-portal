@@ -25,7 +25,7 @@ export default async function AdminLoginPage({ searchParams }: Props) {
   const homePath = `/${routing.defaultLocale}`;
 
   if (session?.user) {
-    if (isAdminRole(session.user.role)) {
+    if (isAdminRole(session.user)) {
       redirect(callbackUrl.startsWith("/") ? callbackUrl : "/admin");
     }
     redirect(homePath);
