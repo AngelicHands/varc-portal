@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
 import { PortalDialog } from "@/components/portal/portal-dialog";
 import { usePortalConfirm } from "@/components/portal/use-confirm";
 import type { QsoListItemDto } from "@/lib/account-types";
+import { hamPublicPath } from "@/lib/ham-reserved";
 import {
   convertQsoDateTimeParts,
   formatQsoDateTime,
@@ -25,6 +26,12 @@ import {
 import { importQsoAdifAction, type AdifImportRecordError } from "@/lib/qso-import-actions";
 import type { AdifImportErrorRef } from "@/lib/adif/import/error-keys";
 import { translateAdifImportError } from "@/lib/adif/import/translate-error";
+import type {
+  QsoLogbookPageSize,
+  QsoLogbookSortDir,
+  QsoLogbookSortKey,
+} from "@/lib/qso-logbook-query";
+import { QSO_LOGBOOK_PAGE_SIZES } from "@/lib/qso-logbook-query";
 import {
   QSO_BANDS,
   QSO_MODES,
@@ -35,7 +42,13 @@ import {
 } from "@/lib/validations/qso";
 
 type Props = {
-  initialQsos: QsoListItemDto[];
+  items: QsoListItemDto[];
+  total: number;
+  page: number;
+  pageSize: QsoLogbookPageSize;
+  search: string;
+  sortKey: QsoLogbookSortKey;
+  sortDir: QsoLogbookSortDir;
   stationCallsign: string;
   canEdit?: boolean;
   canLogWithOperator?: boolean;
@@ -43,8 +56,8 @@ type Props = {
   logbookUserId?: string;
 };
 
-type SortKey = "qsoAt" | "workedCallsign" | "band" | "mode" | "grid";
-type SortDir = "asc" | "desc";
+type SortKey = QsoLogbookSortKey;
+type SortDir = QsoLogbookSortDir;
 
 type FormState = Omit<QsoInputValues, "qsoAt" | "freqMhz"> & {
   qsoDate: string;
@@ -208,12 +221,38 @@ function sortIndicator(active: boolean, dir: SortDir): string {
   return dir === "asc" ? "↑" : "↓";
 }
 
+function buildLogbookHref(
+  callsign: string,
+  params: {
+    page: number;
+    pageSize: number;
+    search: string;
+    sortKey: SortKey;
+    sortDir: SortDir;
+  },
+): string {
+  const sp = new URLSearchParams();
+  sp.set("tab", "logbook");
+  if (params.page > 1) sp.set("page", String(params.page));
+  if (params.pageSize !== 20) sp.set("pageSize", String(params.pageSize));
+  if (params.search) sp.set("q", params.search);
+  if (params.sortKey !== "qsoAt") sp.set("sort", params.sortKey);
+  const defaultDir = params.sortKey === "qsoAt" ? "desc" : "asc";
+  if (params.sortDir !== defaultDir) sp.set("dir", params.sortDir);
+  return `${hamPublicPath(callsign)}?${sp.toString()}`;
+}
+
 const QSO_EMAIL_LIMIT_WARNING_KEY = "qso-email-limit-warning";
-const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
-const DEFAULT_PAGE_SIZE = 20;
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function QsoLogbook({
-  initialQsos,
+  items,
+  total,
+  page,
+  pageSize,
+  search,
+  sortKey,
+  sortDir,
   stationCallsign,
   canEdit = true,
   canLogWithOperator = false,
@@ -225,7 +264,7 @@ export function QsoLogbook({
   const canManageLogbook = canEdit || canAdminManage;
   const { ask, modal: confirmModal } = usePortalConfirm();
   const importInputRef = useRef<HTMLInputElement>(null);
-  const [qsos, setQsos] = useState(initialQsos);
+  const searchTimerRef = useRef<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<FormState>(() => emptyForm("utc"));
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -240,11 +279,6 @@ export function QsoLogbook({
     sessionStorage.removeItem(QSO_EMAIL_LIMIT_WARNING_KEY);
     return stored;
   });
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("qsoAt");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [importError, setImportError] = useState<AdifImportErrorRef | null>(
@@ -260,55 +294,44 @@ export function QsoLogbook({
     { name: string; reason: AdifImportErrorRef }[]
   >([]);
   const [isImporting, startImportTransition] = useTransition();
-  const pending = isSubmitting || isDeleting || isImporting;
+  const [isNavigating, startNavigateTransition] = useTransition();
+  const pending = isSubmitting || isDeleting || isImporting || isNavigating;
 
-  const filteredSorted = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    let items = qsos;
+  const totalPages = total === 0 ? 0 : Math.max(1, Math.ceil(total / pageSize));
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
 
-    if (query) {
-      items = items.filter((item) => {
-        const haystack = [
-          item.workedCallsign,
-          item.band,
-          item.mode,
-          item.grid,
-          item.notes,
-          item.qso_sent ? t("qsoSent") : "",
-          item.qso_confirmed ? t("qsoConfirmed") : "",
-          formatQsoDateTime(item.qsoAt),
-          `${item.rstSent}/${item.rstRcvd}`,
-        ]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(query);
-      });
-    }
-
-    return [...items].sort((a, b) => {
-      let cmp = 0;
-      if (sortKey === "qsoAt") {
-        cmp = a.qsoAt.localeCompare(b.qsoAt);
-      } else {
-        cmp = a[sortKey].localeCompare(b[sortKey], undefined, {
-          sensitivity: "base",
-        });
-      }
-      return sortDir === "asc" ? cmp : -cmp;
+  function navigateLogbook(
+    updates: Partial<{
+      page: number;
+      pageSize: number;
+      search: string;
+      sortKey: SortKey;
+      sortDir: SortDir;
+    }>,
+  ) {
+    const href = buildLogbookHref(stationCallsign, {
+      page: updates.page ?? page,
+      pageSize: updates.pageSize ?? pageSize,
+      search: updates.search ?? search,
+      sortKey: updates.sortKey ?? sortKey,
+      sortDir: updates.sortDir ?? sortDir,
     });
-  }, [qsos, search, sortKey, sortDir, t]);
+    startNavigateTransition(() => {
+      router.push(href);
+    });
+  }
 
-  const totalItems = filteredSorted.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const currentPage = Math.min(page, totalPages);
-
-  const paginatedItems = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredSorted.slice(start, start + pageSize);
-  }, [filteredSorted, currentPage, pageSize]);
-
-  const rangeStart = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(currentPage * pageSize, totalItems);
+  function onSearchChange(value: string) {
+    if (searchTimerRef.current != null) {
+      window.clearTimeout(searchTimerRef.current);
+    }
+    searchTimerRef.current = window.setTimeout(() => {
+      const trimmed = value.trim();
+      if (trimmed === search) return;
+      navigateLogbook({ search: trimmed, page: 1 });
+    }, SEARCH_DEBOUNCE_MS);
+  }
 
   function clearFieldErrors(...fields: QsoFieldKey[]) {
     if (fields.length === 0) return;
@@ -381,13 +404,19 @@ export function QsoLogbook({
   }
 
   function toggleSort(key: SortKey) {
-    setPage(1);
     if (sortKey === key) {
-      setSortDir((current) => (current === "asc" ? "desc" : "asc"));
+      navigateLogbook({
+        sortKey: key,
+        sortDir: sortDir === "asc" ? "desc" : "asc",
+        page: 1,
+      });
       return;
     }
-    setSortKey(key);
-    setSortDir(key === "qsoAt" ? "desc" : "asc");
+    navigateLogbook({
+      sortKey: key,
+      sortDir: key === "qsoAt" ? "desc" : "asc",
+      page: 1,
+    });
   }
 
   function onSubmit(event: React.FormEvent) {
@@ -397,7 +426,7 @@ export function QsoLogbook({
     const nextFieldErrors = mandatoryFieldErrors(form, timeZoneMode);
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
-      setError(t("fixFields"));
+      setError(t("formFields"));
       return;
     }
     setFieldErrors({});
@@ -445,20 +474,13 @@ export function QsoLogbook({
             t("emailLimitReached", { limit: result.warning.limit }),
           );
         }
-        if (editingId) {
-          setQsos((current) =>
-            current.map((item) =>
-              item.id === result.qso.id ? result.qso : item,
-            ),
-          );
-        } else if (canEdit) {
-          setQsos((current) => [result.qso, ...current]);
-        } else {
+        if (!editingId && !canEdit) {
           setSuccessMessage(
             t("qsoLoggedWithOperator", { callsign: stationCallsign }),
           );
         }
         resetModal();
+        router.refresh();
       } finally {
         setIsSubmitting(false);
       }
@@ -485,7 +507,7 @@ export function QsoLogbook({
         setError(result.error);
         return;
       }
-      setQsos((current) => current.filter((item) => item.id !== id));
+      router.refresh();
     } finally {
       setIsDeleting(false);
     }
@@ -510,13 +532,12 @@ export function QsoLogbook({
         setError(result.error);
         return;
       }
-      setQsos([]);
-      setPage(1);
       setImportSummary(null);
       setImportRecordErrors([]);
       setImportRecordErrorsTruncated(0);
       setFailedImportFiles([]);
       setSuccessMessage(t("deletedAll", { count: result.deleted }));
+      navigateLogbook({ page: 1, search: "" });
       router.refresh();
     } finally {
       setIsDeleting(false);
@@ -572,10 +593,8 @@ export function QsoLogbook({
         }),
       );
 
-      if (result.qsos) {
-        setQsos(result.qsos);
-        setPage(1);
-      }
+      navigateLogbook({ page: 1 });
+      router.refresh();
     });
   }
 
@@ -814,7 +833,7 @@ export function QsoLogbook({
             >
               {isImporting ? t("importing") : t("importAdif")}
             </button>
-            {qsos.length > 0 ? (
+            {total > 0 ? (
               <button
                 type="button"
                 disabled={pending}
@@ -841,7 +860,7 @@ export function QsoLogbook({
           <p className="text-sm text-muted">
             {t("adminViewingLogbook", { callsign: stationCallsign })}
           </p>
-          {qsos.length > 0 ? (
+          {total > 0 ? (
             <button
               type="button"
               disabled={pending}
@@ -925,7 +944,7 @@ export function QsoLogbook({
         </div>
       ) : null}
 
-      {qsos.length === 0 ? (
+      {total === 0 && !search ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 py-16 text-center">
           <p className="max-w-md text-muted">
             {t("emptyFor", { callsign: stationCallsign })}
@@ -952,21 +971,19 @@ export function QsoLogbook({
         <>
           <div className="flex flex-wrap items-center gap-3">
             <input
+              key={search}
               type="search"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
+              defaultValue={search}
+              onChange={(e) => onSearchChange(e.target.value)}
               placeholder={t("searchPlaceholder")}
               className="min-w-[12rem] flex-1 rounded-md border border-border px-3 py-2 text-sm"
             />
             <p className="text-sm text-muted">
-              {totalItems > 0
+              {total > 0
                 ? t("showingRange", {
                     start: rangeStart,
                     end: rangeEnd,
-                    total: totalItems,
+                    total,
                   })
                 : t("resultCount", { count: 0 })}
             </p>
@@ -975,12 +992,14 @@ export function QsoLogbook({
               <select
                 value={pageSize}
                 onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
+                  navigateLogbook({
+                    pageSize: Number(e.target.value) as typeof pageSize,
+                    page: 1,
+                  });
                 }}
                 className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
               >
-                {PAGE_SIZE_OPTIONS.map((size) => (
+                {QSO_LOGBOOK_PAGE_SIZES.map((size) => (
                   <option key={size} value={size}>
                     {size}
                   </option>
@@ -1061,14 +1080,14 @@ export function QsoLogbook({
                 </tr>
               </thead>
               <tbody>
-                {filteredSorted.length === 0 ? (
+                {items.length === 0 ? (
                   <tr>
                     <td colSpan={canManageLogbook ? 8 : 7} className="px-3 py-8 text-center text-muted">
                       {t("noSearchResults")}
                     </td>
                   </tr>
                 ) : (
-                  paginatedItems.map((item) => (
+                  items.map((item) => (
                     <tr key={item.id} className="border-b border-border/70">
                       <td className="px-3 py-2 font-medium">
                         <span className="inline-flex items-center gap-2">
@@ -1150,19 +1169,19 @@ export function QsoLogbook({
             >
               <button
                 type="button"
-                onClick={() => setPage(currentPage - 1)}
-                disabled={currentPage <= 1}
+                onClick={() => navigateLogbook({ page: page - 1 })}
+                disabled={page <= 1 || totalPages === 0}
                 className="rounded-md border border-border px-3 py-1.5 hover:bg-foreground/5 disabled:pointer-events-none disabled:opacity-40"
               >
                 {t("previous")}
               </button>
               <span className="text-muted">
-                {t("pageOf", { page: currentPage, totalPages })}
+                {t("pageOf", { page, totalPages: Math.max(totalPages, 1) })}
               </span>
               <button
                 type="button"
-                onClick={() => setPage(currentPage + 1)}
-                disabled={currentPage >= totalPages}
+                onClick={() => navigateLogbook({ page: page + 1 })}
+                disabled={totalPages === 0 || page >= totalPages}
                 className="rounded-md border border-border px-3 py-1.5 hover:bg-foreground/5 disabled:pointer-events-none disabled:opacity-40"
               >
                 {t("next")}

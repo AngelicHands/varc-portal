@@ -21,7 +21,7 @@ import {
 } from "@/lib/ham-map-access";
 import { readMapTilerApiKey } from "@/lib/map/maptiler-style";
 import { buildHomeGridMarker } from "@/lib/qso-map";
-import { listUserQsos } from "@/lib/qso";
+import { listUserQsos, listUserQsosPage } from "@/lib/qso";
 import { listUserDocuments } from "@/lib/user-documents";
 import { callsignHref, hamHref } from "@/lib/locale-hrefs";
 import { formatBirthdayDmy } from "@/lib/validations/qso";
@@ -34,7 +34,15 @@ export const fetchCache = "force-no-store";
 
 type Props = {
   params: Promise<{ locale: string; callsign: string }>;
-  searchParams: Promise<{ tab?: string; view?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    view?: string;
+    page?: string;
+    pageSize?: string;
+    q?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -79,7 +87,15 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
   const locale = localeParam as AppLocale;
   setRequestLocale(locale);
 
-  const { tab: tabParam, view: viewParam } = await searchParams;
+  const {
+    tab: tabParam,
+    view: viewParam,
+    page: pageParam,
+    pageSize: pageSizeParam,
+    q: searchParam,
+    sort: sortParam,
+    dir: dirParam,
+  } = await searchParams;
   const isMapView = viewParam === "map";
   const sign = parseHamPathParam(raw);
   if (!sign) notFound();
@@ -95,6 +111,11 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
       qs.set("tab", tabParam);
     }
     if (isMapView) qs.set("view", "map");
+    if (pageParam) qs.set("page", pageParam);
+    if (pageSizeParam) qs.set("pageSize", pageSizeParam);
+    if (searchParam) qs.set("q", searchParam);
+    if (sortParam) qs.set("sort", sortParam);
+    if (dirParam) qs.set("dir", dirParam);
     const query = qs.toString();
     redirect(`${hamPublicPath(sign)}${query ? `?${query}` : ""}`);
   }
@@ -208,7 +229,17 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
       ])
     : ([null, null] as const);
   const [profile, documents] = ownerData;
-  const qsos = canViewLogbook ? await listUserQsos(ham.id) : [];
+  const logbookPage =
+    canViewLogbook && activeTab === "logbook"
+      ? await listUserQsosPage({
+          userId: ham.id,
+          page: pageParam,
+          pageSize: pageSizeParam,
+          search: searchParam,
+          sortKey: sortParam,
+          sortDir: dirParam,
+        })
+      : null;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
@@ -402,15 +433,23 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
         }
         logbook={
           canViewLogbook ? (
-            <QsoLogbook
-              key={ham.id}
-              initialQsos={qsos}
-              stationCallsign={ham.callsign}
-              canEdit={canEdit}
-              canLogWithOperator={canLogWithOperator}
-              canAdminManage={canAdminManage}
-              logbookUserId={ham.id}
-            />
+            logbookPage ? (
+              <QsoLogbook
+                key={ham.id}
+                items={logbookPage.items}
+                total={logbookPage.total}
+                page={logbookPage.page}
+                pageSize={logbookPage.pageSize}
+                search={logbookPage.search}
+                sortKey={logbookPage.sortKey}
+                sortDir={logbookPage.sortDir}
+                stationCallsign={ham.callsign}
+                canEdit={canEdit}
+                canLogWithOperator={canLogWithOperator}
+                canAdminManage={canAdminManage}
+                logbookUserId={ham.id}
+              />
+            ) : null
           ) : (
             <p className="text-sm text-muted">{accountT("securityQsoPrivateNotice")}</p>
           )

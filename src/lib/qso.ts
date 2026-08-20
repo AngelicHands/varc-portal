@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import type { QsoListItemDto } from "@/lib/account-types";
 import {
   QSO_COUNT_CACHE_TTL_SEC,
@@ -6,10 +7,36 @@ import {
   QsoCacheTags,
   qsoCacheAside,
 } from "@/lib/cache/qso-cache";
+import { escapeRegex } from "@/lib/callsigns-normalize";
 import { connectDb } from "@/lib/db";
+import {
+  normalizeQsoLogbookSearch,
+  parseQsoLogbookPageSize,
+  parseQsoLogbookSortDir,
+  parseQsoLogbookSortKey,
+  type QsoLogbookPageResult,
+  type QsoLogbookSortDir,
+  type QsoLogbookSortKey,
+} from "@/lib/qso-logbook-query";
 import { normalizeQsoSource } from "@/lib/qso-source";
 import { QsoLog } from "@/models/QsoLog";
 import { User } from "@/models/User";
+
+export type {
+  QsoLogbookPageResult,
+  QsoLogbookPageSize,
+  QsoLogbookSortDir,
+  QsoLogbookSortKey,
+} from "@/lib/qso-logbook-query";
+export {
+  QSO_LOGBOOK_DEFAULT_PAGE_SIZE,
+  QSO_LOGBOOK_PAGE_SIZES,
+  QSO_LOGBOOK_SORT_KEYS,
+  normalizeQsoLogbookSearch,
+  parseQsoLogbookPageSize,
+  parseQsoLogbookSortDir,
+  parseQsoLogbookSortKey,
+} from "@/lib/qso-logbook-query";
 
 type QsoDocLike = {
   _id: unknown;
@@ -65,6 +92,118 @@ export async function listUserQsos(
   );
 }
 
+function pageQueryHash(
+  search: string,
+  page: number,
+  pageSize: number,
+  sortKey: string,
+  sortDir: string,
+): string {
+  return createHash("sha1")
+    .update(JSON.stringify({ search, page, pageSize, sortKey, sortDir }))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+function buildQsoSearchFilter(userId: string, search: string) {
+  const base: Record<string, unknown> = { userId };
+  if (!search) return base;
+
+  const escaped = escapeRegex(search);
+  const regex = new RegExp(escaped, "i");
+  return {
+    ...base,
+    $or: [
+      { workedCallsign: regex },
+      { mode: regex },
+      { band: regex },
+      { grid: regex },
+      { notes: regex },
+    ],
+  };
+}
+
+function mongoSort(
+  sortKey: QsoLogbookSortKey,
+  sortDir: QsoLogbookSortDir,
+): Record<string, 1 | -1> {
+  const dir = sortDir === "asc" ? 1 : -1;
+  if (sortKey === "qsoAt") {
+    return { qsoAt: dir, _id: dir };
+  }
+  return { [sortKey]: dir, qsoAt: -1, _id: -1 };
+}
+
+export async function listUserQsosPage(params: {
+  userId: string;
+  page?: string | number;
+  pageSize?: string | number;
+  search?: string;
+  sortKey?: string;
+  sortDir?: string;
+}): Promise<QsoLogbookPageResult> {
+  const search = normalizeQsoLogbookSearch(params.search);
+  const pageSize = parseQsoLogbookPageSize(params.pageSize);
+  const sortKey = parseQsoLogbookSortKey(params.sortKey);
+  const sortDir = parseQsoLogbookSortDir(params.sortDir, sortKey);
+  const pageHintRaw =
+    typeof params.page === "number"
+      ? params.page
+      : Number.parseInt(String(params.page ?? "1"), 10);
+  const pageHint =
+    Number.isFinite(pageHintRaw) && pageHintRaw > 0
+      ? Math.floor(pageHintRaw)
+      : 1;
+
+  const queryHash = pageQueryHash(
+    search,
+    pageHint,
+    pageSize,
+    sortKey,
+    sortDir,
+  );
+
+  return qsoCacheAside(
+    QsoCacheKeys.qsoListPage(
+      params.userId,
+      pageHint,
+      pageSize,
+      queryHash,
+      sortKey,
+      sortDir,
+    ),
+    [QsoCacheTags.user(params.userId)],
+    async () => {
+      await connectDb();
+      const filter = buildQsoSearchFilter(params.userId, search);
+      const total = await QsoLog.countDocuments(filter);
+      const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+      const page =
+        totalPages === 0
+          ? 1
+          : Math.min(pageHint, Math.max(1, totalPages));
+
+      const docs = await QsoLog.find(filter)
+        .sort(mongoSort(sortKey, sortDir))
+        .skip((page - 1) * pageSize)
+        .limit(pageSize)
+        .lean();
+
+      return {
+        items: docs.map((doc) => toQsoListItemDto(doc)),
+        total,
+        totalPages,
+        page,
+        pageSize,
+        search,
+        sortKey,
+        sortDir,
+      };
+    },
+    QSO_LIST_CACHE_TTL_SEC,
+  );
+}
+
 export async function countUserQsos(userId: string) {
   return qsoCacheAside(
     QsoCacheKeys.qsoCount(userId),
@@ -92,4 +231,3 @@ export async function listQsosForExport(userId?: string) {
   const filter = userId ? { userId } : {};
   return QsoLog.find(filter).sort({ qsoAt: 1 }).lean();
 }
-

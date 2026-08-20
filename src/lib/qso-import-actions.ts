@@ -16,7 +16,7 @@ import {
 } from "@/lib/adif/import/error-keys";
 import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
-import { requireUserCallsign, listUserQsos } from "@/lib/qso";
+import { requireUserCallsign } from "@/lib/qso";
 import { revalidateLogbook } from "@/lib/qso-revalidate";
 import { failAction } from "@/lib/safe-error";
 import type { AdifImportValues } from "@/lib/adif/import";
@@ -260,11 +260,6 @@ export async function importQsoAdifAction(formData: FormData) {
       callsigns: [callsignCheck.callsign],
     });
 
-    const qsos =
-      toInsert.length > 0
-        ? await listUserQsos(session.user.id)
-        : undefined;
-
     return {
       ok: true as const,
       imported: toInsert.length,
@@ -277,7 +272,6 @@ export async function importQsoAdifAction(formData: FormData) {
       recordErrors,
       truncatedRecordErrors,
       failedFiles,
-      qsos,
     };
   } catch (error) {
     failAction(error, "Failed to import ADIF");

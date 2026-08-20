@@ -12,6 +12,15 @@ export const QsoCacheKeys = {
   hamPublic: (callsign: string) => `ham:public:${callsign}:v1`,
   qsoList: (userId: string, limit?: number) =>
     `qso:list:user:${userId}:limit:${limit != null && limit > 0 ? limit : "all"}:v1`,
+  qsoListPage: (
+    userId: string,
+    page: number,
+    pageSize: number,
+    queryHash: string,
+    sortKey: string,
+    sortDir: string,
+  ) =>
+    `qso:list:user:${userId}:p${page}:s${pageSize}:q${queryHash}:sort${sortKey}:${sortDir}:v2`,
   qsoCount: (userId: string) => `qso:count:user:${userId}:v1`,
 };
 
