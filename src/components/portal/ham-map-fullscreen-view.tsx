@@ -52,6 +52,7 @@ const GRID_LINE_LAYER_ID = "ham-grid-squares-line";
 const GRID_LABEL_LAYER_ID = "ham-grid-squares-label";
 const TRACE_SOURCE_ID = "ham-qso-traces";
 const TRACE_LAYER_ID = "ham-qso-traces-line";
+const TRACE_LABEL_LAYER_ID = "ham-qso-traces-label";
 
 type GridFeatureProps = {
   kind: "home" | "qso" | "pick";
@@ -390,6 +391,31 @@ function setGridRectangleVisibility(map: MapLibreMap, visible: boolean) {
   }
 }
 
+function formatTraceDistanceKm(km: number): string {
+  if (!Number.isFinite(km) || km < 0) return "0";
+  if (km < 100) {
+    const rounded = Math.round(km * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  }
+  return String(Math.round(km));
+}
+
+function labelTraceDistances(
+  collection: QsoTraceFeatureCollection,
+  formatLabel: (km: number) => string,
+): QsoTraceFeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: collection.features.map((feature) => ({
+      ...feature,
+      properties: {
+        ...feature.properties,
+        distanceLabel: formatLabel(feature.properties.distanceKm),
+      },
+    })),
+  };
+}
+
 function syncTraceLayers(
   map: MapLibreMap,
   collection: QsoTraceFeatureCollection,
@@ -406,6 +432,11 @@ function syncTraceLayers(
       : "rgba(2, 132, 199, 0.65)";
   const lineOpacity = emphasized ? 1 : 0.9;
   const lineWidth = emphasized ? 2.5 : 1.75;
+  const labelColor =
+    theme === "dark" ? "#e0f2fe" : "#0c4a6e";
+  const labelHalo =
+    theme === "dark" ? "rgba(0, 0, 0, 0.8)" : "rgba(255, 255, 255, 0.95)";
+  const labelsVisible = visible && emphasized;
 
   const source = map.getSource(TRACE_SOURCE_ID);
   if (source instanceof GeoJSONSource) {
@@ -441,6 +472,44 @@ function syncTraceLayers(
       TRACE_LAYER_ID,
       "visibility",
       visible ? "visible" : "none",
+    );
+  }
+
+  if (!map.getLayer(TRACE_LABEL_LAYER_ID)) {
+    map.addLayer({
+      id: TRACE_LABEL_LAYER_ID,
+      type: "symbol",
+      source: TRACE_SOURCE_ID,
+      layout: {
+        "symbol-placement": "line-center",
+        "text-field": ["get", "distanceLabel"],
+        "text-font": ["Metropolis Semi Bold", "Noto Sans Regular"],
+        "text-size": 18,
+        "text-rotation-alignment": "viewport",
+        "text-pitch-alignment": "viewport",
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        visibility: labelsVisible ? "visible" : "none",
+      },
+      paint: {
+        "text-color": labelColor,
+        "text-halo-color": labelHalo,
+        "text-halo-width": 2,
+      },
+    });
+  } else {
+    map.setPaintProperty(TRACE_LABEL_LAYER_ID, "text-color", labelColor);
+    map.setPaintProperty(TRACE_LABEL_LAYER_ID, "text-halo-color", labelHalo);
+    map.setLayoutProperty(TRACE_LABEL_LAYER_ID, "text-size", 18);
+    map.setLayoutProperty(
+      TRACE_LABEL_LAYER_ID,
+      "text-rotation-alignment",
+      "viewport",
+    );
+    map.setLayoutProperty(
+      TRACE_LABEL_LAYER_ID,
+      "visibility",
+      labelsVisible ? "visible" : "none",
     );
   }
 }
@@ -693,10 +762,13 @@ export function HamMapFullscreenView({
         mapQsoMarkers.length > 0;
       syncTraceLayers(
         map,
-        buildQsoTraceFeatureCollection(
-          // Traces always originate from the station home, even when home grid is hidden.
-          activeHomeMarker,
-          showQsoMarkers ? mapQsoMarkers : [],
+        labelTraceDistances(
+          buildQsoTraceFeatureCollection(
+            // Traces always originate from the station home, even when home grid is hidden.
+            activeHomeMarker,
+            showQsoMarkers ? mapQsoMarkers : [],
+          ),
+          (km) => t("traceDistanceKm", { km: formatTraceDistanceKm(km) }),
         ),
         mapTheme,
         tracesVisible,
@@ -883,9 +955,12 @@ export function HamMapFullscreenView({
       mapQsoMarkers.length > 0;
     syncTraceLayers(
       map,
-      buildQsoTraceFeatureCollection(
-        activeHomeMarker,
-        showQsoMarkers ? mapQsoMarkers : [],
+      labelTraceDistances(
+        buildQsoTraceFeatureCollection(
+          activeHomeMarker,
+          showQsoMarkers ? mapQsoMarkers : [],
+        ),
+        (km) => t("traceDistanceKm", { km: formatTraceDistanceKm(km) }),
       ),
       mapTheme,
       tracesVisible,
@@ -898,6 +973,48 @@ export function HamMapFullscreenView({
     mapQsoMarkers,
     showQsoMarkers,
     mapTheme,
+    mapTilerKey,
+    t,
+  ]);
+
+  // When a QSO is selected, fit both home + QSO field squares into view.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapTilerKey || !map.isStyleLoaded() || !focusGrid) return;
+
+    const bounds = new LngLatBounds();
+    let hasBounds = false;
+
+    if (mapHomeMarker) {
+      bounds.extend([mapHomeMarker.bounds.west, mapHomeMarker.bounds.south]);
+      bounds.extend([mapHomeMarker.bounds.east, mapHomeMarker.bounds.north]);
+      hasBounds = true;
+    }
+
+    for (const item of mapQsoMarkers) {
+      bounds.extend([item.bounds.west, item.bounds.south]);
+      bounds.extend([item.bounds.east, item.bounds.north]);
+      hasBounds = true;
+    }
+
+    if (!hasBounds) return;
+
+    const listPad = qsoListOpen ? HAM_MAP_QSO_LIST_WIDTH_PX : 0;
+    map.fitBounds(bounds, {
+      padding: {
+        top: 96,
+        bottom: 96,
+        left: 96 + listPad,
+        right: 96,
+      },
+      maxZoom: 9,
+      duration: 800,
+    });
+  }, [
+    focusGrid,
+    mapHomeMarker,
+    mapQsoMarkers,
+    qsoListOpen,
     mapTilerKey,
   ]);
 

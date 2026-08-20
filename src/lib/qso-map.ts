@@ -138,6 +138,22 @@ export function greatCircleCoordinates(
   return coords;
 }
 
+/** Great-circle (line-of-sight along Earth surface) distance in kilometres. */
+export function greatCircleDistanceKm(
+  fromLng: number,
+  fromLat: number,
+  toLng: number,
+  toLat: number,
+): number {
+  const a = toCartesian(fromLat, fromLng);
+  const b = toCartesian(toLat, toLng);
+  let dot = a.x * b.x + a.y * b.y + a.z * b.z;
+  dot = Math.min(1, Math.max(-1, dot));
+  const omega = Math.acos(dot);
+  if (!Number.isFinite(omega)) return 0;
+  return omega * 6371;
+}
+
 export type QsoTraceFeatureCollection = {
   type: "FeatureCollection";
   features: Array<{
@@ -145,6 +161,8 @@ export type QsoTraceFeatureCollection = {
     properties: {
       grid: string;
       qsoCount: number;
+      distanceKm: number;
+      distanceLabel?: string;
     };
     geometry: {
       type: "LineString";
@@ -164,22 +182,31 @@ export function buildQsoTraceFeatureCollection(
 
   return {
     type: "FeatureCollection",
-    features: qsoMarkers.map((item) => ({
-      type: "Feature" as const,
-      properties: {
-        grid: item.grid,
-        qsoCount: item.qsoCount,
-      },
-      geometry: {
-        type: "LineString" as const,
-        coordinates: greatCircleCoordinates(
-          home.lng,
-          home.lat,
-          item.lng,
-          item.lat,
-        ),
-      },
-    })),
+    features: qsoMarkers.map((item) => {
+      const distanceKm = greatCircleDistanceKm(
+        home.lng,
+        home.lat,
+        item.lng,
+        item.lat,
+      );
+      return {
+        type: "Feature" as const,
+        properties: {
+          grid: item.grid,
+          qsoCount: item.qsoCount,
+          distanceKm,
+        },
+        geometry: {
+          type: "LineString" as const,
+          coordinates: greatCircleCoordinates(
+            home.lng,
+            home.lat,
+            item.lng,
+            item.lat,
+          ),
+        },
+      };
+    }),
   };
 }
 
