@@ -20,7 +20,12 @@ import {
   type HamMapTheme,
 } from "@/lib/map/maptiler-style";
 import type { HomeGridMarker, QsoGridMarker } from "@/lib/qso-map";
+import {
+  buildQsoTraceFeatureCollection,
+  type QsoTraceFeatureCollection,
+} from "@/lib/qso-map";
 import { HamMapFloatingPanel } from "@/components/portal/ham-map-floating-panel";
+import { HamMapControlsPanel } from "@/components/portal/ham-map-controls-panel";
 import { HamMapHomeLocationPrompt } from "@/components/portal/ham-map-home-location-prompt";
 import type { MaidenheadBounds } from "@/lib/maidenhead";
 import {
@@ -35,6 +40,8 @@ const GRID_SOURCE_ID = "ham-grid-squares";
 const GRID_FILL_LAYER_ID = "ham-grid-squares-fill";
 const GRID_LINE_LAYER_ID = "ham-grid-squares-line";
 const GRID_LABEL_LAYER_ID = "ham-grid-squares-label";
+const TRACE_SOURCE_ID = "ham-qso-traces";
+const TRACE_LAYER_ID = "ham-qso-traces-line";
 
 type GridFeatureProps = {
   kind: "home" | "qso" | "pick";
@@ -339,6 +346,64 @@ function syncGridSquareLayers(
   }
 }
 
+function setGridRectangleVisibility(map: MapLibreMap, visible: boolean) {
+  const value = visible ? "visible" : "none";
+  for (const layerId of [
+    GRID_FILL_LAYER_ID,
+    GRID_LINE_LAYER_ID,
+    GRID_LABEL_LAYER_ID,
+  ]) {
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, "visibility", value);
+    }
+  }
+}
+
+function syncTraceLayers(
+  map: MapLibreMap,
+  collection: QsoTraceFeatureCollection,
+  theme: HamMapTheme | null,
+  visible: boolean,
+) {
+  const lineColor =
+    theme === "dark" ? "rgba(125, 211, 252, 0.75)" : "rgba(2, 132, 199, 0.65)";
+
+  const source = map.getSource(TRACE_SOURCE_ID);
+  if (source instanceof GeoJSONSource) {
+    source.setData(collection);
+  } else {
+    map.addSource(TRACE_SOURCE_ID, {
+      type: "geojson",
+      data: collection,
+    });
+  }
+
+  if (!map.getLayer(TRACE_LAYER_ID)) {
+    map.addLayer({
+      id: TRACE_LAYER_ID,
+      type: "line",
+      source: TRACE_SOURCE_ID,
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+        visibility: visible ? "visible" : "none",
+      },
+      paint: {
+        "line-color": lineColor,
+        "line-width": 1.75,
+        "line-opacity": 0.9,
+      },
+    });
+  } else {
+    map.setPaintProperty(TRACE_LAYER_ID, "line-color", lineColor);
+    map.setLayoutProperty(
+      TRACE_LAYER_ID,
+      "visibility",
+      visible ? "visible" : "none",
+    );
+  }
+}
+
 type Props = {
   mapTilerKey: string;
   callsign: string;
@@ -375,6 +440,7 @@ export function HamMapFullscreenView({
   canSetHomeLocation = false,
 }: Props) {
   const t = useTranslations("ham.map");
+  const shellRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
@@ -384,10 +450,18 @@ export function HamMapFullscreenView({
   const [overrideHomeMarker, setOverrideHomeMarker] =
     useState<HomeGridMarker | null>(null);
   const [pickedGrid, setPickedGrid] = useState<PickedGrid | null>(null);
+  const [showGridRectangles, setShowGridRectangles] = useState(true);
+  const [showLocationMarkers, setShowLocationMarkers] = useState(true);
+  const [showTraces, setShowTraces] = useState(true);
+  const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
+  const [fullscreenSupported, setFullscreenSupported] = useState(false);
   const activeHomeMarker = homeMarker ?? overrideHomeMarker;
   const activeHomeGrid = activeHomeMarker?.grid ?? homeGrid;
   const activeHomeRef = useRef(activeHomeMarker);
   const pickedGridRef = useRef(pickedGrid);
+  const showGridRectanglesRef = useRef(showGridRectangles);
+  const showLocationMarkersRef = useRef(showLocationMarkers);
+  const showTracesRef = useRef(showTraces);
 
   useEffect(() => {
     activeHomeRef.current = activeHomeMarker;
@@ -396,6 +470,38 @@ export function HamMapFullscreenView({
   useEffect(() => {
     pickedGridRef.current = pickedGrid;
   }, [pickedGrid]);
+
+  useEffect(() => {
+    showGridRectanglesRef.current = showGridRectangles;
+  }, [showGridRectangles]);
+
+  useEffect(() => {
+    showLocationMarkersRef.current = showLocationMarkers;
+  }, [showLocationMarkers]);
+
+  useEffect(() => {
+    showTracesRef.current = showTraces;
+  }, [showTraces]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setFullscreenSupported(
+        typeof document.documentElement.requestFullscreen === "function",
+      );
+    });
+
+    function onFullscreenChange() {
+      const shell = shellRef.current;
+      setIsBrowserFullscreen(Boolean(shell && document.fullscreenElement === shell));
+      requestAnimationFrame(() => mapRef.current?.resize());
+    }
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     document.body.classList.add("ham-map-view");
@@ -470,7 +576,7 @@ export function HamMapFullscreenView({
     const map = mapRef.current;
     if (!map || !mapTilerKey) return;
 
-    const applyMarkers = () => {
+    const applyMarkers = (fitCamera: boolean) => {
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
 
@@ -489,8 +595,24 @@ export function HamMapFullscreenView({
         ),
         mapTheme,
       );
+      setGridRectangleVisibility(map, showGridRectanglesRef.current);
 
-      if (activeHomeMarker) {
+      const tracesVisible =
+        showTracesRef.current &&
+        showQsoMarkers &&
+        Boolean(activeHomeMarker) &&
+        qsoMarkers.length > 0;
+      syncTraceLayers(
+        map,
+        buildQsoTraceFeatureCollection(
+          activeHomeMarker,
+          showQsoMarkers ? qsoMarkers : [],
+        ),
+        mapTheme,
+        tracesVisible,
+      );
+
+      if (showLocationMarkersRef.current && activeHomeMarker) {
         const el = document.createElement("div");
         el.className =
           "flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-lg";
@@ -503,6 +625,9 @@ export function HamMapFullscreenView({
           )
           .addTo(map);
         markersRef.current.push(marker);
+      }
+
+      if (activeHomeMarker) {
         bounds.extend([activeHomeMarker.bounds.west, activeHomeMarker.bounds.south]);
         bounds.extend([activeHomeMarker.bounds.east, activeHomeMarker.bounds.north]);
         bounds.extend([activeHomeMarker.lng, activeHomeMarker.lat]);
@@ -511,40 +636,44 @@ export function HamMapFullscreenView({
 
       if (showQsoMarkers) {
         for (const item of qsoMarkers) {
-          const el = document.createElement("div");
-          el.className =
-            mapTheme === "dark"
-              ? "h-3 w-3 rounded-full border border-white/80 bg-sky-400 shadow"
-              : "h-3 w-3 rounded-full border border-white bg-sky-600 shadow";
-          const callsignPreview = item.workedCallsigns.slice(0, 5).join(", ");
-          const extra =
-            item.workedCallsigns.length > 5
-              ? ` +${item.workedCallsigns.length - 5}`
-              : "";
-          const marker = new Marker({ element: el })
-            .setLngLat([item.lng, item.lat])
-            .setPopup(
-              new Popup({ offset: 10 }).setHTML(
-                `<strong>${formatMaidenheadDisplay(item.grid)}</strong><br/>${t("qsoCount", { count: item.qsoCount })}<br/><span style="font-size:12px">${callsignPreview}${extra}</span>`,
-              ),
-            )
-            .addTo(map);
-          markersRef.current.push(marker);
+          if (showLocationMarkersRef.current) {
+            const el = document.createElement("div");
+            el.className =
+              mapTheme === "dark"
+                ? "h-3 w-3 rounded-full border border-white/80 bg-sky-400 shadow"
+                : "h-3 w-3 rounded-full border border-white bg-sky-600 shadow";
+            const callsignPreview = item.workedCallsigns.slice(0, 5).join(", ");
+            const extra =
+              item.workedCallsigns.length > 5
+                ? ` +${item.workedCallsigns.length - 5}`
+                : "";
+            const marker = new Marker({ element: el })
+              .setLngLat([item.lng, item.lat])
+              .setPopup(
+                new Popup({ offset: 10 }).setHTML(
+                  `<strong>${formatMaidenheadDisplay(item.grid)}</strong><br/>${t("qsoCount", { count: item.qsoCount })}<br/><span style="font-size:12px">${callsignPreview}${extra}</span>`,
+                ),
+              )
+              .addTo(map);
+            markersRef.current.push(marker);
+          }
           bounds.extend([item.bounds.west, item.bounds.south]);
           bounds.extend([item.bounds.east, item.bounds.north]);
           hasBounds = true;
         }
       }
 
-      if (hasBounds) {
+      if (fitCamera && hasBounds) {
         map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 0 });
       }
     };
 
-    if (map.isStyleLoaded()) applyMarkers();
-    map.on("style.load", applyMarkers);
+    const applyMarkersAndFit = () => applyMarkers(true);
+
+    if (map.isStyleLoaded()) applyMarkersAndFit();
+    map.on("style.load", applyMarkersAndFit);
     return () => {
-      map.off("style.load", applyMarkers);
+      map.off("style.load", applyMarkersAndFit);
     };
   }, [activeHomeMarker, qsoMarkers, showQsoMarkers, mapTheme, mapTilerKey, t]);
 
@@ -565,14 +694,108 @@ export function HamMapFullscreenView({
       ),
       mapTheme,
     );
+    setGridRectangleVisibility(map, showGridRectangles);
   }, [
     pickedGrid,
+    showGridRectangles,
     activeHomeMarker,
     qsoMarkers,
     showQsoMarkers,
     mapTheme,
     mapTilerKey,
     t,
+  ]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapTilerKey || !map.isStyleLoaded()) return;
+    setGridRectangleVisibility(map, showGridRectangles);
+  }, [showGridRectangles, mapTilerKey, mapTheme]);
+
+  // Rebuild pin markers when the location-marker toggle changes (no camera jump).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapTilerKey || !map.isStyleLoaded()) return;
+
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = [];
+    if (!showLocationMarkers) return;
+
+    if (activeHomeMarker) {
+      const el = document.createElement("div");
+      el.className =
+        "flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-lg";
+      markersRef.current.push(
+        new Marker({ element: el })
+          .setLngLat([activeHomeMarker.lng, activeHomeMarker.lat])
+          .setPopup(
+            new Popup({ offset: 12 }).setHTML(
+              `<strong>${activeHomeMarker.callsign}</strong><br/>${t("homeMarkerLabel")}: ${formatMaidenheadDisplay(activeHomeMarker.grid)}<br/>${t("homeLocationLabel")}: ${activeHomeMarker.lat.toFixed(5)}, ${activeHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${activeHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid")}</span>`,
+            ),
+          )
+          .addTo(map),
+      );
+    }
+
+    if (showQsoMarkers) {
+      for (const item of qsoMarkers) {
+        const el = document.createElement("div");
+        el.className =
+          mapTheme === "dark"
+            ? "h-3 w-3 rounded-full border border-white/80 bg-sky-400 shadow"
+            : "h-3 w-3 rounded-full border border-white bg-sky-600 shadow";
+        const callsignPreview = item.workedCallsigns.slice(0, 5).join(", ");
+        const extra =
+          item.workedCallsigns.length > 5
+            ? ` +${item.workedCallsigns.length - 5}`
+            : "";
+        markersRef.current.push(
+          new Marker({ element: el })
+            .setLngLat([item.lng, item.lat])
+            .setPopup(
+              new Popup({ offset: 10 }).setHTML(
+                `<strong>${formatMaidenheadDisplay(item.grid)}</strong><br/>${t("qsoCount", { count: item.qsoCount })}<br/><span style="font-size:12px">${callsignPreview}${extra}</span>`,
+              ),
+            )
+            .addTo(map),
+        );
+      }
+    }
+  }, [
+    showLocationMarkers,
+    activeHomeMarker,
+    qsoMarkers,
+    showQsoMarkers,
+    mapTheme,
+    mapTilerKey,
+    t,
+  ]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapTilerKey || !map.isStyleLoaded()) return;
+
+    const tracesVisible =
+      showTraces &&
+      showQsoMarkers &&
+      Boolean(activeHomeMarker) &&
+      qsoMarkers.length > 0;
+    syncTraceLayers(
+      map,
+      buildQsoTraceFeatureCollection(
+        activeHomeMarker,
+        showQsoMarkers ? qsoMarkers : [],
+      ),
+      mapTheme,
+      tracesVisible,
+    );
+  }, [
+    showTraces,
+    activeHomeMarker,
+    qsoMarkers,
+    showQsoMarkers,
+    mapTheme,
+    mapTilerKey,
   ]);
 
   useEffect(() => {
@@ -629,6 +852,20 @@ export function HamMapFullscreenView({
     map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 800 });
   }
 
+  async function toggleBrowserFullscreen() {
+    const shell = shellRef.current;
+    if (!shell) return;
+    try {
+      if (document.fullscreenElement === shell) {
+        await document.exitFullscreen();
+      } else {
+        await shell.requestFullscreen();
+      }
+    } catch {
+      // Browser may deny fullscreen without a user gesture or support.
+    }
+  }
+
   const hasMarkers =
     Boolean(activeHomeMarker) || (showQsoMarkers && qsoMarkers.length > 0);
   const panelTheme = mapTheme ?? "light";
@@ -639,7 +876,7 @@ export function HamMapFullscreenView({
   const emptyMuted = panelTheme === "light" ? "text-zinc-500" : "text-white/70";
 
   return (
-    <div className="fixed inset-0 z-[100] bg-zinc-200">
+    <div ref={shellRef} className="fixed inset-0 z-[100] bg-zinc-200">
       {mapTilerKey ? (
         // MapLibre sets position:relative on this node — use h-full/w-full, not absolute inset-0
         // (inset collapses to height 0 → black map, no tiles). See .cursor/rules/maplibre-container.mdc
@@ -670,6 +907,30 @@ export function HamMapFullscreenView({
         showLogbookPrivateNotice={!showQsoMarkers && Boolean(activeHomeMarker)}
         mapAvailable={Boolean(mapTilerKey)}
         onFocusHomeGrid={activeHomeMarker ? focusHomeGrid : undefined}
+      />
+
+      <HamMapControlsPanel
+        mapTheme={panelTheme}
+        showGridRectangles={showGridRectangles}
+        onToggleGridRectangles={() =>
+          setShowGridRectangles((current) => !current)
+        }
+        showLocationMarkers={showLocationMarkers}
+        onToggleLocationMarkers={() =>
+          setShowLocationMarkers((current) => !current)
+        }
+        showTraces={showTraces}
+        onToggleTraces={() => setShowTraces((current) => !current)}
+        tracesAvailable={
+          showQsoMarkers &&
+          Boolean(activeHomeMarker) &&
+          qsoMarkers.length > 0
+        }
+        isBrowserFullscreen={isBrowserFullscreen}
+        onToggleBrowserFullscreen={() => {
+          void toggleBrowserFullscreen();
+        }}
+        fullscreenSupported={fullscreenSupported}
       />
 
       <HamMapHomeLocationPrompt

@@ -157,7 +157,13 @@
       "homeLocationUnsupported": "Geolocation is not available in this browser.",
       "homeLocationFailed": "Could not get your location. Check browser permissions and try again.",
       "focusHomeGrid": "Center map on home grid",
-      "pickedGridLabel": "Selected grid"
+      "pickedGridLabel": "Selected grid",
+      "mapControlsLabel": "Map controls",
+      "toggleGridRectangles": "Show grid squares",
+      "toggleLocationMarkers": "Show location markers",
+      "toggleTraces": "Show QSO traces",
+      "enterBrowserFullscreen": "Enter fullscreen",
+      "exitBrowserFullscreen": "Exit fullscreen"
     }
   },
   "account": {
