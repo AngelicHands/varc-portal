@@ -1752,7 +1752,7 @@ export async function createUserAction(
       passwordHash,
       role: normalizeRoleKey(data.role),
       callsign: data.callsign,
-      callsignVerified: Boolean(data.callsign) && Boolean(data.callsignVerified),
+      callsignVerified: false,
     });
     return { ok: true, id: String(created._id) };
   } catch (error) {
@@ -1785,19 +1785,25 @@ export async function updateAdminUserAction(
       }
     }
 
-    user.name = parsed.data.name;
-    const previousCallsign = user.callsign?.trim() ?? "";
+    const previousCallsign = (user.callsign?.trim() ?? "").toUpperCase();
     const nextCallsign = parsed.data.callsign;
-    user.callsign = nextCallsign;
-    if (!nextCallsign) {
-      user.callsignVerified = false;
-    } else if (typeof parsed.data.callsignVerified === "boolean") {
-      user.callsignVerified = parsed.data.callsignVerified;
-    } else if (nextCallsign !== previousCallsign) {
-      user.callsignVerified = false;
-    }
-    user.markModified("callsignVerified");
-    await user.save();
+    const callsignChanged = nextCallsign !== previousCallsign;
+    const nextVerified =
+      Boolean(nextCallsign) &&
+      !callsignChanged &&
+      Boolean(user.callsignVerified);
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          name: parsed.data.name,
+          callsign: nextCallsign,
+          callsignVerified: nextVerified,
+        },
+      },
+      { strict: false },
+    );
     await invalidateCmsTags(
       CmsCacheTags.callsigns,
       ...(nextCallsign ? [CmsCacheTags.callsign(nextCallsign)] : []),

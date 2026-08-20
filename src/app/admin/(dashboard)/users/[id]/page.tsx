@@ -125,6 +125,7 @@ export default async function AdminUserDetailPage({ params }: Props) {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <CallsignStatusCard
+          key={`${callsign}:${callsignVerified ? "1" : "0"}`}
           userId={id}
           callsign={callsign}
           verified={callsignVerified}
@@ -152,7 +153,6 @@ export default async function AdminUserDetailPage({ params }: Props) {
             userId={id}
             initialName={user.name}
             initialCallsign={user.callsign?.trim() ?? ""}
-            initialCallsignVerified={callsignVerified}
           />
         </section>
 

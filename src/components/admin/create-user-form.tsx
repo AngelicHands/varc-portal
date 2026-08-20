@@ -15,7 +15,6 @@ type EditableUser = {
   name: string;
   email: string;
   callsign: string;
-  callsignVerified: boolean;
   role: string;
 };
 
@@ -36,9 +35,6 @@ export function CreateUserModal({ open, roles, user, onClose }: Props) {
   const [email, setEmail] = useState(user?.email ?? "");
   const [password, setPassword] = useState("");
   const [callsign, setCallsign] = useState(user?.callsign ?? "");
-  const [callsignVerified, setCallsignVerified] = useState(
-    Boolean(user?.callsignVerified),
-  );
   const defaultRole =
     (user?.role as Role | undefined) ||
     (roles.find((role) => role.key === "administrator")?.key as Role) ||
@@ -100,8 +96,6 @@ export function CreateUserModal({ open, roles, user, onClose }: Props) {
                 ? await updateAdminUserAction(user.id, {
                     name,
                     callsign,
-                    callsignVerified:
-                      Boolean(callsign.trim()) && callsignVerified,
                   })
                 : await createUserAction({
                     name,
@@ -109,8 +103,6 @@ export function CreateUserModal({ open, roles, user, onClose }: Props) {
                     password,
                     role,
                     callsign,
-                    callsignVerified:
-                      Boolean(callsign.trim()) && callsignVerified,
                   });
               if (
                 !notifyAction(
@@ -171,28 +163,10 @@ export function CreateUserModal({ open, roles, user, onClose }: Props) {
             <span className="mb-1 block font-medium">Callsign</span>
             <input
               value={callsign}
-              onChange={(e) => {
-                const next = e.target.value.toUpperCase();
-                setCallsign(next);
-                if (!next.trim()) setCallsignVerified(false);
-              }}
+              onChange={(e) => setCallsign(e.target.value.toUpperCase())}
               placeholder="XV1ABC"
               className="w-full rounded border border-gray-300 px-3 py-2 uppercase"
             />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium">Callsign status</span>
-            <select
-              value={callsignVerified ? "verified" : "not_verified"}
-              disabled={!callsign.trim()}
-              onChange={(e) =>
-                setCallsignVerified(e.target.value === "verified")
-              }
-              className="w-full rounded border border-gray-300 px-3 py-2 disabled:bg-gray-50 disabled:text-gray-500"
-            >
-              <option value="not_verified">Not verified</option>
-              <option value="verified">Verified</option>
-            </select>
           </label>
           {editing ? null : (
             <label className="block text-sm">

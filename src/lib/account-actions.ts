@@ -36,13 +36,24 @@ export async function updateProfileAction(raw: unknown) {
       return { ok: false as const, error: "User not found" };
     }
 
-    const previousCallsign = user.callsign?.trim() ?? "";
-    user.name = parsed.data.name;
-    user.callsign = parsed.data.callsign;
-    if (parsed.data.callsign !== previousCallsign) {
-      user.callsignVerified = false;
-    }
-    await user.save();
+    const previousCallsign = (user.callsign?.trim() ?? "").toUpperCase();
+    const nextCallsign = parsed.data.callsign;
+    const callsignChanged = nextCallsign !== previousCallsign;
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          name: parsed.data.name,
+          callsign: nextCallsign,
+          callsignVerified:
+            Boolean(nextCallsign) &&
+            !callsignChanged &&
+            Boolean(user.callsignVerified),
+        },
+      },
+      { strict: false },
+    );
 
     revalidatePath("/account");
     revalidatePath("/logbook");
