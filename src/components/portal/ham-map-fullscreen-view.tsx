@@ -31,6 +31,10 @@ import {
 import { HamMapFloatingPanel } from "@/components/portal/ham-map-floating-panel";
 import { HamMapControlsPanel } from "@/components/portal/ham-map-controls-panel";
 import { HamMapQsoTimeFilter } from "@/components/portal/ham-map-qso-time-filter";
+import {
+  HAM_MAP_QSO_LIST_WIDTH_PX,
+  HamMapQsoListPanel,
+} from "@/components/portal/ham-map-qso-list-panel";
 import { HamMapHomeLocationPrompt } from "@/components/portal/ham-map-home-location-prompt";
 import type { MaidenheadBounds } from "@/lib/maidenhead";
 import {
@@ -39,6 +43,7 @@ import {
   maidenheadBounds,
   normalizeGrid,
   pointInMaidenheadBounds,
+  truncateMaidenhead,
 } from "@/lib/maidenhead";
 
 const GRID_SOURCE_ID = "ham-grid-squares";
@@ -179,19 +184,40 @@ function syncGridSquareLayers(
   map: MapLibreMap,
   collection: GridFeatureCollection,
   theme: HamMapTheme | null,
+  emphasized = false,
 ) {
-  const homeFill =
-    theme === "dark" ? "rgba(16, 185, 129, 0.28)" : "rgba(5, 150, 105, 0.22)";
-  const homeLine =
-    theme === "dark" ? "rgba(110, 231, 183, 0.95)" : "rgba(4, 120, 87, 0.9)";
+  const homeFill = emphasized
+    ? theme === "dark"
+      ? "rgba(16, 185, 129, 0.3)"
+      : "rgba(5, 150, 105, 0.3)"
+    : theme === "dark"
+      ? "rgba(16, 185, 129, 0.28)"
+      : "rgba(5, 150, 105, 0.22)";
+  const homeLine = emphasized
+    ? theme === "dark"
+      ? "rgba(110, 231, 183, 1)"
+      : "rgba(4, 120, 87, 1)"
+    : theme === "dark"
+      ? "rgba(110, 231, 183, 0.95)"
+      : "rgba(4, 120, 87, 0.9)";
   const pickFill =
     theme === "dark" ? "rgba(251, 191, 36, 0.28)" : "rgba(217, 119, 6, 0.2)";
   const pickLine =
     theme === "dark" ? "rgba(252, 211, 77, 0.95)" : "rgba(180, 83, 9, 0.9)";
-  const qsoFill =
-    theme === "dark" ? "rgba(56, 189, 248, 0.14)" : "rgba(2, 132, 199, 0.12)";
-  const qsoLine =
-    theme === "dark" ? "rgba(125, 211, 252, 0.75)" : "rgba(3, 105, 161, 0.7)";
+  const qsoFill = emphasized
+    ? theme === "dark"
+      ? "rgba(56, 189, 248, 0.3)"
+      : "rgba(2, 132, 199, 0.3)"
+    : theme === "dark"
+      ? "rgba(56, 189, 248, 0.14)"
+      : "rgba(2, 132, 199, 0.12)";
+  const qsoLine = emphasized
+    ? theme === "dark"
+      ? "rgba(125, 211, 252, 1)"
+      : "rgba(3, 105, 161, 1)"
+    : theme === "dark"
+      ? "rgba(125, 211, 252, 0.75)"
+      : "rgba(3, 105, 161, 0.7)";
   const homeText =
     theme === "dark" ? "#a7f3d0" : "#065f46";
   const pickText =
@@ -200,6 +226,19 @@ function syncGridSquareLayers(
     theme === "dark" ? "#bae6fd" : "#0c4a6e";
   const labelHalo =
     theme === "dark" ? "rgba(0, 0, 0, 0.75)" : "rgba(255, 255, 255, 0.9)";
+  const labelAnchor = emphasized ? "bottom-left" : "top-left";
+  const labelOffset: [number, number] = emphasized ? [0.15, -0.35] : [0.35, 0.35];
+  const labelSize = emphasized
+    ? 14
+    : (["match", ["get", "kind"], "home", 13, "pick", 13, 11] as [
+        "match",
+        ["get", "kind"],
+        "home",
+        number,
+        "pick",
+        number,
+        number,
+      ]);
 
   const source = map.getSource(GRID_SOURCE_ID);
   if (source instanceof GeoJSONSource) {
@@ -262,11 +301,12 @@ function syncGridSquareLayers(
           "match",
           ["get", "kind"],
           "home",
-          2.5,
+          emphasized ? 3 : 2.5,
           "pick",
           2.5,
-          1.5,
+          emphasized ? 3 : 1.5,
         ],
+        "line-opacity": 1,
       },
     });
   } else {
@@ -283,10 +323,10 @@ function syncGridSquareLayers(
       "match",
       ["get", "kind"],
       "home",
-      2.5,
+      emphasized ? 3 : 2.5,
       "pick",
       2.5,
-      1.5,
+      emphasized ? 3 : 1.5,
     ]);
   }
 
@@ -299,18 +339,9 @@ function syncGridSquareLayers(
       layout: {
         "text-field": ["get", "grid"],
         "text-font": ["Metropolis Semi Bold", "Noto Sans Regular"],
-        "text-size": [
-          "match",
-          ["get", "kind"],
-          "home",
-          13,
-          "pick",
-          13,
-          11,
-        ],
-        "text-anchor": "top-left",
-        // Inset from the NW corner into the square (north-up map).
-        "text-offset": [0.35, 0.35],
+        "text-size": labelSize,
+        "text-anchor": labelAnchor,
+        "text-offset": labelOffset,
         "text-allow-overlap": true,
         "text-ignore-placement": true,
       },
@@ -326,6 +357,7 @@ function syncGridSquareLayers(
         ],
         "text-halo-color": labelHalo,
         "text-halo-width": 1.5,
+        "text-opacity": 1,
       },
     });
   } else {
@@ -339,15 +371,9 @@ function syncGridSquareLayers(
       qsoText,
     ]);
     map.setPaintProperty(GRID_LABEL_LAYER_ID, "text-halo-color", labelHalo);
-    map.setLayoutProperty(GRID_LABEL_LAYER_ID, "text-size", [
-      "match",
-      ["get", "kind"],
-      "home",
-      13,
-      "pick",
-      13,
-      11,
-    ]);
+    map.setLayoutProperty(GRID_LABEL_LAYER_ID, "text-size", labelSize);
+    map.setLayoutProperty(GRID_LABEL_LAYER_ID, "text-anchor", labelAnchor);
+    map.setLayoutProperty(GRID_LABEL_LAYER_ID, "text-offset", labelOffset);
   }
 }
 
@@ -369,9 +395,17 @@ function syncTraceLayers(
   collection: QsoTraceFeatureCollection,
   theme: HamMapTheme | null,
   visible: boolean,
+  emphasized = false,
 ) {
-  const lineColor =
-    theme === "dark" ? "rgba(125, 211, 252, 0.75)" : "rgba(2, 132, 199, 0.65)";
+  const lineColor = emphasized
+    ? theme === "dark"
+      ? "rgba(125, 211, 252, 1)"
+      : "rgba(2, 132, 199, 1)"
+    : theme === "dark"
+      ? "rgba(125, 211, 252, 0.75)"
+      : "rgba(2, 132, 199, 0.65)";
+  const lineOpacity = emphasized ? 1 : 0.9;
+  const lineWidth = emphasized ? 2.5 : 1.75;
 
   const source = map.getSource(TRACE_SOURCE_ID);
   if (source instanceof GeoJSONSource) {
@@ -395,12 +429,14 @@ function syncTraceLayers(
       },
       paint: {
         "line-color": lineColor,
-        "line-width": 1.75,
-        "line-opacity": 0.9,
+        "line-width": lineWidth,
+        "line-opacity": lineOpacity,
       },
     });
   } else {
     map.setPaintProperty(TRACE_LAYER_ID, "line-color", lineColor);
+    map.setPaintProperty(TRACE_LAYER_ID, "line-width", lineWidth);
+    map.setPaintProperty(TRACE_LAYER_ID, "line-opacity", lineOpacity);
     map.setLayoutProperty(
       TRACE_LAYER_ID,
       "visibility",
@@ -460,17 +496,53 @@ export function HamMapFullscreenView({
   const [showLocationMarkers, setShowLocationMarkers] = useState(true);
   const [showTraces, setShowTraces] = useState(true);
   const [qsoTimeRange, setQsoTimeRange] = useState<HamMapQsoTimeRange>("all");
+  const [qsoListOpen, setQsoListOpen] = useState(false);
+  const [selectedQsoId, setSelectedQsoId] = useState<string | null>(null);
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
   const [fullscreenSupported, setFullscreenSupported] = useState(false);
   const activeHomeMarker = homeMarker ?? overrideHomeMarker;
   const activeHomeGrid = activeHomeMarker?.grid ?? homeGrid;
-  const qsoMarkers: QsoGridMarker[] = useMemo(
-    () =>
-      showQsoMarkers
-        ? aggregateQsoGridMarkers(filterQsosByTimeRange(qsos, qsoTimeRange))
-        : [],
+  const filteredQsos = useMemo(
+    () => (showQsoMarkers ? filterQsosByTimeRange(qsos, qsoTimeRange) : []),
     [showQsoMarkers, qsos, qsoTimeRange],
   );
+  const qsoMarkers: QsoGridMarker[] = useMemo(
+    () =>
+      showQsoMarkers ? aggregateQsoGridMarkers(filteredQsos) : [],
+    [showQsoMarkers, filteredQsos],
+  );
+  const activeSelectedQsoId =
+    qsoListOpen &&
+    selectedQsoId &&
+    filteredQsos.some((item) => item.id === selectedQsoId)
+      ? selectedQsoId
+      : null;
+  const focusGrid = useMemo(() => {
+    if (!activeSelectedQsoId) return null;
+    const qso = filteredQsos.find((item) => item.id === activeSelectedQsoId);
+    if (!qso?.grid) return null;
+    return truncateMaidenhead(qso.grid, 4);
+  }, [activeSelectedQsoId, filteredQsos]);
+  const mapHomeMarker = useMemo(() => {
+    if (!focusGrid) return activeHomeMarker;
+    if (!activeHomeMarker) return null;
+    const field = truncateMaidenhead(activeHomeMarker.grid, 4);
+    const bounds = field ? maidenheadBounds(field) : null;
+    if (!field || !bounds) return null;
+    return { ...activeHomeMarker, grid: field, bounds };
+  }, [focusGrid, activeHomeMarker]);
+  const mapPickedGrid = focusGrid ? null : pickedGrid;
+  const mapQsoMarkers = useMemo(() => {
+    if (!focusGrid) return qsoMarkers;
+    const match = qsoMarkers.find(
+      (marker) => truncateMaidenhead(marker.grid, 4) === focusGrid,
+    );
+    if (!match) return [];
+    const bounds = maidenheadBounds(focusGrid);
+    if (!bounds) return [];
+    return [{ ...match, grid: focusGrid, bounds }];
+  }, [focusGrid, qsoMarkers]);
+
   const activeHomeRef = useRef(activeHomeMarker);
   const pickedGridRef = useRef(pickedGrid);
   const showGridRectanglesRef = useRef(showGridRectangles);
@@ -598,17 +670,19 @@ export function HamMapFullscreenView({
       const bounds = new LngLatBounds();
       let hasBounds = false;
 
+      const focusMode = Boolean(focusGrid);
       syncGridSquareLayers(
         map,
         buildGridFeatureCollection(
-          activeHomeMarker,
-          qsoMarkers,
+          mapHomeMarker,
+          mapQsoMarkers,
           showQsoMarkers,
           t("homeMarkerLabel"),
-          pickedGridRef.current,
+          mapPickedGrid,
           t("pickedGridLabel"),
         ),
         mapTheme,
+        focusMode,
       );
       setGridRectangleVisibility(map, showGridRectanglesRef.current);
 
@@ -616,26 +690,28 @@ export function HamMapFullscreenView({
         showTracesRef.current &&
         showQsoMarkers &&
         Boolean(activeHomeMarker) &&
-        qsoMarkers.length > 0;
+        mapQsoMarkers.length > 0;
       syncTraceLayers(
         map,
         buildQsoTraceFeatureCollection(
+          // Traces always originate from the station home, even when home grid is hidden.
           activeHomeMarker,
-          showQsoMarkers ? qsoMarkers : [],
+          showQsoMarkers ? mapQsoMarkers : [],
         ),
         mapTheme,
         tracesVisible,
+        focusMode,
       );
 
-      if (showLocationMarkersRef.current && activeHomeMarker) {
+      if (showLocationMarkersRef.current && mapHomeMarker) {
         const el = document.createElement("div");
         el.className =
           "flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-lg";
         const marker = new Marker({ element: el })
-          .setLngLat([activeHomeMarker.lng, activeHomeMarker.lat])
+          .setLngLat([mapHomeMarker.lng, mapHomeMarker.lat])
           .setPopup(
             new Popup({ offset: 12 }).setHTML(
-              `<strong>${activeHomeMarker.callsign}</strong><br/>${t("homeMarkerLabel")}: ${formatMaidenheadDisplay(activeHomeMarker.grid)}<br/>${t("homeLocationLabel")}: ${activeHomeMarker.lat.toFixed(5)}, ${activeHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${activeHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid")}</span>`,
+              `<strong>${mapHomeMarker.callsign}</strong><br/>${t("homeMarkerLabel")}: ${formatMaidenheadDisplay(mapHomeMarker.grid)}<br/>${t("homeLocationLabel")}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${mapHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid")}</span>`,
             ),
           )
           .addTo(map);
@@ -650,7 +726,7 @@ export function HamMapFullscreenView({
       }
 
       if (showQsoMarkers) {
-        for (const item of qsoMarkers) {
+        for (const item of mapQsoMarkers) {
           if (showLocationMarkersRef.current) {
             const el = document.createElement("div");
             el.className =
@@ -698,7 +774,7 @@ export function HamMapFullscreenView({
     return () => {
       map.off("style.load", onStyleLoad);
     };
-  }, [activeHomeMarker, qsoMarkers, showQsoMarkers, mapTheme, mapTilerKey, t]);
+  }, [activeHomeMarker, focusGrid, mapHomeMarker, mapQsoMarkers, mapPickedGrid, showQsoMarkers, mapTheme, mapTilerKey, t]);
 
   // Keep pick rectangle on the grid layer without re-fitting the camera.
   useEffect(() => {
@@ -708,21 +784,23 @@ export function HamMapFullscreenView({
     syncGridSquareLayers(
       map,
       buildGridFeatureCollection(
-        activeHomeMarker,
-        qsoMarkers,
+        mapHomeMarker,
+        mapQsoMarkers,
         showQsoMarkers,
         t("homeMarkerLabel"),
-        pickedGrid,
+        mapPickedGrid,
         t("pickedGridLabel"),
       ),
       mapTheme,
+      Boolean(focusGrid),
     );
     setGridRectangleVisibility(map, showGridRectangles);
   }, [
-    pickedGrid,
+    focusGrid,
+    mapPickedGrid,
     showGridRectangles,
-    activeHomeMarker,
-    qsoMarkers,
+    mapHomeMarker,
+    mapQsoMarkers,
     showQsoMarkers,
     mapTheme,
     mapTilerKey,
@@ -744,16 +822,16 @@ export function HamMapFullscreenView({
     markersRef.current = [];
     if (!showLocationMarkers) return;
 
-    if (activeHomeMarker) {
+    if (mapHomeMarker) {
       const el = document.createElement("div");
       el.className =
         "flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-lg";
       markersRef.current.push(
         new Marker({ element: el })
-          .setLngLat([activeHomeMarker.lng, activeHomeMarker.lat])
+          .setLngLat([mapHomeMarker.lng, mapHomeMarker.lat])
           .setPopup(
             new Popup({ offset: 12 }).setHTML(
-              `<strong>${activeHomeMarker.callsign}</strong><br/>${t("homeMarkerLabel")}: ${formatMaidenheadDisplay(activeHomeMarker.grid)}<br/>${t("homeLocationLabel")}: ${activeHomeMarker.lat.toFixed(5)}, ${activeHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${activeHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid")}</span>`,
+              `<strong>${mapHomeMarker.callsign}</strong><br/>${t("homeMarkerLabel")}: ${formatMaidenheadDisplay(mapHomeMarker.grid)}<br/>${t("homeLocationLabel")}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${mapHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid")}</span>`,
             ),
           )
           .addTo(map),
@@ -761,7 +839,7 @@ export function HamMapFullscreenView({
     }
 
     if (showQsoMarkers) {
-      for (const item of qsoMarkers) {
+      for (const item of mapQsoMarkers) {
         const el = document.createElement("div");
         el.className =
           mapTheme === "dark"
@@ -786,8 +864,8 @@ export function HamMapFullscreenView({
     }
   }, [
     showLocationMarkers,
-    activeHomeMarker,
-    qsoMarkers,
+    mapHomeMarker,
+    mapQsoMarkers,
     showQsoMarkers,
     mapTheme,
     mapTilerKey,
@@ -802,20 +880,22 @@ export function HamMapFullscreenView({
       showTraces &&
       showQsoMarkers &&
       Boolean(activeHomeMarker) &&
-      qsoMarkers.length > 0;
+      mapQsoMarkers.length > 0;
     syncTraceLayers(
       map,
       buildQsoTraceFeatureCollection(
         activeHomeMarker,
-        showQsoMarkers ? qsoMarkers : [],
+        showQsoMarkers ? mapQsoMarkers : [],
       ),
       mapTheme,
       tracesVisible,
+      Boolean(focusGrid),
     );
   }, [
+    focusGrid,
     showTraces,
     activeHomeMarker,
-    qsoMarkers,
+    mapQsoMarkers,
     showQsoMarkers,
     mapTheme,
     mapTilerKey,
@@ -930,6 +1010,9 @@ export function HamMapFullscreenView({
         showLogbookPrivateNotice={!showQsoMarkers && Boolean(activeHomeMarker)}
         mapAvailable={Boolean(mapTilerKey)}
         onFocusHomeGrid={activeHomeMarker ? focusHomeGrid : undefined}
+        offsetLeft={
+          showQsoMarkers && qsoListOpen ? HAM_MAP_QSO_LIST_WIDTH_PX : 0
+        }
       />
 
       <div className="pointer-events-none absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
@@ -964,6 +1047,20 @@ export function HamMapFullscreenView({
           />
         ) : null}
       </div>
+
+      {showQsoMarkers ? (
+        <HamMapQsoListPanel
+          mapTheme={panelTheme}
+          open={qsoListOpen}
+          onOpenChange={(open) => {
+            setQsoListOpen(open);
+            if (!open) setSelectedQsoId(null);
+          }}
+          qsos={filteredQsos}
+          selectedQsoId={activeSelectedQsoId}
+          onSelectQso={setSelectedQsoId}
+        />
+      ) : null}
 
       <HamMapHomeLocationPrompt
         enabled={canSetHomeLocation && !activeHomeMarker}

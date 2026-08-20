@@ -164,6 +164,13 @@
       "toggleTraces": "Show QSO traces",
       "qsoTimeFilterLabel": "QSO",
       "qsoTimeFilterAll": "All",
+      "qsoListTitle": "QSO list",
+      "qsoListHandle": "QSOs",
+      "qsoListExpand": "Show QSO list",
+      "qsoListCollapse": "Hide QSO list",
+      "qsoListCount": "{count, plural, one {# contact} other {# contacts}}",
+      "qsoListEmpty": "No QSOs in this time range.",
+      "qsoListNoGrid": "No grid",
       "enterBrowserFullscreen": "Enter fullscreen",
       "exitBrowserFullscreen": "Exit fullscreen"
     }

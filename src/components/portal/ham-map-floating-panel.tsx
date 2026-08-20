@@ -19,6 +19,8 @@ type Props = {
   showLogbookPrivateNotice: boolean;
   mapAvailable?: boolean;
   onFocusHomeGrid?: () => void;
+  /** Extra left offset when the QSO list drawer is open. */
+  offsetLeft?: number;
 };
 
 function initialsFrom(name: string, callsign: string): string {
@@ -81,6 +83,7 @@ export function HamMapFloatingPanel({
   showLogbookPrivateNotice,
   mapAvailable = true,
   onFocusHomeGrid,
+  offsetLeft = 0,
 }: Props) {
   const t = useTranslations("ham.map");
   const light = mapTheme === "light";
@@ -111,7 +114,10 @@ export function HamMapFloatingPanel({
   const profileHover = light ? "hover:opacity-80" : "hover:opacity-90";
 
   return (
-    <aside className="pointer-events-auto absolute left-3 top-3 z-20 flex max-w-[min(100%-1.5rem,22rem)] flex-col gap-2">
+    <aside
+      className="pointer-events-auto absolute top-3 z-20 flex max-w-[min(100%-1.5rem,22rem)] flex-col gap-2 transition-[left] duration-300 ease-out"
+      style={{ left: 12 + offsetLeft }}
+    >
       <div
         className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 backdrop-blur-md ${panelClass}`}
       >

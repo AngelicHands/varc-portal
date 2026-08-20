@@ -38,6 +38,21 @@ export function isValidMaidenheadGrid(raw: string): boolean {
 }
 
 /**
+ * Truncate a locator to an even precision (default 4 = square, e.g. OL20vx → OL20).
+ * Returns null when the input is shorter than the requested precision.
+ */
+export function truncateMaidenhead(
+  raw: string,
+  precision = 4,
+): string | null {
+  const grid = normalizeGrid(raw);
+  if (precision < 4 || precision > 12 || precision % 2 !== 0) return null;
+  if (grid.length < precision) return null;
+  const truncated = grid.slice(0, precision);
+  return isValidMaidenheadGrid(truncated) ? truncated : null;
+}
+
+/**
  * South-west corner of a Maidenhead square (no centering).
  * Intermediate levels must not be pre-centered — see maidenheadToLatLng.
  */
