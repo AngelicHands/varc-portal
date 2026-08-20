@@ -24,6 +24,11 @@ data:
   CF_MAIL_MAX: "500"
   CF_MAIL_RATE_LIMIT: "5"
   CF_MAIL_RATE_LIMIT_WINDOW: "1h"
+  # In-process email queue worker (runs inside the web pod via instrumentation.ts)
+  EMAIL_WORKER_ENABLED: "1"
+  EMAIL_WORKER_POLL_MS: "3000"
+  # QSO logbook: max confirmation emails per non-admin user (admins bypass)
+  QSO_EMAIL_LIMIT: "20"
   BACKUP_S3_PREFIX: "backup-artifacts"
   BACKUP_MAX_AGE_DAYS: "7"
   BACKUP_MAX_COUNT: "10"
