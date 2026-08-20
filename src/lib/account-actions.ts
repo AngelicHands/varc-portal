@@ -12,7 +12,7 @@ import { createEmailJob } from "@/lib/mail/jobs";
 import { buildCallsignVerificationRequestEmail } from "@/lib/mail/callsign-verification-email";
 import { failAction } from "@/lib/safe-error";
 import { listUserDocuments } from "@/lib/user-documents";
-import { profileFormSchema } from "@/lib/validations/qso";
+import { profileFormSchema, homeLocationUpdateSchema } from "@/lib/validations/qso";
 import { User } from "@/models/User";
 
 async function requireAccountSession() {
@@ -67,10 +67,18 @@ export async function updateProfileAction(raw: unknown) {
     }
 
     const birthdayIso = parsed.data.birthday;
+    const homeGrid = parsed.data.homeGrid;
+    const hasLocation =
+      Boolean(homeGrid) &&
+      typeof parsed.data.homeLat === "number" &&
+      typeof parsed.data.homeLng === "number";
     const update: Record<string, unknown> = {
       name: parsed.data.name,
       callsign: nextCallsign,
       gender: parsed.data.gender,
+      homeGrid,
+      homeLat: hasLocation ? parsed.data.homeLat : null,
+      homeLng: hasLocation ? parsed.data.homeLng : null,
       callsignVerified:
         Boolean(nextCallsign) &&
         !callsignChanged &&
@@ -103,6 +111,57 @@ export async function updateProfileAction(raw: unknown) {
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to update profile");
+  }
+}
+
+export async function updateHomeLocationAction(raw: unknown) {
+  try {
+    const session = await requireAccountSession();
+    if (!session) {
+      return { ok: false as const, error: "Unauthorized" };
+    }
+
+    const parsed = homeLocationUpdateSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        ok: false as const,
+        error: parsed.error.issues[0]?.message ?? "Invalid location data",
+      };
+    }
+
+    await connectDb();
+    const user = await User.findById(session.user.id);
+    if (!user) {
+      return { ok: false as const, error: "User not found" };
+    }
+
+    const callsign = user.callsign?.trim().toUpperCase() ?? "";
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          homeGrid: parsed.data.homeGrid,
+          homeLat: parsed.data.homeLat,
+          homeLng: parsed.data.homeLng,
+        },
+      },
+      { strict: false },
+    );
+
+    revalidatePath("/account");
+    revalidateUserCallsignPaths(callsign);
+    await invalidateQsoAndHamCache({
+      userId: session.user.id,
+      callsigns: [callsign],
+    });
+    return {
+      ok: true as const,
+      homeGrid: parsed.data.homeGrid,
+      homeLat: parsed.data.homeLat,
+      homeLng: parsed.data.homeLng,
+    };
+  } catch (error) {
+    return failAction(error, "Failed to update home location");
   }
 }
 

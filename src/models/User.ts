@@ -34,6 +34,10 @@ const UserSchema = new Schema(
       enum: ["", "male", "female", "other"],
       default: "",
     },
+    homeGrid: { type: String, default: "", trim: true, uppercase: true },
+    /** WGS84 station location (marker); optional companion to homeGrid. */
+    homeLat: { type: Number, default: null },
+    homeLng: { type: Number, default: null },
     emailVerified: { type: Date, default: null },
   },
   { timestamps: true },

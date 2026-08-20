@@ -2,6 +2,7 @@ import type { AdifRecord } from "@/lib/adif/parse";
 import type { QsoSource } from "@/lib/qso-source";
 import {
   adifField,
+  adifNotesFromRecord,
   normalizeAdifBand,
   normalizeAdifCallsign,
   normalizeAdifFreq,
@@ -34,9 +35,7 @@ export function mapEqslAdifRecord(
     return { ok: false, reason: adifImportError("invalidQsoDateTime") };
   }
 
-  const notes = [adifField(record, "qslmsg"), adifField(record, "comment", "notes")]
-    .filter(Boolean)
-    .join(" · ");
+  const notes = adifNotesFromRecord(record);
 
   return validateImportedCandidate(
     {

@@ -18,7 +18,7 @@ export async function SiteFooter({
   const t = await getTranslations("footer");
 
   return (
-    <footer className="border-t border-border bg-surface">
+    <footer data-site-footer className="border-t border-border bg-surface">
       <div className="mx-auto max-w-6xl px-4 py-10 text-sm text-muted md:px-6">
         <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between md:gap-8">
           <div className="min-w-0 shrink md:max-w-[40%]">

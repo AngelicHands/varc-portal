@@ -16,9 +16,12 @@ export type SiteAccountUser = {
 export function SiteAccountMenu({
   user,
   compact = false,
+  overlayTone,
 }: {
   user: SiteAccountUser | null;
   compact?: boolean;
+  /** When set (map overlay), style the trigger for light/dark basemap panels. */
+  overlayTone?: "light" | "dark";
 }) {
   const t = useTranslations("nav");
   const locale = useLocale();
@@ -26,12 +29,23 @@ export function SiteAccountMenu({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
+  const loginClass =
+    overlayTone === "dark"
+      ? "shrink-0 text-sm text-white/70 transition hover:text-white"
+      : overlayTone === "light"
+        ? "shrink-0 text-sm text-zinc-600 transition hover:text-zinc-900"
+        : "shrink-0 text-sm text-muted transition hover:text-foreground";
+
+  const compactTriggerClass =
+    overlayTone === "dark"
+      ? "inline-flex h-10 items-center gap-1.5 rounded-md border border-white/20 px-2.5 text-sm text-white outline-none transition hover:bg-white/10 data-[state=open]:bg-white/10"
+      : overlayTone === "light"
+        ? "inline-flex h-10 items-center gap-1.5 rounded-md border border-zinc-300 px-2.5 text-sm text-zinc-800 outline-none transition hover:bg-zinc-100 data-[state=open]:bg-zinc-100"
+        : "inline-flex h-10 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[state=open]:bg-foreground/5";
+
   if (!user) {
     return (
-      <NextLink
-        href={loginHref}
-        className="shrink-0 text-sm text-muted transition hover:text-foreground"
-      >
+      <NextLink href={loginHref} className={loginClass}>
         {t("login")}
       </NextLink>
     );
@@ -60,7 +74,7 @@ export function SiteAccountMenu({
           <DropdownMenu.Trigger asChild>
             <button
               type="button"
-              className="inline-flex h-10 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[state=open]:bg-foreground/5"
+              className={compactTriggerClass}
               aria-label={t("accountMenu")}
             >
               <svg

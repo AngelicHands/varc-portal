@@ -1,0 +1,549 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import {
+  GeoJSONSource,
+  LngLatBounds,
+  Map as MapLibreMap,
+  Marker,
+  NavigationControl,
+  Popup,
+  setWorkerUrl,
+} from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { useTranslations } from "next-intl";
+import {
+  MAPLIBRE_WORKER_URL,
+  mapTilerStyleUrl,
+  readStoredHamMapTheme,
+  writeStoredHamMapTheme,
+  type HamMapTheme,
+} from "@/lib/map/maptiler-style";
+import type { HomeGridMarker, QsoGridMarker } from "@/lib/qso-map";
+import { HamMapFloatingPanel } from "@/components/portal/ham-map-floating-panel";
+import { HamMapHomeLocationPrompt } from "@/components/portal/ham-map-home-location-prompt";
+import type { MaidenheadBounds } from "@/lib/maidenhead";
+import { formatMaidenheadDisplay } from "@/lib/maidenhead";
+
+const GRID_SOURCE_ID = "ham-grid-squares";
+const GRID_FILL_LAYER_ID = "ham-grid-squares-fill";
+const GRID_LINE_LAYER_ID = "ham-grid-squares-line";
+const GRID_LABEL_LAYER_ID = "ham-grid-squares-label";
+
+type GridFeatureProps = {
+  kind: "home" | "qso";
+  grid: string;
+  label: string;
+};
+
+type GridFeatureCollection = {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    properties: GridFeatureProps;
+    geometry:
+      | {
+          type: "Polygon";
+          coordinates: [number, number][][];
+        }
+      | {
+          type: "Point";
+          coordinates: [number, number];
+        };
+  }>;
+};
+
+function boundsToCoordinates(
+  bounds: MaidenheadBounds,
+): [number, number][][] {
+  const { west, south, east, north } = bounds;
+  return [
+    [
+      [west, south],
+      [east, south],
+      [east, north],
+      [west, north],
+      [west, south],
+    ],
+  ];
+}
+
+/** Northwest corner — top-left of the square with north-up maps. */
+function boundsTopLeft(bounds: MaidenheadBounds): [number, number] {
+  return [bounds.west, bounds.north];
+}
+
+function pushGridFeatures(
+  features: GridFeatureCollection["features"],
+  props: GridFeatureProps,
+  bounds: MaidenheadBounds,
+) {
+  features.push({
+    type: "Feature",
+    properties: props,
+    geometry: {
+      type: "Polygon",
+      coordinates: boundsToCoordinates(bounds),
+    },
+  });
+  features.push({
+    type: "Feature",
+    properties: props,
+    geometry: {
+      type: "Point",
+      coordinates: boundsTopLeft(bounds),
+    },
+  });
+}
+
+function buildGridFeatureCollection(
+  homeMarker: HomeGridMarker | null,
+  qsoMarkers: QsoGridMarker[],
+  showQsoMarkers: boolean,
+  homeLabel: string,
+): GridFeatureCollection {
+  const features: GridFeatureCollection["features"] = [];
+
+  if (homeMarker) {
+    const gridLabel = formatMaidenheadDisplay(homeMarker.grid);
+    pushGridFeatures(
+      features,
+      {
+        kind: "home",
+        grid: gridLabel,
+        label: `${homeLabel}: ${gridLabel}`,
+      },
+      homeMarker.bounds,
+    );
+  }
+
+  if (showQsoMarkers) {
+    for (const item of qsoMarkers) {
+      const gridLabel = formatMaidenheadDisplay(item.grid);
+      pushGridFeatures(
+        features,
+        {
+          kind: "qso",
+          grid: gridLabel,
+          label: gridLabel,
+        },
+        item.bounds,
+      );
+    }
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+function syncGridSquareLayers(
+  map: MapLibreMap,
+  collection: GridFeatureCollection,
+  theme: HamMapTheme | null,
+) {
+  const homeFill =
+    theme === "dark" ? "rgba(16, 185, 129, 0.28)" : "rgba(5, 150, 105, 0.22)";
+  const homeLine =
+    theme === "dark" ? "rgba(110, 231, 183, 0.95)" : "rgba(4, 120, 87, 0.9)";
+  const qsoFill =
+    theme === "dark" ? "rgba(56, 189, 248, 0.14)" : "rgba(2, 132, 199, 0.12)";
+  const qsoLine =
+    theme === "dark" ? "rgba(125, 211, 252, 0.75)" : "rgba(3, 105, 161, 0.7)";
+  const homeText =
+    theme === "dark" ? "#a7f3d0" : "#065f46";
+  const qsoText =
+    theme === "dark" ? "#bae6fd" : "#0c4a6e";
+  const labelHalo =
+    theme === "dark" ? "rgba(0, 0, 0, 0.75)" : "rgba(255, 255, 255, 0.9)";
+
+  const source = map.getSource(GRID_SOURCE_ID);
+  if (source instanceof GeoJSONSource) {
+    source.setData(collection);
+  } else {
+    map.addSource(GRID_SOURCE_ID, {
+      type: "geojson",
+      data: collection,
+    });
+  }
+
+  if (!map.getLayer(GRID_FILL_LAYER_ID)) {
+    map.addLayer({
+      id: GRID_FILL_LAYER_ID,
+      type: "fill",
+      source: GRID_SOURCE_ID,
+      filter: ["==", ["geometry-type"], "Polygon"],
+      paint: {
+        "fill-color": [
+          "match",
+          ["get", "kind"],
+          "home",
+          homeFill,
+          qsoFill,
+        ],
+        "fill-opacity": 1,
+      },
+    });
+  } else {
+    map.setPaintProperty(GRID_FILL_LAYER_ID, "fill-color", [
+      "match",
+      ["get", "kind"],
+      "home",
+      homeFill,
+      qsoFill,
+    ]);
+  }
+
+  if (!map.getLayer(GRID_LINE_LAYER_ID)) {
+    map.addLayer({
+      id: GRID_LINE_LAYER_ID,
+      type: "line",
+      source: GRID_SOURCE_ID,
+      filter: ["==", ["geometry-type"], "Polygon"],
+      paint: {
+        "line-color": [
+          "match",
+          ["get", "kind"],
+          "home",
+          homeLine,
+          qsoLine,
+        ],
+        "line-width": [
+          "match",
+          ["get", "kind"],
+          "home",
+          2.5,
+          1.5,
+        ],
+      },
+    });
+  } else {
+    map.setPaintProperty(GRID_LINE_LAYER_ID, "line-color", [
+      "match",
+      ["get", "kind"],
+      "home",
+      homeLine,
+      qsoLine,
+    ]);
+  }
+
+  if (!map.getLayer(GRID_LABEL_LAYER_ID)) {
+    map.addLayer({
+      id: GRID_LABEL_LAYER_ID,
+      type: "symbol",
+      source: GRID_SOURCE_ID,
+      filter: ["==", ["geometry-type"], "Point"],
+      layout: {
+        "text-field": ["get", "grid"],
+        "text-font": ["Metropolis Semi Bold", "Noto Sans Regular"],
+        "text-size": [
+          "match",
+          ["get", "kind"],
+          "home",
+          13,
+          11,
+        ],
+        "text-anchor": "top-left",
+        // Inset from the NW corner into the square (north-up map).
+        "text-offset": [0.35, 0.35],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+      },
+      paint: {
+        "text-color": [
+          "match",
+          ["get", "kind"],
+          "home",
+          homeText,
+          qsoText,
+        ],
+        "text-halo-color": labelHalo,
+        "text-halo-width": 1.5,
+      },
+    });
+  } else {
+    map.setPaintProperty(GRID_LABEL_LAYER_ID, "text-color", [
+      "match",
+      ["get", "kind"],
+      "home",
+      homeText,
+      qsoText,
+    ]);
+    map.setPaintProperty(GRID_LABEL_LAYER_ID, "text-halo-color", labelHalo);
+  }
+}
+
+type Props = {
+  mapTilerKey: string;
+  callsign: string;
+  operatorName: string;
+  operatorImage?: string | null;
+  verified: boolean;
+  homeGrid: string;
+  homeMarker: HomeGridMarker | null;
+  qsoMarkers: QsoGridMarker[];
+  showQsoMarkers: boolean;
+  branding: { siteName: string; logoUrl?: string };
+  canSetHomeLocation?: boolean;
+};
+
+let mapLibreWorkerConfigured = false;
+
+function ensureMapLibreWorker() {
+  if (mapLibreWorkerConfigured) return;
+  setWorkerUrl(MAPLIBRE_WORKER_URL);
+  mapLibreWorkerConfigured = true;
+}
+
+export function HamMapFullscreenView({
+  mapTilerKey,
+  callsign,
+  operatorName,
+  operatorImage,
+  verified,
+  homeGrid,
+  homeMarker,
+  qsoMarkers,
+  showQsoMarkers,
+  branding,
+  canSetHomeLocation = false,
+}: Props) {
+  const t = useTranslations("ham.map");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const markersRef = useRef<Marker[]>([]);
+  const appliedThemeRef = useRef<HamMapTheme | null>(null);
+  const [mapTheme, setMapTheme] = useState<HamMapTheme | null>(null);
+  const themeReady = mapTheme !== null;
+  const [overrideHomeMarker, setOverrideHomeMarker] =
+    useState<HomeGridMarker | null>(null);
+  const activeHomeMarker = homeMarker ?? overrideHomeMarker;
+  const activeHomeGrid = activeHomeMarker?.grid ?? homeGrid;
+
+  useEffect(() => {
+    document.body.classList.add("ham-map-view");
+    const frame = window.requestAnimationFrame(() => {
+      setMapTheme(readStoredHamMapTheme());
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.body.classList.remove("ham-map-view");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mapTilerKey || !mapTheme || !containerRef.current || mapRef.current) return;
+
+    ensureMapLibreWorker();
+
+    const map = new MapLibreMap({
+      container: containerRef.current,
+      style: mapTilerStyleUrl(mapTheme, mapTilerKey),
+      center: [0, 20],
+      zoom: 1.5,
+      attributionControl: {},
+    });
+
+    map.addControl(new NavigationControl(), "bottom-right");
+    mapRef.current = map;
+    appliedThemeRef.current = mapTheme;
+
+    const onLoad = () => {
+      map.resize();
+    };
+    map.on("load", onLoad);
+    // Ensure layout after the fixed fullscreen container paints.
+    requestAnimationFrame(() => map.resize());
+
+    return () => {
+      map.off("load", onLoad);
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+      appliedThemeRef.current = null;
+    };
+    // Create once after the client theme is known; later theme changes use setStyle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapTilerKey, themeReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapTilerKey || !mapTheme) return;
+    if (appliedThemeRef.current === mapTheme) return;
+
+    const applyStyle = () => {
+      if (appliedThemeRef.current === mapTheme) return;
+      appliedThemeRef.current = mapTheme;
+      map.setStyle(mapTilerStyleUrl(mapTheme, mapTilerKey));
+    };
+
+    if (map.isStyleLoaded()) {
+      applyStyle();
+      return;
+    }
+
+    map.once("load", applyStyle);
+    return () => {
+      map.off("load", applyStyle);
+    };
+  }, [mapTheme, mapTilerKey]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapTilerKey) return;
+
+    const applyMarkers = () => {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+
+      const bounds = new LngLatBounds();
+      let hasBounds = false;
+
+      syncGridSquareLayers(
+        map,
+        buildGridFeatureCollection(
+          activeHomeMarker,
+          qsoMarkers,
+          showQsoMarkers,
+          t("homeMarkerLabel"),
+        ),
+        mapTheme,
+      );
+
+      if (activeHomeMarker) {
+        const el = document.createElement("div");
+        el.className =
+          "flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-lg";
+        const marker = new Marker({ element: el })
+          .setLngLat([activeHomeMarker.lng, activeHomeMarker.lat])
+          .setPopup(
+            new Popup({ offset: 12 }).setHTML(
+              `<strong>${activeHomeMarker.callsign}</strong><br/>${t("homeMarkerLabel")}: ${formatMaidenheadDisplay(activeHomeMarker.grid)}<br/>${t("homeLocationLabel")}: ${activeHomeMarker.lat.toFixed(5)}, ${activeHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${activeHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid")}</span>`,
+            ),
+          )
+          .addTo(map);
+        markersRef.current.push(marker);
+        bounds.extend([activeHomeMarker.bounds.west, activeHomeMarker.bounds.south]);
+        bounds.extend([activeHomeMarker.bounds.east, activeHomeMarker.bounds.north]);
+        bounds.extend([activeHomeMarker.lng, activeHomeMarker.lat]);
+        hasBounds = true;
+      }
+
+      if (showQsoMarkers) {
+        for (const item of qsoMarkers) {
+          const el = document.createElement("div");
+          el.className =
+            mapTheme === "dark"
+              ? "h-3 w-3 rounded-full border border-white/80 bg-sky-400 shadow"
+              : "h-3 w-3 rounded-full border border-white bg-sky-600 shadow";
+          const callsignPreview = item.workedCallsigns.slice(0, 5).join(", ");
+          const extra =
+            item.workedCallsigns.length > 5
+              ? ` +${item.workedCallsigns.length - 5}`
+              : "";
+          const marker = new Marker({ element: el })
+            .setLngLat([item.lng, item.lat])
+            .setPopup(
+              new Popup({ offset: 10 }).setHTML(
+                `<strong>${formatMaidenheadDisplay(item.grid)}</strong><br/>${t("qsoCount", { count: item.qsoCount })}<br/><span style="font-size:12px">${callsignPreview}${extra}</span>`,
+              ),
+            )
+            .addTo(map);
+          markersRef.current.push(marker);
+          bounds.extend([item.bounds.west, item.bounds.south]);
+          bounds.extend([item.bounds.east, item.bounds.north]);
+          hasBounds = true;
+        }
+      }
+
+      if (hasBounds) {
+        map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 0 });
+      }
+    };
+
+    if (map.isStyleLoaded()) applyMarkers();
+    map.on("style.load", applyMarkers);
+    return () => {
+      map.off("style.load", applyMarkers);
+    };
+  }, [activeHomeMarker, qsoMarkers, showQsoMarkers, mapTheme, mapTilerKey, t]);
+
+  function onMapThemeChange(theme: HamMapTheme) {
+    writeStoredHamMapTheme(theme);
+    setMapTheme(theme);
+  }
+
+  function focusHomeGrid() {
+    const map = mapRef.current;
+    const marker = activeHomeMarker;
+    if (!map || !marker) return;
+
+    const bounds = new LngLatBounds();
+    bounds.extend([marker.bounds.west, marker.bounds.south]);
+    bounds.extend([marker.bounds.east, marker.bounds.north]);
+    bounds.extend([marker.lng, marker.lat]);
+    map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 800 });
+  }
+
+  const hasMarkers =
+    Boolean(activeHomeMarker) || (showQsoMarkers && qsoMarkers.length > 0);
+  const panelTheme = mapTheme ?? "light";
+  const emptyBanner =
+    panelTheme === "light"
+      ? "border-zinc-300/80 bg-white/90 text-zinc-900 shadow-lg shadow-zinc-900/10"
+      : "border-white/10 bg-black/70 text-white/90";
+  const emptyMuted = panelTheme === "light" ? "text-zinc-500" : "text-white/70";
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-zinc-200">
+      {mapTilerKey ? (
+        // MapLibre sets position:relative on this node — use h-full/w-full, not absolute inset-0
+        // (inset collapses to height 0 → black map, no tiles). See .cursor/rules/maplibre-container.mdc
+        <div
+          ref={containerRef}
+          className="h-full w-full"
+          aria-label={t("title")}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-zinc-950 p-6 pl-[min(100%,23rem)]">
+          <div className="max-w-md rounded-xl border border-white/10 bg-black/60 px-6 py-5 text-center text-white shadow-lg backdrop-blur-md">
+            <p className="text-lg font-medium">{t("mapUnavailable")}</p>
+            <p className="mt-2 text-sm text-white/70">{t("mapUnavailableHint")}</p>
+          </div>
+        </div>
+      )}
+
+      <HamMapFloatingPanel
+        callsign={callsign}
+        operatorName={operatorName}
+        operatorImage={operatorImage}
+        verified={verified}
+        homeGrid={activeHomeGrid}
+        branding={branding}
+        mapTheme={panelTheme}
+        themeReady={themeReady}
+        onMapThemeChange={onMapThemeChange}
+        showLogbookPrivateNotice={!showQsoMarkers && Boolean(activeHomeMarker)}
+        mapAvailable={Boolean(mapTilerKey)}
+        onFocusHomeGrid={activeHomeMarker ? focusHomeGrid : undefined}
+      />
+
+      <HamMapHomeLocationPrompt
+        enabled={canSetHomeLocation && !activeHomeMarker}
+        callsign={callsign}
+        mapTheme={panelTheme}
+        onLocationSaved={(marker) => {
+          setOverrideHomeMarker(marker);
+        }}
+      />
+
+      {mapTilerKey && !hasMarkers ? (
+        <div
+          className={`pointer-events-none absolute bottom-6 left-1/2 z-20 w-[min(92vw,28rem)] -translate-x-1/2 rounded-xl border px-4 py-3 text-center text-sm backdrop-blur-md ${emptyBanner}`}
+        >
+          <p className="font-medium">{t("emptyTitle")}</p>
+          <p className={`mt-1 text-xs ${emptyMuted}`}>{t("emptyMessage")}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}

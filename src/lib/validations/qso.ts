@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { normalizeCallsignQuery } from "@/lib/callsigns-normalize";
 import { isReservedHamPath } from "@/lib/ham-reserved";
+import { isValidMaidenheadGrid, normalizeGrid } from "@/lib/maidenhead";
 
 /** Basic ham callsign shape (1–2 prefix letters/digits + suffix). */
 const CALLSIGN_PATTERN = /^[A-Z0-9/]{3,15}$/;
@@ -118,6 +119,52 @@ export const profileFormSchema = z.object({
       (value) => value === "" || PROFILE_GENDERS.includes(value as (typeof PROFILE_GENDERS)[number]),
       { message: "Select a gender" },
     ),
+  homeGrid: z
+    .string()
+    .trim()
+    .max(12)
+    .transform((value) => normalizeGrid(value))
+    .refine((value) => value === "" || isValidMaidenheadGrid(value), {
+      message: "Enter a valid Maidenhead grid (e.g. OK30)",
+    }),
+  homeLat: z
+    .union([z.number(), z.null()])
+    .optional()
+    .refine(
+      (value) => value == null || (Number.isFinite(value) && value >= -90 && value <= 90),
+      { message: "Invalid latitude" },
+    ),
+  homeLng: z
+    .union([z.number(), z.null()])
+    .optional()
+    .refine(
+      (value) =>
+        value == null || (Number.isFinite(value) && value >= -180 && value <= 180),
+      { message: "Invalid longitude" },
+    ),
+});
+
+/** Partial update: station grid + GPS from map / profile location helpers. */
+export const homeLocationUpdateSchema = z.object({
+  homeGrid: z
+    .string()
+    .trim()
+    .min(4)
+    .max(12)
+    .transform((value) => normalizeGrid(value))
+    .refine((value) => isValidMaidenheadGrid(value), {
+      message: "Enter a valid Maidenhead grid (e.g. OK30)",
+    }),
+  homeLat: z
+    .number()
+    .refine((value) => Number.isFinite(value) && value >= -90 && value <= 90, {
+      message: "Invalid latitude",
+    }),
+  homeLng: z
+    .number()
+    .refine((value) => Number.isFinite(value) && value >= -180 && value <= 180, {
+      message: "Invalid longitude",
+    }),
 });
 
 export const QSO_BANDS = [

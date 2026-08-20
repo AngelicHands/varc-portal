@@ -17,6 +17,7 @@ export const RESERVED_HAM_PATHS = new Set([
   "ROBOTS",
   "SITEMAP",
   "FAVICON",
+  "MAPLIBRE",
   "_NEXT",
 ]);
 

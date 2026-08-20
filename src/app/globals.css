@@ -512,3 +512,12 @@ button:disabled,
   accent-color: #b91c1c;
   outline-color: #b91c1c;
 }
+
+body.ham-map-view header[data-site-header],
+body.ham-map-view footer[data-site-footer] {
+  display: none;
+}
+
+body.ham-map-view main {
+  padding: 0;
+}

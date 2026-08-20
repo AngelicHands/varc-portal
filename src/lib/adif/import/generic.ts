@@ -2,6 +2,7 @@ import type { AdifRecord } from "@/lib/adif/parse";
 import type { QsoSource } from "@/lib/qso-source";
 import {
   adifField,
+  adifNotesFromRecord,
   adifStationCallsign,
   normalizeAdifBand,
   normalizeAdifCallsign,
@@ -76,7 +77,7 @@ export function mapGenericAdifRecord(
       rstRcvd: adifField(record, "rst_rcvd") || "59",
       qso_sent: false,
       grid: adifField(record, "gridsquare", "grid").toUpperCase(),
-      notes: adifField(record, "comment", "notes", "qslmsg"),
+      notes: adifNotesFromRecord(record),
     },
     source,
     {

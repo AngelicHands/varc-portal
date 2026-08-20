@@ -4,6 +4,9 @@
   "private": true,
   "packageManager": "pnpm@10.28.0",
   "scripts": {
+    "copy:maplibre": "node scripts/copy-maplibre-assets.mjs",
+    "predev": "pnpm copy:maplibre",
+    "prebuild": "pnpm copy:maplibre",
     "dev": "next dev --port 3099",
     "dev:all": "./scripts/dev-local.sh",
     "build": "next build",
@@ -47,6 +50,7 @@
     "exceljs": "^4.4.0",
     "isomorphic-dompurify": "^3.21.0",
     "lodash.throttle": "^4.1.1",
+    "maplibre-gl": "^6.4.1",
     "mongoose": "^9.9.1",
     "next": "16.2.12",
     "next-auth": "5.0.0-beta.32",

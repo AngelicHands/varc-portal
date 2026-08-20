@@ -89,6 +89,26 @@ export function adifField(record: AdifRecord, ...names: string[]): string {
   return "";
 }
 
+const ADIF_NOTE_FIELD_NAMES = [
+  "qslmsg",
+  "comment",
+  "notes",
+  "qsl_rcvd_msg",
+  "qsl_sent_msg",
+] as const;
+
+/** Merge ADIF message fields (QSLMSG, COMMENT, etc.) into QsoLog.notes. */
+export function adifNotesFromRecord(record: AdifRecord): string {
+  const parts: string[] = [];
+  for (const name of ADIF_NOTE_FIELD_NAMES) {
+    const value = adifField(record, name);
+    if (value && !parts.includes(value)) {
+      parts.push(value);
+    }
+  }
+  return parts.join(" · ").slice(0, 2000);
+}
+
 export function normalizeAdifBand(raw: string): QsoBand {
   const band = raw.trim().toLowerCase();
   if ((QSO_BANDS as readonly string[]).includes(band)) {

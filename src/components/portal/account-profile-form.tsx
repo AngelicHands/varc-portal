@@ -19,6 +19,7 @@ import {
   maxBirthdayIso,
   parseBirthdayInput,
 } from "@/lib/validations/qso";
+import { latLngToMaidenhead, formatMaidenheadDisplay } from "@/lib/maidenhead";
 
 type Props = {
   initial: {
@@ -29,11 +30,14 @@ type Props = {
     callsignVerificationStatus: CallsignVerificationStatus;
     birthday: string | null;
     gender: ProfileGender;
+    homeGrid: string;
+    homeLat: number | null;
+    homeLng: number | null;
   };
   initialDocuments: UserDocumentDto[];
 };
 
-type EditField = "name" | "callsign" | "birthday" | "gender";
+type EditField = "name" | "callsign" | "birthday" | "gender" | "homeGrid";
 
 const cardClass =
   "flex h-full flex-col rounded-lg border border-border bg-surface p-4 md:p-5";
@@ -127,6 +131,9 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
   const [callsign, setCallsign] = useState(initial.callsign ?? "");
   const [birthday, setBirthday] = useState(initial.birthday ?? "");
   const [gender, setGender] = useState<ProfileGender>(initial.gender ?? "");
+  const [homeGrid, setHomeGrid] = useState(initial.homeGrid ?? "");
+  const [homeLat, setHomeLat] = useState<number | null>(initial.homeLat ?? null);
+  const [homeLng, setHomeLng] = useState<number | null>(initial.homeLng ?? null);
   const [verificationStatus, setVerificationStatus] = useState<CallsignVerificationStatus>(
     initial.callsignVerificationStatus,
   );
@@ -138,6 +145,10 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
   const [draftCallsign, setDraftCallsign] = useState("");
   const [draftBirthday, setDraftBirthday] = useState("");
   const [draftGender, setDraftGender] = useState<ProfileGender>("");
+  const [draftHomeGrid, setDraftHomeGrid] = useState("");
+  const [draftHomeLat, setDraftHomeLat] = useState<number | null>(null);
+  const [draftHomeLng, setDraftHomeLng] = useState<number | null>(null);
+  const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -205,6 +216,11 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
     if (field === "callsign") setDraftCallsign(callsign);
     if (field === "birthday") setDraftBirthday(birthday);
     if (field === "gender") setDraftGender(gender);
+    if (field === "homeGrid") {
+      setDraftHomeGrid(homeGrid);
+      setDraftHomeLat(homeLat);
+      setDraftHomeLng(homeLng);
+    }
   }
 
   function closeEdit() {
@@ -224,6 +240,9 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
     callsign: string;
     birthday: string;
     gender: ProfileGender;
+    homeGrid: string;
+    homeLat: number | null;
+    homeLng: number | null;
   }) {
     setMessage(null);
     setError(null);
@@ -238,6 +257,9 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
         callsign: next.callsign,
         birthday: birthdayIso,
         gender: next.gender,
+        homeGrid: next.homeGrid,
+        homeLat: next.homeLat,
+        homeLng: next.homeLng,
       });
       if (result.ok) {
         const nextCallsign = next.callsign.trim().toUpperCase();
@@ -247,6 +269,9 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
         setCallsign(nextCallsign);
         setBirthday(next.birthday);
         setGender(next.gender);
+        setHomeGrid(next.homeGrid.trim().toUpperCase());
+        setHomeLat(next.homeLat);
+        setHomeLng(next.homeLng);
         if (callsignDidChange) {
           setVerificationStatus("unverified");
         }
@@ -295,12 +320,63 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
   function onSaveEdit(event: React.FormEvent) {
     event.preventDefault();
     if (!editField) return;
+    const nextGrid = editField === "homeGrid" ? draftHomeGrid : homeGrid;
+    const nextLat =
+      editField === "homeGrid"
+        ? nextGrid.trim()
+          ? draftHomeLat
+          : null
+        : homeLat;
+    const nextLng =
+      editField === "homeGrid"
+        ? nextGrid.trim()
+          ? draftHomeLng
+          : null
+        : homeLng;
     saveProfile({
       name: editField === "name" ? draftName : name,
       callsign: editField === "callsign" ? draftCallsign : callsign,
       birthday: editField === "birthday" ? draftBirthday : birthday,
       gender: editField === "gender" ? draftGender : gender,
+      homeGrid: nextGrid,
+      homeLat: nextLat,
+      homeLng: nextLng,
     });
+  }
+
+  function useCurrentLocation() {
+    setError(null);
+    if (!navigator.geolocation) {
+      setError(t("homeLocationUnsupported"));
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const grid = latLngToMaidenhead(lat, lng, 6);
+        if (!grid) {
+          setLocating(false);
+          setError(t("homeLocationFailed"));
+          return;
+        }
+        setDraftHomeLat(lat);
+        setDraftHomeLng(lng);
+        setDraftHomeGrid(grid);
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        setError(t("homeLocationFailed"));
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
+    );
+  }
+
+  function clearDraftLocation() {
+    setDraftHomeLat(null);
+    setDraftHomeLng(null);
   }
 
   const editTitles: Record<EditField, string> = {
@@ -308,6 +384,7 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
     callsign: t("callsign"),
     birthday: t("birthday"),
     gender: t("gender"),
+    homeGrid: t("homeGrid"),
   };
 
   const canRequestVerification =
@@ -363,6 +440,19 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
             label={t("gender")}
             value={genderLabel(gender)}
             onEdit={() => openEdit("gender")}
+          />
+
+          <ProfileFieldCard
+            label={t("homeGrid")}
+            value={
+              homeGrid
+                ? homeLat != null && homeLng != null
+                  ? `${formatMaidenheadDisplay(homeGrid)} · ${homeLat.toFixed(5)}, ${homeLng.toFixed(5)}`
+                  : formatMaidenheadDisplay(homeGrid)
+                : "—"
+            }
+            valueClass="text-xl font-semibold tracking-wide text-foreground"
+            onEdit={() => openEdit("homeGrid")}
           />
         </div>
 
@@ -479,6 +569,60 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
                 <option value="other">{t("genderOther")}</option>
               </select>
             </label>
+          ) : null}
+
+          {editField === "homeGrid" ? (
+            <div className="grid gap-3 text-sm">
+              <label className="block">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                  {t("homeGrid")}
+                </span>
+                <input
+                  value={draftHomeGrid}
+                  onChange={(e) => {
+                    setDraftHomeGrid(e.target.value.toUpperCase());
+                    // Manual grid edit clears GPS point until "use location" again.
+                    setDraftHomeLat(null);
+                    setDraftHomeLng(null);
+                  }}
+                  autoFocus
+                  placeholder="OL20VX"
+                  maxLength={12}
+                  className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 uppercase"
+                />
+              </label>
+              <p className="text-xs text-muted">{t("homeLocationHelp")}</p>
+              {draftHomeLat != null && draftHomeLng != null ? (
+                <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground">
+                  {t("homeLocationCoords", {
+                    lat: draftHomeLat.toFixed(5),
+                    lng: draftHomeLng.toFixed(5),
+                  })}
+                </p>
+              ) : (
+                <p className="text-xs text-muted">{t("homeLocationMissing")}</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={useCurrentLocation}
+                  disabled={pending || locating}
+                  className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-foreground/5 disabled:opacity-60"
+                >
+                  {locating ? t("homeLocationLocating") : t("homeLocationUse")}
+                </button>
+                {draftHomeLat != null && draftHomeLng != null ? (
+                  <button
+                    type="button"
+                    onClick={clearDraftLocation}
+                    disabled={pending || locating}
+                    className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-foreground/5 disabled:opacity-60"
+                  >
+                    {t("homeLocationClear")}
+                  </button>
+                ) : null}
+              </div>
+            </div>
           ) : null}
 
           {error && editField ? (

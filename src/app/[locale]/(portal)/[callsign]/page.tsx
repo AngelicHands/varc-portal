@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { Link } from "@/i18n/navigation";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { AccountProfileForm } from "@/components/portal/account-profile-form";
+import { HamMapFullscreenView } from "@/components/portal/ham-map-fullscreen-view";
 import { HamProfileTabs } from "@/components/portal/ham-profile-tabs";
 import { QsoLogbook } from "@/components/portal/qso-logbook";
 import { SecuritySettingsForm } from "@/components/portal/security-settings-form";
@@ -13,11 +14,19 @@ import { getAccountProfile } from "@/lib/account";
 import { findPublicHamByCallsign, hamPublicUrl } from "@/lib/ham-profile";
 import { parseHamPathParam, parseHamTab, type HamTabId } from "@/lib/ham-reserved";
 import { getPublicSiteBranding } from "@/lib/cms";
+import {
+  canAccessHamMapPage,
+  canViewHomeMapMarker,
+  canViewQsoMapMarkers,
+} from "@/lib/ham-map-access";
+import { readMapTilerApiKey } from "@/lib/map/maptiler-style";
+import { aggregateQsoGridMarkers, buildHomeGridMarker } from "@/lib/qso-map";
 import { getPublicBaseUrl } from "@/lib/public-url";
 import { listUserQsos } from "@/lib/qso";
 import { listUserDocuments } from "@/lib/user-documents";
 import { callsignHref, hamHref } from "@/lib/locale-hrefs";
 import { formatBirthdayDmy } from "@/lib/validations/qso";
+import { formatMaidenheadDisplay } from "@/lib/maidenhead";
 import { canManageUsers } from "@/lib/roles";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -26,7 +35,7 @@ export const fetchCache = "force-no-store";
 
 type Props = {
   params: Promise<{ locale: string; callsign: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; view?: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -71,19 +80,24 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
   const locale = localeParam as AppLocale;
   setRequestLocale(locale);
 
-  const { tab: tabParam } = await searchParams;
+  const { tab: tabParam, view: viewParam } = await searchParams;
+  const isMapView = viewParam === "map";
   const sign = parseHamPathParam(raw);
   if (!sign) notFound();
   if (raw !== sign) {
-    const qs =
+    const qs = new URLSearchParams();
+    if (
       tabParam === "profile" ||
       tabParam === "documents" ||
       tabParam === "logbook" ||
       tabParam === "qsl" ||
       tabParam === "security"
-        ? `?tab=${tabParam}`
-        : "";
-    redirect(`/${locale}/${sign}${qs}`);
+    ) {
+      qs.set("tab", tabParam);
+    }
+    if (isMapView) qs.set("view", "map");
+    const query = qs.toString();
+    redirect(`/${locale}/${sign}${query ? `?${query}` : ""}`);
   }
 
   const ham = await findPublicHamByCallsign(sign);
@@ -123,6 +137,47 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
   }
   const canViewProfile = canEdit || canAdminManage || ham.isProfilePublic;
   const canViewLogbook = canEdit || canAdminManage || ham.isQsoPublic;
+  const verified = ham.callsignVerified;
+
+  const mapAccess = canAccessHamMapPage(isBlockedProfile);
+
+  if (isMapView) {
+    if (!mapAccess) {
+      redirect(`/${locale}/${ham.callsign}`);
+    }
+
+    const branding = await getPublicSiteBranding(locale);
+
+    const showQsoMarkers = canViewQsoMapMarkers(canViewLogbook);
+    const showHomeMarker = canViewHomeMapMarker(canViewProfile, ham.homeGrid);
+    const qsosForMap = showQsoMarkers ? await listUserQsos(ham.id) : [];
+    const qsoMarkers = showQsoMarkers ? aggregateQsoGridMarkers(qsosForMap) : [];
+    const homeMarker = showHomeMarker
+      ? buildHomeGridMarker(ham.homeGrid, ham.callsign, ham.homeLat, ham.homeLng)
+      : null;
+
+    return (
+      <>
+        <SetLocaleAlternates
+          vi={hamHref(ham.callsign)}
+          en={hamHref(ham.callsign)}
+        />
+        <HamMapFullscreenView
+          mapTilerKey={readMapTilerApiKey()}
+          callsign={ham.callsign}
+          operatorName={canViewProfile ? ham.name : ""}
+          operatorImage={canViewProfile ? ham.image : null}
+          verified={verified}
+          homeGrid={canViewProfile ? ham.homeGrid : ""}
+          homeMarker={homeMarker}
+          qsoMarkers={qsoMarkers}
+          showQsoMarkers={showQsoMarkers}
+          branding={branding}
+          canSetHomeLocation={canEdit && !ham.homeGrid.trim()}
+        />
+      </>
+    );
+  }
 
   const visibleTabs: HamTabId[] = canEdit
     ? ["profile", "logbook", "documents", "qsl", "security"]
@@ -137,7 +192,6 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
       : null;
   const canLogWithOperator = canViewLogbook && Boolean(viewerProfile?.callsign?.trim());
   const activeTab = parseHamTab(tabParam, visibleTabs);
-  const verified = ham.callsignVerified;
   const birthdayLabel = canViewProfile ? formatBirthdayDmy(ham.birthday) || null : null;
   const genderLabel = canViewProfile
     ? ham.gender === "male"
@@ -178,30 +232,42 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
             className="h-24 w-24 shrink-0 rounded-full border border-border object-cover"
           />
         ) : null}
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-display text-5xl tracking-wide text-foreground md:text-6xl">
-              {ham.callsign}
-            </h1>
-            {verified ? (
-              <span
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-700"
-                aria-label="Verified callsign"
-                title="Verified callsign"
-              >
-                <svg
-                  viewBox="0 0 16 16"
-                  className="h-4 w-4"
-                  aria-hidden
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <h1 className="font-display text-5xl tracking-wide text-foreground md:text-6xl">
+                {ham.callsign}
+              </h1>
+              {verified ? (
+                <span
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-700"
+                  aria-label="Verified callsign"
+                  title="Verified callsign"
                 >
-                  <path d="M3.5 8.5 6.5 11.5 12.5 5.5" />
-                </svg>
-              </span>
+                  <svg
+                    viewBox="0 0 16 16"
+                    className="h-4 w-4"
+                    aria-hidden
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3.5 8.5 6.5 11.5 12.5 5.5" />
+                  </svg>
+                </span>
+              ) : null}
+            </div>
+            {canEdit || canAdminManage ? (
+              <p className="shrink-0 text-right text-sm text-muted">
+                {accountT("securityProfileAccess")}:{" "}
+                <span className="font-medium text-foreground">
+                  {ham.isProfilePublic
+                    ? accountT("securityStatusPublic")
+                    : accountT("securityStatusPrivate")}
+                </span>
+              </p>
             ) : null}
           </div>
           {canViewProfile && !verified ? (
@@ -231,17 +297,30 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
         </p>
       ) : null}
 
-      {canEdit || canAdminManage ? (
-        <div className="mt-8 flex justify-end">
-          <p className="text-sm text-muted">
-            {accountT("securityProfileAccess")}:{" "}
-            <span className="font-medium text-foreground">
-              {ham.isProfilePublic
-                ? accountT("securityStatusPublic")
-                : accountT("securityStatusPrivate")}
-            </span>
-          </p>
-        </div>
+      {mapAccess ? (
+        <p className="mt-4 text-sm">
+          <Link
+            href={{
+              pathname: "/[callsign]",
+              params: { callsign: ham.callsign },
+              query: { view: "map" },
+            }}
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 font-medium text-foreground transition hover:border-accent/40 hover:text-accent"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              aria-hidden
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M3 6.5 12 2l9 4.5v11L12 22l-9-4.5v-11Z" />
+              <path d="M12 22V11M3 6.5 12 11l9-4.5" />
+            </svg>
+            {t("viewMap")}
+          </Link>
+        </p>
       ) : null}
 
       <HamProfileTabs
@@ -261,6 +340,9 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
                 callsignVerificationStatus: profile.callsignVerificationStatus,
                 birthday: profile.birthday,
                 gender: profile.gender,
+                homeGrid: profile.homeGrid,
+                homeLat: profile.homeLat,
+                homeLng: profile.homeLng,
               }}
               initialDocuments={documents ?? []}
             />
@@ -307,6 +389,16 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
                   </p>
                   <p className="mt-2 text-sm text-foreground">
                     {[genderLabel, birthdayLabel].filter(Boolean).join(" · ")}
+                  </p>
+                </div>
+              ) : null}
+              {ham.homeGrid ? (
+                <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                    {accountT("homeGrid")}
+                  </p>
+                  <p className="mt-2 text-sm text-foreground">
+                    {formatMaidenheadDisplay(ham.homeGrid)}
                   </p>
                 </div>
               ) : null}

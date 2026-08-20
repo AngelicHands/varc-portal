@@ -13,6 +13,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "dist/**",
     "next-env.d.ts",
+    "public/maplibre/**",
     // TipTap UI Components CLI source (vendor-like, React Compiler rules conflict)
     "src/components/tiptap-*/**",
     "src/hooks/use-composed-ref.ts",

@@ -1,0 +1,33 @@
+---
+description: MapLibre map container sizing — avoid black/empty map from height 0
+globs: "**/ham-map*.tsx,**/maplibre*.ts*,**/map/**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# MapLibre container sizing
+
+MapLibre GL sets `position: relative` on the map container and **overrides** Tailwind `absolute` / `inset-*`.
+
+## Symptom
+
+Fullscreen (or parent) map shows an all-black / empty screen: canvas exists, style.json loads, but **no vector tiles** and `.maplibregl-map` has `clientHeight === 0`.
+
+## Required pattern
+
+Parent must have a definite size (e.g. `fixed inset-0`). Map container must use **percentage size**, not absolute inset:
+
+```tsx
+<div className="fixed inset-0">
+  <div ref={mapContainerRef} className="h-full w-full" />
+</div>
+```
+
+## Do not
+
+- Put `absolute inset-0` on the MapLibre container (MapLibre replaces `position` → height collapses to 0).
+- Assume the map painted correctly just because attribution or zoom controls appear — verify `clientHeight > 0` and tile requests.
+
+## Also
+
+- Call `map.resize()` after `load` / when the fullscreen shell paints.
+- Serve workers from `/public/maplibre/` via `setWorkerUrl` (see `scripts/copy-maplibre-assets.mjs`); do not rely on the page URL as the worker script.

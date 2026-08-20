@@ -29,6 +29,9 @@ export type AccountProfileDto = {
   gender: ProfileGender;
   isProfilePublic: boolean;
   isQsoPublic: boolean;
+  homeGrid: string;
+  homeLat: number | null;
+  homeLng: number | null;
 };
 
 export type QsoListItemDto = {

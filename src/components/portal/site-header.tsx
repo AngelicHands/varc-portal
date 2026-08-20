@@ -287,7 +287,7 @@ export function SiteHeader({
 
   return (
     <>
-      <header className="relative z-50 border-b border-border/80 bg-surface/90 backdrop-blur-md">
+      <header data-site-header className="relative z-50 border-b border-border/80 bg-surface/90 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 md:px-6">
           <Link
             href="/"

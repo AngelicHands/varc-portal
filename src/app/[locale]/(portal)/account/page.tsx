@@ -79,6 +79,9 @@ export default async function AccountPage({ params, searchParams }: Props) {
             callsignVerificationStatus: profile.callsignVerificationStatus,
             birthday: profile.birthday,
             gender: profile.gender,
+            homeGrid: profile.homeGrid,
+            homeLat: profile.homeLat,
+            homeLng: profile.homeLng,
           }}
           initialDocuments={documents}
         />
