@@ -11,6 +11,7 @@ import {
 import { createEmailJob } from "@/lib/mail/jobs";
 import { buildCallsignVerificationRequestEmail } from "@/lib/mail/callsign-verification-email";
 import { failAction } from "@/lib/safe-error";
+import { getAccountProfile } from "@/lib/account";
 import { listUserDocuments } from "@/lib/user-documents";
 import { profileFormSchema, homeLocationUpdateSchema } from "@/lib/validations/qso";
 import { User } from "@/models/User";
@@ -320,5 +321,28 @@ export async function updateSecuritySettingsAction(raw: unknown) {
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to update security settings");
+  }
+}
+
+/** Owner profile / documents / security tab data (client-fetched after tab paint). */
+export async function loadHamOwnerTabDataAction() {
+  try {
+    const session = await requireAccountSession();
+    if (!session?.user?.id) {
+      return { ok: false as const, error: "Unauthorized" };
+    }
+
+    const [profile, documents] = await Promise.all([
+      getAccountProfile(session.user.id, session.user.email),
+      listUserDocuments(session.user.id),
+    ]);
+
+    if (!profile) {
+      return { ok: false as const, error: "Profile not found" };
+    }
+
+    return { ok: true as const, profile, documents };
+  } catch (error) {
+    return failAction(error, "Failed to load account data");
   }
 }

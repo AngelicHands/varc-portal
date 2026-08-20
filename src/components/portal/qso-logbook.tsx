@@ -880,84 +880,71 @@ export function QsoLogbook({
 
   return (
     <div className="grid gap-6">
-      {canEdit ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted">
-            {t("stationCallsign", { callsign: stationCallsign })}
+      {canEdit || canAdminManage || canLogWithOperator ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-sm text-muted">
+            {canEdit
+              ? t("stationCallsign", { callsign: stationCallsign })
+              : canAdminManage
+                ? t("adminViewingLogbook", { callsign: stationCallsign })
+                : t("stationCallsign", { callsign: stationCallsign })}
           </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
-              {t("addQso")}
-            </button>
-            {/* API download — not a Next.js page route */}
-            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-            <a
-              href="/api/account/qso/export"
-              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-foreground/5"
-            >
-              {t("exportAdif")}
-            </a>
-            <button
-              type="button"
-              disabled={isImporting}
-              onClick={() => importInputRef.current?.click()}
-              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-foreground/5 disabled:opacity-60"
-            >
-              {isImporting ? t("importing") : t("importAdif")}
-            </button>
-            {total > 0 ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {canEdit ? (
+              <>
+                <button
+                  type="button"
+                  onClick={openCreateModal}
+                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:opacity-90"
+                >
+                  {t("addQso")}
+                </button>
+                {/* API download — not a Next.js page route */}
+                {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                <a
+                  href="/api/account/qso/export"
+                  className="rounded-md border border-border px-3 py-2 text-sm whitespace-nowrap hover:bg-foreground/5"
+                >
+                  {t("exportAdif")}
+                </a>
+                <button
+                  type="button"
+                  disabled={isImporting}
+                  onClick={() => importInputRef.current?.click()}
+                  className="rounded-md border border-border px-3 py-2 text-sm whitespace-nowrap hover:bg-foreground/5 disabled:opacity-60"
+                >
+                  {isImporting ? t("importing") : t("importAdif")}
+                </button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".adi,.adif,text/plain"
+                  multiple
+                  className="sr-only"
+                  onChange={onImportAdifSelected}
+                />
+              </>
+            ) : null}
+            {canLogWithOperator ? (
+              <button
+                type="button"
+                onClick={openLogWithOperatorModal}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:opacity-90"
+              >
+                {t("logQsoWithOperator")}
+              </button>
+            ) : null}
+            {(canEdit || canAdminManage) && total > 0 ? (
               <button
                 type="button"
                 disabled={pending}
                 onClick={() => void onDeleteAll()}
-                className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium whitespace-nowrap text-red-700 hover:bg-red-100 disabled:opacity-60"
               >
                 {pending ? t("deletingAll") : t("deleteAll")}
               </button>
             ) : null}
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".adi,.adif,text/plain"
-              multiple
-              className="sr-only"
-              onChange={onImportAdifSelected}
-            />
           </div>
-        </div>
-      ) : null}
-
-      {canAdminManage ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm text-muted">
-            {t("adminViewingLogbook", { callsign: stationCallsign })}
-          </p>
-          {total > 0 ? (
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() => void onDeleteAll()}
-              className="rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-            >
-              {pending ? t("deletingAll") : t("deleteAll")}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
-      {canLogWithOperator ? (
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={openLogWithOperatorModal}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            {t("logQsoWithOperator")}
-          </button>
         </div>
       ) : null}
 

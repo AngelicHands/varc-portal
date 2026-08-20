@@ -5,12 +5,16 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { auth } from "@/auth";
 import { Link } from "@/i18n/navigation";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
-import { AccountProfileForm } from "@/components/portal/account-profile-form";
 import { HamMapFullscreenView } from "@/components/portal/ham-map-fullscreen-view";
+import {
+  HamOwnerDocumentsTabPanel,
+  HamOwnerProfileTabPanel,
+  HamOwnerQslTabPanel,
+  HamOwnerSecurityTabPanel,
+  HamOwnerTabDataProvider,
+} from "@/components/portal/ham-owner-tab-panels";
 import { HamProfileTabs } from "@/components/portal/ham-profile-tabs";
 import { QsoLogbook } from "@/components/portal/qso-logbook";
-import { SecuritySettingsForm } from "@/components/portal/security-settings-form";
-import { UserDocumentsPanel } from "@/components/portal/user-documents-panel";
 import { getAccountProfile } from "@/lib/account";
 import { findPublicHamByCallsign, hamPublicPath, hamPublicUrl } from "@/lib/ham-profile";
 import { parseHamPathParam, parseHamTab, type HamTabId } from "@/lib/ham-reserved";
@@ -23,7 +27,6 @@ import {
 import { readMapTilerApiKey } from "@/lib/map/maptiler-style";
 import { buildHomeGridMarker } from "@/lib/qso-map";
 import { listUserQsos } from "@/lib/qso";
-import { listUserDocuments } from "@/lib/user-documents";
 import { callsignHref, hamHref } from "@/lib/locale-hrefs";
 import { formatBirthdayDmy } from "@/lib/validations/qso";
 import { formatMaidenheadDisplay } from "@/lib/maidenhead";
@@ -223,14 +226,36 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
           : null
     : null;
 
-  const ownerData = canEdit
-    ? await Promise.all([
-        getAccountProfile(ham.id, session?.user?.email),
-        listUserDocuments(ham.id),
-      ])
-    : ([null, null] as const);
-  const [profile, documents] = ownerData;
   const logbookT = await getTranslations("logbook");
+
+  const logbookPanel = canViewLogbook ? (
+    <Suspense
+      fallback={
+        <div
+          className="flex items-center justify-center gap-2 py-16 text-sm text-muted"
+          role="status"
+          aria-live="polite"
+        >
+          <span
+            className="inline-block size-4 animate-spin rounded-full border-2 border-muted border-t-accent"
+            aria-hidden
+          />
+          {logbookT("loading")}
+        </div>
+      }
+    >
+      <QsoLogbook
+        key={ham.id}
+        logbookUserId={ham.id}
+        stationCallsign={ham.callsign}
+        canEdit={canEdit}
+        canLogWithOperator={canLogWithOperator}
+        canAdminManage={canAdminManage}
+      />
+    </Suspense>
+  ) : (
+    <p className="text-sm text-muted">{accountT("securityQsoPrivateNotice")}</p>
+  );
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
@@ -340,148 +365,94 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
         </p>
       ) : null}
 
-      <HamProfileTabs
-        callsign={ham.callsign}
-        active={activeTab}
-        isOwner={canEdit}
-        canViewProfile={canViewProfile}
-        canViewLogbook={canViewLogbook}
-        profile={
-          canEdit && profile ? (
-            <AccountProfileForm
-              initial={{
-                name: profile.name,
-                email: profile.email,
-                callsign: profile.callsign,
-                callsignVerified: profile.callsignVerified,
-                callsignVerificationStatus: profile.callsignVerificationStatus,
-                birthday: profile.birthday,
-                gender: profile.gender,
-                homeGrid: profile.homeGrid,
-                homeLat: profile.homeLat,
-                homeLng: profile.homeLng,
-              }}
-              initialDocuments={documents ?? []}
-            />
-          ) : canViewProfile ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                  {accountT("name")}
-                </p>
-                <p className="mt-2 text-sm text-foreground">{ham.name}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                  {accountT("callsign")}
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <p className="text-sm text-foreground">{ham.callsign}</p>
-                  {verified ? (
-                    <span
-                      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700"
-                      aria-label="Verified callsign"
-                      title="Verified callsign"
-                    >
-                      <svg
-                        viewBox="0 0 16 16"
-                        className="h-3.5 w-3.5"
-                        aria-hidden
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+      {canEdit ? (
+        <HamOwnerTabDataProvider>
+          <HamProfileTabs
+            callsign={ham.callsign}
+            active={activeTab}
+            isOwner={canEdit}
+            canViewProfile={canViewProfile}
+            canViewLogbook={canViewLogbook}
+            profile={<HamOwnerProfileTabPanel />}
+            logbook={logbookPanel}
+            documents={<HamOwnerDocumentsTabPanel />}
+            qsl={<HamOwnerQslTabPanel />}
+            security={<HamOwnerSecurityTabPanel />}
+          />
+        </HamOwnerTabDataProvider>
+      ) : (
+        <HamProfileTabs
+          callsign={ham.callsign}
+          active={activeTab}
+          isOwner={canEdit}
+          canViewProfile={canViewProfile}
+          canViewLogbook={canViewLogbook}
+          profile={
+            canViewProfile ? (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                    {accountT("name")}
+                  </p>
+                  <p className="mt-2 text-sm text-foreground">{ham.name}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                    {accountT("callsign")}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <p className="text-sm text-foreground">{ham.callsign}</p>
+                    {verified ? (
+                      <span
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700"
+                        aria-label="Verified callsign"
+                        title="Verified callsign"
                       >
-                        <path d="M3.5 8.5 6.5 11.5 12.5 5.5" />
-                      </svg>
-                    </span>
-                  ) : null}
+                        <svg
+                          viewBox="0 0 16 16"
+                          className="h-3.5 w-3.5"
+                          aria-hidden
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M3.5 8.5 6.5 11.5 12.5 5.5" />
+                        </svg>
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
+                {genderLabel || birthdayLabel ? (
+                  <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                      {t("publicDetails")}
+                    </p>
+                    <p className="mt-2 text-sm text-foreground">
+                      {[genderLabel, birthdayLabel].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                ) : null}
+                {ham.homeGrid ? (
+                  <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                      {accountT("homeGrid")}
+                    </p>
+                    <p className="mt-2 text-sm text-foreground">
+                      {formatMaidenheadDisplay(ham.homeGrid)}
+                    </p>
+                  </div>
+                ) : null}
               </div>
-              {genderLabel || birthdayLabel ? (
-                <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                    {t("publicDetails")}
-                  </p>
-                  <p className="mt-2 text-sm text-foreground">
-                    {[genderLabel, birthdayLabel].filter(Boolean).join(" · ")}
-                  </p>
-                </div>
-              ) : null}
-              {ham.homeGrid ? (
-                <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                    {accountT("homeGrid")}
-                  </p>
-                  <p className="mt-2 text-sm text-foreground">
-                    {formatMaidenheadDisplay(ham.homeGrid)}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          ) : null
-        }
-        logbook={
-          canViewLogbook ? (
-            <Suspense
-              fallback={
-                <div
-                  className="flex items-center justify-center gap-2 py-16 text-sm text-muted"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span
-                    className="inline-block size-4 animate-spin rounded-full border-2 border-muted border-t-accent"
-                    aria-hidden
-                  />
-                  {logbookT("loading")}
-                </div>
-              }
-            >
-              <QsoLogbook
-                key={ham.id}
-                logbookUserId={ham.id}
-                stationCallsign={ham.callsign}
-                canEdit={canEdit}
-                canLogWithOperator={canLogWithOperator}
-                canAdminManage={canAdminManage}
-              />
-            </Suspense>
-          ) : (
-            <p className="text-sm text-muted">{accountT("securityQsoPrivateNotice")}</p>
-          )
-        }
-        documents={
-          canEdit && documents ? (
-            <UserDocumentsPanel
-              initialDocuments={documents}
-              uploadEndpoint="/api/account/documents"
-              labels={{
-                certificate: accountT("certificate"),
-                license: accountT("license"),
-                upload: accountT("upload"),
-                uploading: accountT("uploading"),
-                uploadFailed: accountT("uploadFailed"),
-                delete: accountT("delete"),
-                deleteFailed: accountT("deleteFailed"),
-                noDocuments: accountT("noDocuments"),
-              }}
-            />
-          ) : null
-        }
-        qsl={canEdit ? <div /> : null}
-        security={
-          canEdit && profile ? (
-            <SecuritySettingsForm
-              initial={{
-                isProfilePublic: profile.isProfilePublic,
-                isQsoPublic: profile.isQsoPublic,
-              }}
-            />
-          ) : null
-        }
-      />
+            ) : null
+          }
+          logbook={logbookPanel}
+          documents={null}
+          qsl={null}
+          security={null}
+        />
+      )}
     </div>
   );
 }
