@@ -400,6 +400,42 @@ function formatTraceDistanceKm(km: number): string {
   return String(Math.round(km));
 }
 
+function fitMapToBounds(
+  map: MapLibreMap,
+  bounds: LngLatBounds,
+  qsoListOpen: boolean,
+) {
+  const container = map.getContainer();
+  const width = container.clientWidth || 0;
+  const height = container.clientHeight || 0;
+  if (width < 80 || height < 80) return;
+
+  const listPad = qsoListOpen ? HAM_MAP_QSO_LIST_WIDTH_PX : 0;
+  const maxPadX = Math.max(24, Math.floor(width / 2) - 32);
+  const maxPadY = Math.max(24, Math.floor(height / 2) - 32);
+  const padding = {
+    top: Math.min(96, maxPadY),
+    bottom: Math.min(96, maxPadY),
+    left: Math.min(96 + listPad, maxPadX),
+    right: Math.min(96, maxPadX),
+  };
+
+  try {
+    map.stop();
+    map.fitBounds(bounds, {
+      padding,
+      maxZoom: 9,
+      duration: 800,
+      essential: true,
+    });
+  } catch {
+    const camera = map.cameraForBounds(bounds, { padding: 48 });
+    if (camera) {
+      map.easeTo({ ...camera, duration: 800, essential: true });
+    }
+  }
+}
+
 function labelTraceDistances(
   collection: QsoTraceFeatureCollection,
   formatLabel: (km: number) => string,
@@ -617,6 +653,17 @@ export function HamMapFullscreenView({
   const showGridRectanglesRef = useRef(showGridRectangles);
   const showLocationMarkersRef = useRef(showLocationMarkers);
   const showTracesRef = useRef(showTraces);
+  const lastFittedQsoIdRef = useRef<string | null>(null);
+  const activeSelectedQsoIdRef = useRef<string | null>(null);
+  const qsoListOpenRef = useRef(qsoListOpen);
+
+  useEffect(() => {
+    activeSelectedQsoIdRef.current = activeSelectedQsoId;
+  }, [activeSelectedQsoId]);
+
+  useEffect(() => {
+    qsoListOpenRef.current = qsoListOpen;
+  }, [qsoListOpen]);
 
   useEffect(() => {
     activeHomeRef.current = activeHomeMarker;
@@ -790,7 +837,14 @@ export function HamMapFullscreenView({
         markersRef.current.push(marker);
       }
 
-      if (activeHomeMarker) {
+      // Camera bounds: when focused, use the displayed (4-char) rectangles.
+      if (focusMode) {
+        if (mapHomeMarker) {
+          bounds.extend([mapHomeMarker.bounds.west, mapHomeMarker.bounds.south]);
+          bounds.extend([mapHomeMarker.bounds.east, mapHomeMarker.bounds.north]);
+          hasBounds = true;
+        }
+      } else if (activeHomeMarker) {
         bounds.extend([activeHomeMarker.bounds.west, activeHomeMarker.bounds.south]);
         bounds.extend([activeHomeMarker.bounds.east, activeHomeMarker.bounds.north]);
         bounds.extend([activeHomeMarker.lng, activeHomeMarker.lat]);
@@ -826,9 +880,19 @@ export function HamMapFullscreenView({
         }
       }
 
-      if (fitCamera && hasBounds) {
+      const selectedId = activeSelectedQsoIdRef.current;
+      if (focusMode && hasBounds && selectedId) {
+        if (lastFittedQsoIdRef.current !== selectedId) {
+          fitMapToBounds(map, bounds, qsoListOpenRef.current);
+          lastFittedQsoIdRef.current = selectedId;
+        }
+      } else if (fitCamera && hasBounds) {
         map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 0 });
         hasFittedCameraRef.current = true;
+      }
+
+      if (!focusMode) {
+        lastFittedQsoIdRef.current = null;
       }
     };
 
@@ -978,9 +1042,17 @@ export function HamMapFullscreenView({
   ]);
 
   // When a QSO is selected, fit both home + QSO field squares into view.
+  // applyMarkers also fits on selection; this covers cases where overlays are
+  // already in sync and only the selection id changed.
   useEffect(() => {
+    if (!activeSelectedQsoId || !focusGrid) {
+      lastFittedQsoIdRef.current = null;
+      return;
+    }
+    if (lastFittedQsoIdRef.current === activeSelectedQsoId) return;
+
     const map = mapRef.current;
-    if (!map || !mapTilerKey || !map.isStyleLoaded() || !focusGrid) return;
+    if (!map || !mapTilerKey || !map.isStyleLoaded()) return;
 
     const bounds = new LngLatBounds();
     let hasBounds = false;
@@ -988,6 +1060,16 @@ export function HamMapFullscreenView({
     if (mapHomeMarker) {
       bounds.extend([mapHomeMarker.bounds.west, mapHomeMarker.bounds.south]);
       bounds.extend([mapHomeMarker.bounds.east, mapHomeMarker.bounds.north]);
+      hasBounds = true;
+    } else if (activeHomeMarker) {
+      bounds.extend([
+        activeHomeMarker.bounds.west,
+        activeHomeMarker.bounds.south,
+      ]);
+      bounds.extend([
+        activeHomeMarker.bounds.east,
+        activeHomeMarker.bounds.north,
+      ]);
       hasBounds = true;
     }
 
@@ -999,21 +1081,14 @@ export function HamMapFullscreenView({
 
     if (!hasBounds) return;
 
-    const listPad = qsoListOpen ? HAM_MAP_QSO_LIST_WIDTH_PX : 0;
-    map.fitBounds(bounds, {
-      padding: {
-        top: 96,
-        bottom: 96,
-        left: 96 + listPad,
-        right: 96,
-      },
-      maxZoom: 9,
-      duration: 800,
-    });
+    fitMapToBounds(map, bounds, qsoListOpen);
+    lastFittedQsoIdRef.current = activeSelectedQsoId;
   }, [
+    activeSelectedQsoId,
     focusGrid,
     mapHomeMarker,
     mapQsoMarkers,
+    activeHomeMarker,
     qsoListOpen,
     mapTilerKey,
   ]);
