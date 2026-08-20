@@ -65,6 +65,7 @@ export async function createQsoAction(raw: unknown) {
       userId: new mongoose.Types.ObjectId(session.user.id),
       ...parsed.data,
       qso_confirmed: false,
+      source: "portal",
     });
 
     let emailSkipped = false;

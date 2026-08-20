@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { auth } from "@/auth";
 import { parseAdifFile } from "@/lib/adif/parse";
 import {
+  detectAdifImportSource,
   mapAdifRecordToQsoInput,
   qsoDuplicateKey,
   qsoDuplicateKeyFromDoc,
@@ -47,6 +48,7 @@ export async function importQsoAdifAction(formData: FormData) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = parseAdifFile(buffer);
+    const fileSource = detectAdifImportSource(parsed.header);
 
     let skippedInvalid = 0;
     let skippedStationMismatch = 0;
@@ -54,7 +56,11 @@ export async function importQsoAdifAction(formData: FormData) {
     const candidates: AdifImportValues[] = [];
 
     for (const [index, record] of parsed.records.entries()) {
-      const mapped = mapAdifRecordToQsoInput(record, callsignCheck.callsign);
+      const mapped = mapAdifRecordToQsoInput(
+        record,
+        callsignCheck.callsign,
+        fileSource,
+      );
       if (!mapped.ok) {
         if (mapped.skip === "station_mismatch") {
           skippedStationMismatch += 1;
@@ -123,6 +129,7 @@ export async function importQsoAdifAction(formData: FormData) {
           confirmedAt: item.confirmedAt ? new Date(item.confirmedAt) : null,
           grid: item.grid,
           notes: item.notes,
+          source: item.source,
         })),
       );
     }
@@ -136,6 +143,7 @@ export async function importQsoAdifAction(formData: FormData) {
     return {
       ok: true as const,
       imported: toInsert.length,
+      source: fileSource,
       skippedDuplicate,
       skippedInvalid,
       skippedStationMismatch,

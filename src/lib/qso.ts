@@ -7,6 +7,7 @@ import {
   qsoCacheAside,
 } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
+import { normalizeQsoSource } from "@/lib/qso-source";
 import { QsoLog } from "@/models/QsoLog";
 import { User } from "@/models/User";
 
@@ -21,6 +22,7 @@ type QsoDocLike = {
   rstRcvd?: string;
   qso_sent?: boolean;
   qso_confirmed?: boolean;
+  source?: string;
   grid?: string;
   notes?: string;
 };
@@ -37,6 +39,7 @@ export function toQsoListItemDto(doc: QsoDocLike): QsoListItemDto {
     rstRcvd: doc.rstRcvd ?? "59",
     qso_sent: doc.qso_sent ?? false,
     qso_confirmed: doc.qso_confirmed ?? false,
+    source: normalizeQsoSource(doc.source, "portal"),
     grid: doc.grid ?? "",
     notes: doc.notes ?? "",
   };

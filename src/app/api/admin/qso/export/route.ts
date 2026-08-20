@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { adifFilename, serializeQsoToAdifRecord } from "@/lib/adif/export";
+import { adifFilename, buildAdifExport, serializeQsoToAdifRecord } from "@/lib/adif/export";
+import { buildPortalAdifHeader } from "@/lib/adif/export/portal";
 import { canManageUsers } from "@/lib/roles";
 import { connectDb } from "@/lib/db";
 import { publicErrorMessage } from "@/lib/safe-error";
@@ -44,22 +45,29 @@ export async function GET(request: Request) {
       rstRcvd: qso.rstRcvd,
       grid: qso.grid,
       notes: qso.notes,
+      source: qso.source,
+      qso_confirmed: qso.qso_confirmed,
+      confirmedAt: qso.confirmedAt,
       stationCallsign: userId
         ? stationByUserId.get(String(qso.userId)) || "UNKNOWN"
         : stationByUserId.get(String(qso.userId)) || "UNKNOWN",
     }));
 
-    const body = [
-      "ADIF Export from VARC Portal",
-      "<ADIF_VER:5>3.1.4",
-      "<PROGRAMID:11>VARC Portal",
-      "<EOH>",
-      "",
-      ...records.map((record) => {
-        const { stationCallsign, ...qso } = record;
-        return serializeQsoToAdifRecord(qso, stationCallsign);
-      }),
-    ].join("\r\n");
+    const body = userId
+      ? buildAdifExport(
+          records.map(({ stationCallsign, ...qso }) => {
+            void stationCallsign;
+            return qso;
+          }),
+          records[0]?.stationCallsign || "UNKNOWN",
+        )
+      : [
+          buildPortalAdifHeader(),
+          ...records.map((record) => {
+            const { stationCallsign, ...qso } = record;
+            return serializeQsoToAdifRecord(qso, stationCallsign);
+          }),
+        ].join("\r\n");
 
     const filename = userId
       ? adifFilename(stationByUserId.get(userId) || "LOG")

@@ -40,6 +40,9 @@ export async function GET() {
         rstRcvd: qso.rstRcvd,
         grid: qso.grid,
         notes: qso.notes,
+        source: qso.source,
+        qso_confirmed: qso.qso_confirmed,
+        confirmedAt: qso.confirmedAt,
       })),
       stationCallsign,
     );

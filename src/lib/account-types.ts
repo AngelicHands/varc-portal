@@ -1,4 +1,5 @@
 import type { UserDocumentKind } from "@/lib/validations/qso";
+import type { QsoSource } from "@/lib/qso-source";
 
 export type UserDocumentDto = {
   id: string;
@@ -41,6 +42,7 @@ export type QsoListItemDto = {
   rstRcvd: string;
   qso_sent: boolean;
   qso_confirmed: boolean;
+  source: QsoSource;
   grid: string;
   notes: string;
 };

@@ -8,7 +8,8 @@ export type ParsedAdif = {
 export const ADIF_MAX_FILE_BYTES = 2 * 1024 * 1024;
 export const ADIF_MAX_RECORDS = 5000;
 
-const FIELD_TAG_WITH_LENGTH_RE = /^([^:>]+):(\d+)$/;
+/** ADIF tags: <NAME:length> or <NAME:length:type> (e.g. <QSO_DATE:8:D>). */
+const FIELD_TAG_WITH_LENGTH_RE = /^([^:>]+):(\d+)(?::[^>]*)?$/;
 
 function parseFieldAt(
   content: string,

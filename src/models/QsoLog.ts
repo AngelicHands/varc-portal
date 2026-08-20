@@ -1,4 +1,5 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
+import { QSO_SOURCES } from "@/lib/qso-source";
 
 const QsoLogSchema = new Schema(
   {
@@ -17,6 +18,12 @@ const QsoLogSchema = new Schema(
     rstRcvd: { type: String, default: "59", trim: true },
     qso_sent: { type: Boolean, default: true },
     qso_confirmed: { type: Boolean, default: false },
+    source: {
+      type: String,
+      enum: QSO_SOURCES,
+      default: "portal",
+      index: true,
+    },
     confirmationTokenHash: { type: String, default: "", index: true },
     confirmationExpiresAt: { type: Date, default: null },
     confirmationSentAt: { type: Date, default: null },
@@ -44,6 +51,9 @@ export type QsoLogDocument = InferSchemaType<typeof QsoLogSchema> & {
   _id: mongoose.Types.ObjectId;
 };
 
+if (mongoose.models.QsoLog) {
+  delete mongoose.models.QsoLog;
+}
+
 export const QsoLog: Model<QsoLogDocument> =
-  mongoose.models.QsoLog ??
   mongoose.model<QsoLogDocument>("QsoLog", QsoLogSchema);
