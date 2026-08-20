@@ -351,6 +351,8 @@
     "adminViewingLogbook": "Admin view — {callsign}'s logbook",
     "empty": "No QSOs logged yet.",
     "emptyFor": "No QSOs logged for {callsign} yet.",
+    "loading": "Loading QSOs…",
+    "retry": "Try again",
     "searchPlaceholder": "Search QSOs…",
     "noSearchResults": "No QSOs match your search.",
     "resultCount": "{count} QSO(s)",

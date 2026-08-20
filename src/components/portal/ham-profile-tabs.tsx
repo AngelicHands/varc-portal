@@ -1,7 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useState, useTransition } from "react";
 import NextLink from "next/link";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { HamTabId } from "@/lib/ham-reserved";
 
@@ -47,6 +49,16 @@ export function HamProfileTabs({
   security?: ReactNode;
 }) {
   const t = useTranslations("ham");
+  const router = useRouter();
+  const [displayTab, setDisplayTab] = useState(active);
+  const [syncedActive, setSyncedActive] = useState(active);
+  const [, startTransition] = useTransition();
+
+  if (active !== syncedActive) {
+    setSyncedActive(active);
+    setDisplayTab(active);
+  }
+
   const visible = TABS.filter((tab) => {
     if (tab.id === "profile" && !isOwner) return canViewProfile;
     if (tab.id === "logbook" && !isOwner) return canViewLogbook;
@@ -61,6 +73,23 @@ export function HamProfileTabs({
     security: t("tabSecurity"),
   };
 
+  function goToTab(tabId: HamTabId) {
+    if (tabId === displayTab) return;
+    const href = tabHref(callsign, tabId, firstVisible);
+    setDisplayTab(tabId);
+    startTransition(() => {
+      router.push(href, { scroll: false });
+    });
+  }
+
+  const panels: { id: HamTabId; node: ReactNode }[] = [
+    { id: "profile", node: profile },
+    { id: "logbook", node: logbook },
+    { id: "documents", node: documents },
+    { id: "qsl", node: qsl },
+    { id: "security", node: security },
+  ];
+
   return (
     <div className="mt-12">
       <div
@@ -69,7 +98,7 @@ export function HamProfileTabs({
         className="flex flex-wrap gap-6 border-b border-border"
       >
         {visible.map((tab) => {
-          const selected = tab.id === active;
+          const selected = tab.id === displayTab;
           return (
             <NextLink
               key={tab.id}
@@ -78,6 +107,10 @@ export function HamProfileTabs({
               id={`ham-tab-${tab.id}`}
               aria-controls={`ham-panel-${tab.id}`}
               href={tabHref(callsign, tab.id, firstVisible)}
+              onClick={(event) => {
+                event.preventDefault();
+                goToTab(tab.id);
+              }}
               className={`-mb-px border-b-2 pb-3 text-sm font-medium transition-colors ${
                 selected
                   ? "border-accent text-foreground"
@@ -89,24 +122,22 @@ export function HamProfileTabs({
           );
         })}
       </div>
-      <div
-        role="tabpanel"
-        id={`ham-panel-${active}`}
-        aria-labelledby={`ham-tab-${active}`}
-        className="pt-8"
-      >
-        {active === "profile"
-          ? profile
-          : active === "logbook"
-            ? logbook
-            : active === "documents"
-              ? documents
-              : active === "qsl"
-                ? qsl
-                : active === "security"
-                  ? security
-                  : null}
-      </div>
+      {panels.map(({ id, node }) => {
+        if (node == null) return null;
+        const selected = displayTab === id;
+        return (
+          <div
+            key={id}
+            role="tabpanel"
+            id={`ham-panel-${id}`}
+            aria-labelledby={`ham-tab-${id}`}
+            hidden={!selected}
+            className={selected ? "pt-8" : "hidden pt-8"}
+          >
+            {node}
+          </div>
+        );
+      })}
     </div>
   );
 }

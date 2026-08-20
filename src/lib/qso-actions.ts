@@ -7,7 +7,7 @@ import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import { enqueueQsoConfirmationRequest } from "@/lib/qso-confirmation";
 import { getQsoEmailLimit } from "@/lib/qso-email-limit";
-import { requireUserCallsign, toQsoListItemDto } from "@/lib/qso";
+import { requireUserCallsign, listUserQsosPage, toQsoListItemDto } from "@/lib/qso";
 import { revalidateLogbook } from "@/lib/qso-revalidate";
 import { canManageUsers, isAdminRole } from "@/lib/roles";
 import { failAction } from "@/lib/safe-error";
@@ -265,5 +265,50 @@ export async function deleteAllUserQsosAction(userId: string) {
     return { ok: true as const, deleted: result.deletedCount ?? 0 };
   } catch (error) {
     return failAction(error, "Failed to delete logbook");
+  }
+}
+
+/** Paginated logbook read for the profile tab (client-fetched after tab paint). */
+export async function loadQsoLogbookPageAction(input: {
+  userId: string;
+  page?: string | number;
+  pageSize?: string | number;
+  search?: string;
+  sortKey?: string;
+  sortDir?: string;
+}) {
+  try {
+    const userId = input.userId?.trim();
+    if (!userId || !mongoose.isValidObjectId(userId)) {
+      return { ok: false as const, error: "Invalid user" };
+    }
+
+    const session = await auth();
+    await connectDb();
+    const owner = await User.findById(userId)
+      .select("isQsoPublic")
+      .lean();
+    if (!owner) {
+      return { ok: false as const, error: "Not found" };
+    }
+
+    const isOwner = session?.user?.id === userId;
+    const isManager = Boolean(session?.user && canManageUsers(session.user));
+    if (!isOwner && !isManager && !owner.isQsoPublic) {
+      return { ok: false as const, error: "Forbidden" };
+    }
+
+    const page = await listUserQsosPage({
+      userId,
+      page: input.page,
+      pageSize: input.pageSize,
+      search: input.search,
+      sortKey: input.sortKey,
+      sortDir: input.sortDir,
+    });
+
+    return { ok: true as const, page };
+  } catch (error) {
+    return failAction(error, "Failed to load logbook");
   }
 }

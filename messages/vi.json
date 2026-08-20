@@ -351,6 +351,8 @@
     "adminViewingLogbook": "Quản trị — nhật ký {callsign}",
     "empty": "Chưa có QSO nào.",
     "emptyFor": "Chưa ghi QSO nào cho {callsign}.",
+    "loading": "Đang tải QSO…",
+    "retry": "Thử lại",
     "searchPlaceholder": "Tìm QSO…",
     "noSearchResults": "Không có QSO nào khớp tìm kiếm.",
     "resultCount": "{count} QSO",

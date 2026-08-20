@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { auth } from "@/auth";
@@ -21,7 +22,7 @@ import {
 } from "@/lib/ham-map-access";
 import { readMapTilerApiKey } from "@/lib/map/maptiler-style";
 import { buildHomeGridMarker } from "@/lib/qso-map";
-import { listUserQsos, listUserQsosPage } from "@/lib/qso";
+import { listUserQsos } from "@/lib/qso";
 import { listUserDocuments } from "@/lib/user-documents";
 import { callsignHref, hamHref } from "@/lib/locale-hrefs";
 import { formatBirthdayDmy } from "@/lib/validations/qso";
@@ -229,17 +230,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
       ])
     : ([null, null] as const);
   const [profile, documents] = ownerData;
-  const logbookPage =
-    canViewLogbook && activeTab === "logbook"
-      ? await listUserQsosPage({
-          userId: ham.id,
-          page: pageParam,
-          pageSize: pageSizeParam,
-          search: searchParam,
-          sortKey: sortParam,
-          sortDir: dirParam,
-        })
-      : null;
+  const logbookT = await getTranslations("logbook");
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
@@ -433,23 +424,30 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
         }
         logbook={
           canViewLogbook ? (
-            logbookPage ? (
+            <Suspense
+              fallback={
+                <div
+                  className="flex items-center justify-center gap-2 py-16 text-sm text-muted"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span
+                    className="inline-block size-4 animate-spin rounded-full border-2 border-muted border-t-accent"
+                    aria-hidden
+                  />
+                  {logbookT("loading")}
+                </div>
+              }
+            >
               <QsoLogbook
                 key={ham.id}
-                items={logbookPage.items}
-                total={logbookPage.total}
-                page={logbookPage.page}
-                pageSize={logbookPage.pageSize}
-                search={logbookPage.search}
-                sortKey={logbookPage.sortKey}
-                sortDir={logbookPage.sortDir}
+                logbookUserId={ham.id}
                 stationCallsign={ham.callsign}
                 canEdit={canEdit}
                 canLogWithOperator={canLogWithOperator}
                 canAdminManage={canAdminManage}
-                logbookUserId={ham.id}
               />
-            ) : null
+            </Suspense>
           ) : (
             <p className="text-sm text-muted">{accountT("securityQsoPrivateNotice")}</p>
           )

@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PortalDialog } from "@/components/portal/portal-dialog";
 import { usePortalConfirm } from "@/components/portal/use-confirm";
@@ -21,17 +21,24 @@ import {
   createQsoAction,
   deleteAllUserQsosAction,
   deleteQsoAction,
+  loadQsoLogbookPageAction,
   updateQsoAction,
 } from "@/lib/qso-actions";
 import { importQsoAdifAction, type AdifImportRecordError } from "@/lib/qso-import-actions";
 import type { AdifImportErrorRef } from "@/lib/adif/import/error-keys";
 import { translateAdifImportError } from "@/lib/adif/import/translate-error";
 import type {
-  QsoLogbookPageSize,
+  QsoLogbookPageResult,
   QsoLogbookSortDir,
   QsoLogbookSortKey,
 } from "@/lib/qso-logbook-query";
-import { QSO_LOGBOOK_PAGE_SIZES } from "@/lib/qso-logbook-query";
+import {
+  QSO_LOGBOOK_DEFAULT_PAGE_SIZE,
+  QSO_LOGBOOK_PAGE_SIZES,
+  parseQsoLogbookPageSize,
+  parseQsoLogbookSortDir,
+  parseQsoLogbookSortKey,
+} from "@/lib/qso-logbook-query";
 import {
   QSO_BANDS,
   QSO_MODES,
@@ -42,18 +49,13 @@ import {
 } from "@/lib/validations/qso";
 
 type Props = {
-  items: QsoListItemDto[];
-  total: number;
-  page: number;
-  pageSize: QsoLogbookPageSize;
-  search: string;
-  sortKey: QsoLogbookSortKey;
-  sortDir: QsoLogbookSortDir;
+  logbookUserId: string;
   stationCallsign: string;
+  /** Optional SSR snapshot when opening ?tab=logbook directly. */
+  initialPage?: QsoLogbookPageResult | null;
   canEdit?: boolean;
   canLogWithOperator?: boolean;
   canAdminManage?: boolean;
-  logbookUserId?: string;
 };
 
 type SortKey = QsoLogbookSortKey;
@@ -246,25 +248,41 @@ const QSO_EMAIL_LIMIT_WARNING_KEY = "qso-email-limit-warning";
 const SEARCH_DEBOUNCE_MS = 300;
 
 export function QsoLogbook({
-  items,
-  total,
-  page,
-  pageSize,
-  search,
-  sortKey,
-  sortDir,
+  logbookUserId,
   stationCallsign,
+  initialPage = null,
   canEdit = true,
   canLogWithOperator = false,
   canAdminManage = false,
-  logbookUserId,
 }: Props) {
   const t = useTranslations("logbook");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const canManageLogbook = canEdit || canAdminManage;
   const { ask, modal: confirmModal } = usePortalConfirm();
   const importInputRef = useRef<HTMLInputElement>(null);
   const searchTimerRef = useRef<number | null>(null);
+  const fetchSeqRef = useRef(0);
+
+  const page = Math.max(
+    1,
+    Number.parseInt(searchParams.get("page") ?? "1", 10) || 1,
+  );
+  const pageSize = parseQsoLogbookPageSize(
+    searchParams.get("pageSize") ?? QSO_LOGBOOK_DEFAULT_PAGE_SIZE,
+  );
+  const search = (searchParams.get("q") ?? "").trim().slice(0, 80);
+  const sortKey = parseQsoLogbookSortKey(searchParams.get("sort") ?? undefined);
+  const sortDir = parseQsoLogbookSortDir(
+    searchParams.get("dir") ?? undefined,
+    sortKey,
+  );
+
+  const [pageData, setPageData] = useState<QsoLogbookPageResult | null>(
+    initialPage,
+  );
+  const [listError, setListError] = useState<string | null>(null);
+  const [listLoading, setListLoading] = useState(!initialPage);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<FormState>(() => emptyForm("utc"));
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -297,10 +315,69 @@ export function QsoLogbook({
   const [isNavigating, startNavigateTransition] = useTransition();
   const pending = isSubmitting || isDeleting || isImporting || isNavigating;
 
-  const totalPages = total === 0 ? 0 : Math.max(1, Math.ceil(total / pageSize));
+  const items = pageData?.items ?? [];
+  const total = pageData?.total ?? 0;
+  const totalPages =
+    pageData?.totalPages ??
+    (total === 0 ? 0 : Math.max(1, Math.ceil(total / pageSize)));
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, total);
 
+  useEffect(() => {
+    const seq = ++fetchSeqRef.current;
+    let cancelled = false;
+
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setListLoading(true);
+      setListError(null);
+      void loadQsoLogbookPageAction({
+        userId: logbookUserId,
+        page,
+        pageSize,
+        search,
+        sortKey,
+        sortDir,
+      }).then((result) => {
+        if (cancelled || seq !== fetchSeqRef.current) return;
+        if (!result.ok) {
+          setListError(result.error);
+          setPageData(null);
+          setListLoading(false);
+          return;
+        }
+        setPageData(result.page);
+        setListLoading(false);
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [logbookUserId, page, pageSize, search, sortKey, sortDir]);
+
+  async function reloadList() {
+    const seq = ++fetchSeqRef.current;
+    setListLoading(true);
+    setListError(null);
+    const result = await loadQsoLogbookPageAction({
+      userId: logbookUserId,
+      page,
+      pageSize,
+      search,
+      sortKey,
+      sortDir,
+    });
+    if (seq !== fetchSeqRef.current) return;
+    if (!result.ok) {
+      setListError(result.error);
+      setPageData(null);
+      setListLoading(false);
+      return;
+    }
+    setPageData(result.page);
+    setListLoading(false);
+  }
   function navigateLogbook(
     updates: Partial<{
       page: number;
@@ -318,7 +395,7 @@ export function QsoLogbook({
       sortDir: updates.sortDir ?? sortDir,
     });
     startNavigateTransition(() => {
-      router.push(href);
+      router.push(href, { scroll: false });
     });
   }
 
@@ -480,7 +557,7 @@ export function QsoLogbook({
           );
         }
         resetModal();
-        router.refresh();
+        void reloadList();
       } finally {
         setIsSubmitting(false);
       }
@@ -499,22 +576,21 @@ export function QsoLogbook({
 
     setIsDeleting(true);
     try {
-      const result =
-        canAdminManage && logbookUserId
-          ? await adminDeleteQsoAction(id, logbookUserId)
-          : await deleteQsoAction(id);
+      const result = canAdminManage
+        ? await adminDeleteQsoAction(id, logbookUserId)
+        : await deleteQsoAction(id);
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      router.refresh();
+      void reloadList();
     } finally {
       setIsDeleting(false);
     }
   }
 
   async function onDeleteAll() {
-    if ((!canEdit && !canAdminManage) || !logbookUserId) return;
+    if (!canEdit && !canAdminManage) return;
     const confirmed = await ask({
       title: t("deleteAll"),
       message: t("confirmDeleteAll", { callsign: stationCallsign }),
@@ -538,7 +614,7 @@ export function QsoLogbook({
       setFailedImportFiles([]);
       setSuccessMessage(t("deletedAll", { count: result.deleted }));
       navigateLogbook({ page: 1, search: "" });
-      router.refresh();
+      void reloadList();
     } finally {
       setIsDeleting(false);
     }
@@ -594,7 +670,7 @@ export function QsoLogbook({
       );
 
       navigateLogbook({ page: 1 });
-      router.refresh();
+      void reloadList();
     });
   }
 
@@ -944,7 +1020,30 @@ export function QsoLogbook({
         </div>
       ) : null}
 
-      {total === 0 && !search ? (
+      {listError ? (
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border px-6 py-16 text-center">
+          <p className="max-w-md text-sm text-red-700">{listError}</p>
+          <button
+            type="button"
+            onClick={() => void reloadList()}
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-foreground/5"
+          >
+            {t("retry")}
+          </button>
+        </div>
+      ) : listLoading && !pageData ? (
+        <div
+          className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border px-6 py-16 text-sm text-muted"
+          role="status"
+          aria-live="polite"
+        >
+          <span
+            className="inline-block size-4 animate-spin rounded-full border-2 border-muted border-t-accent"
+            aria-hidden
+          />
+          {t("loading")}
+        </div>
+      ) : total === 0 && !search ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 py-16 text-center">
           <p className="max-w-md text-muted">
             {t("emptyFor", { callsign: stationCallsign })}
@@ -1008,7 +1107,22 @@ export function QsoLogbook({
             </label>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-border">
+          <div className="relative overflow-x-auto rounded-lg border border-border">
+            {listLoading ? (
+              <div
+                className="absolute inset-0 z-10 flex items-center justify-center bg-background/70"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-muted shadow-sm">
+                  <span
+                    className="inline-block size-3.5 animate-spin rounded-full border-2 border-muted border-t-accent"
+                    aria-hidden
+                  />
+                  {t("loading")}
+                </span>
+              </div>
+            ) : null}
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-foreground/5 text-muted">
                 <tr>
