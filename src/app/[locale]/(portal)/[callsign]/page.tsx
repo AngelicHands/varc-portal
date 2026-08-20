@@ -91,6 +91,11 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
     getTranslations("account"),
   ]);
   const canEdit = session?.user?.id === ham.id;
+  const viewerProfile =
+    session?.user?.id && !canEdit
+      ? await getAccountProfile(session.user.id, session.user.email)
+      : null;
+  const canLogWithOperator = Boolean(viewerProfile?.callsign?.trim());
   const activeTab = parseHamTab(tabParam, canEdit);
   const verified = ham.callsignVerified;
   const birthdayLabel = formatBirthdayDmy(ham.birthday) || null;
@@ -179,6 +184,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
             initialQsos={qsos}
             stationCallsign={ham.callsign}
             canEdit={canEdit}
+            canLogWithOperator={canLogWithOperator}
           />
         }
         documents={

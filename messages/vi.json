@@ -163,6 +163,8 @@
     "stationCallsign": "Hô hiệu của bạn: {callsign}",
     "exportAdif": "Xuất ADIF",
     "addQso": "Ghi QSO mới",
+    "logQsoWithOperator": "Ghi QSO với hô hiệu này",
+    "qsoLoggedWithOperator": "Đã ghi QSO với {callsign}. QSO được thêm vào nhật ký của bạn.",
     "editQso": "Sửa QSO",
     "workedCallsign": "Hô hiệu liên lạc",
     "dateTime": "Ngày giờ",

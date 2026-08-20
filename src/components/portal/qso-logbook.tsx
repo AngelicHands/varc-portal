@@ -32,6 +32,7 @@ type Props = {
   initialQsos: QsoListItemDto[];
   stationCallsign: string;
   canEdit?: boolean;
+  canLogWithOperator?: boolean;
 };
 
 type SortKey = "qsoAt" | "workedCallsign" | "band" | "mode" | "grid";
@@ -147,10 +148,13 @@ function DeleteIcon() {
   );
 }
 
-function emptyForm(zone: QsoTimeZoneMode = "utc"): FormState {
+function emptyForm(
+  zone: QsoTimeZoneMode = "utc",
+  workedCallsign = "",
+): FormState {
   const { date, time } = qsoDateTimeNow(zone);
   return {
-    workedCallsign: "",
+    workedCallsign: workedCallsign.trim().toUpperCase(),
     qsoDate: date,
     qsoTime: time,
     band: "20m",
@@ -204,6 +208,7 @@ export function QsoLogbook({
   initialQsos,
   stationCallsign,
   canEdit = true,
+  canLogWithOperator = false,
 }: Props) {
   const t = useTranslations("logbook");
   const { ask, modal: confirmModal } = usePortalConfirm();
@@ -213,6 +218,7 @@ export function QsoLogbook({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [timeZoneMode, setTimeZoneMode] = useState<QsoTimeZoneMode>("utc");
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [warning] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -294,6 +300,17 @@ export function QsoLogbook({
     setTimeZoneMode("utc");
     setForm(emptyForm("utc"));
     setError(null);
+    setSuccessMessage(null);
+    setFieldErrors({});
+    setModalOpen(true);
+  }
+
+  function openLogWithOperatorModal() {
+    setEditingId(null);
+    setTimeZoneMode("utc");
+    setForm(emptyForm("utc", stationCallsign));
+    setError(null);
+    setSuccessMessage(null);
     setFieldErrors({});
     setModalOpen(true);
   }
@@ -408,8 +425,12 @@ export function QsoLogbook({
               item.id === result.qso.id ? result.qso : item,
             ),
           );
-        } else {
+        } else if (canEdit) {
           setQsos((current) => [result.qso, ...current]);
+        } else {
+          setSuccessMessage(
+            t("qsoLoggedWithOperator", { callsign: stationCallsign }),
+          );
         }
         resetModal();
       } finally {
@@ -672,9 +693,26 @@ export function QsoLogbook({
         </div>
       ) : null}
 
+      {canLogWithOperator ? (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={openLogWithOperatorModal}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            {t("logQsoWithOperator")}
+          </button>
+        </div>
+      ) : null}
+
       {warning ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {warning}
+        </p>
+      ) : null}
+      {successMessage ? (
+        <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {successMessage}
         </p>
       ) : null}
 
@@ -690,6 +728,14 @@ export function QsoLogbook({
               className="mt-6 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
             >
               {t("addQso")}
+            </button>
+          ) : canLogWithOperator ? (
+            <button
+              type="button"
+              onClick={openLogWithOperatorModal}
+              className="mt-6 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+            >
+              {t("logQsoWithOperator")}
             </button>
           ) : null}
         </div>
@@ -915,10 +961,16 @@ export function QsoLogbook({
         </>
       )}
 
-      {canEdit ? (
+      {canEdit || canLogWithOperator ? (
         <PortalDialog
           open={modalOpen}
-          title={editingId ? t("editQso") : t("addQso")}
+          title={
+            editingId
+              ? t("editQso")
+              : canLogWithOperator && !canEdit
+                ? t("logQsoWithOperator")
+                : t("addQso")
+          }
           onClose={closeModal}
           closeDisabled={pending}
           size="lg"

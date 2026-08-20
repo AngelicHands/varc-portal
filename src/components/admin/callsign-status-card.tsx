@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { verifyUserCallsignAction } from "@/lib/actions";
@@ -100,9 +101,21 @@ export function CallsignStatusCard({ userId, callsign, verified }: Props) {
   return (
     <>
       <div className={`flex h-full flex-col rounded-lg border p-5 ${toneClass}`}>
-        <p className={`text-xs font-medium uppercase tracking-wide ${labelClass}`}>
-          Callsign
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <p className={`text-xs font-medium uppercase tracking-wide ${labelClass}`}>
+            Callsign
+          </p>
+          {hasCallsign ? (
+            <Link
+              href={`/${sign}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 text-xs font-normal normal-case text-blue-700 hover:underline"
+            >
+              View profile
+            </Link>
+          ) : null}
+        </div>
         <p className={`mt-2 truncate text-2xl font-semibold ${valueClass}`}>
           {sign || "—"}
         </p>

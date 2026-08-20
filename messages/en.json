@@ -163,6 +163,8 @@
     "stationCallsign": "Your callsign: {callsign}",
     "exportAdif": "Export ADIF",
     "addQso": "Log new QSO",
+    "logQsoWithOperator": "Log a QSO with this operator",
+    "qsoLoggedWithOperator": "QSO logged with {callsign}. It was added to your logbook.",
     "editQso": "Edit QSO",
     "workedCallsign": "Contact callsign",
     "dateTime": "Date & time",
