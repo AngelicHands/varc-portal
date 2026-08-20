@@ -6,6 +6,10 @@ const backupRestoreUploadLimit = Number(
   process.env.BACKUP_RESTORE_UPLOAD_MAX_BYTES || 536870912,
 );
 
+// Keep in sync with RESERVED_HAM_PATHS in src/lib/ham-reserved.ts (lowercase).
+const BARE_CALLSIGN_REWRITE_PATTERN =
+  "(?!_next|account|admin|api|callsigns|categories|en|favicon|logbook|maplibre|media|news|pages|qso|robots|sitemap|vi)[A-Za-z0-9]{3,15}";
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
@@ -42,6 +46,12 @@ const nextConfig: NextConfig = {
       {
         source: "/media/:path*",
         destination: "/api/media/:path*",
+      },
+      // Bare /XV1ABC → /vi/XV1ABC. Must be next.config (not middleware):
+      // Next.js 16 standalone turns middleware rewrites into a self-308 loop.
+      {
+        source: `/:sign(${BARE_CALLSIGN_REWRITE_PATTERN})`,
+        destination: "/vi/:sign",
       },
     ];
   },

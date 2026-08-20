@@ -148,13 +148,13 @@ export default async function proxy(req: NextRequest) {
   const prefixedCallsign = redirectPrefixedCallsign(publicReq);
   if (prefixedCallsign) return prefixedCallsign;
 
-  const bareCallsign = rewriteBareCallsign(publicReq);
+  const bareCallsign = handleBareCallsign(publicReq);
   if (bareCallsign) return bareCallsign;
 
   return intlMiddleware(publicReq);
 }
 
-/** /vi/XV1ABC or /en/XV1ABC → /XV1ABC (locale kept via cookie). */
+/** /vi/XV1ABC → /XV1ABC (default locale only). /en/XV1ABC stays prefixed. */
 function redirectPrefixedCallsign(req: NextRequest): NextResponse | null {
   const match = PREFIXED_CALLSIGN_PATH.exec(req.nextUrl.pathname);
   if (!match) return null;
@@ -163,6 +163,10 @@ function redirectPrefixedCallsign(req: NextRequest): NextResponse | null {
   const sign = match[2].toUpperCase();
   if (!isAppLocale(localeRaw) || isReservedHamPath(sign)) return null;
 
+  // Only strip the default locale so bare URLs stay the Vietnamese canonical.
+  // English keeps /en/CALLSIGN (cookie + language switcher).
+  if (localeRaw !== routing.defaultLocale) return null;
+
   const canonical = req.nextUrl.clone();
   canonical.pathname = `/${sign}`;
   const response = NextResponse.redirect(canonical, 308);
@@ -170,23 +174,36 @@ function redirectPrefixedCallsign(req: NextRequest): NextResponse | null {
   return response;
 }
 
-/** Unprefixed /XV1ABC → rewrite to /{locale}/XV1ABC for the app router. */
-function rewriteBareCallsign(req: NextRequest): NextResponse | null {
-  const { pathname } = req.nextUrl;
+/**
+ * Bare /XV1ABC — do not middleware-rewrite (standalone self-308 loop).
+ * Default locale: next() and let next.config rewrite to /vi/CALLSIGN.
+ * Other locales: redirect to /{locale}/CALLSIGN.
+ */
+function handleBareCallsign(publicReq: NextRequest): NextResponse | null {
+  const { pathname } = publicReq.nextUrl;
   const sign = parseBareCallsignPath(pathname);
   if (!sign) return null;
 
   const rawSegment = pathname.slice(1);
   if (rawSegment !== sign) {
-    const canonical = req.nextUrl.clone();
+    const canonical = publicReq.nextUrl.clone();
     canonical.pathname = `/${sign}`;
     return NextResponse.redirect(canonical, 308);
   }
 
-  const locale = localeFromCookie(req);
-  const rewriteUrl = req.nextUrl.clone();
-  rewriteUrl.pathname = `/${locale}/${sign}`;
-  return NextResponse.rewrite(rewriteUrl);
+  const locale = localeFromCookie(publicReq);
+  if (locale !== routing.defaultLocale) {
+    const prefixed = publicReq.nextUrl.clone();
+    prefixed.pathname = `/${locale}/${sign}`;
+    const response = NextResponse.redirect(prefixed, 308);
+    setLocaleCookie(response, locale);
+    return response;
+  }
+
+  // next.config rewrites /CALLSIGN → /vi/CALLSIGN (middleware rewrite loops in standalone).
+  const response = NextResponse.next();
+  setLocaleCookie(response, routing.defaultLocale);
+  return response;
 }
 
 export const config = {
