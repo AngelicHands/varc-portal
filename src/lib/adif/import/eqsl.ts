@@ -10,6 +10,7 @@ import {
   type AdifMapResult,
   type AdifSkipReason,
 } from "@/lib/adif/import/shared";
+import { adifImportError } from "@/lib/adif/import/error-keys";
 import { isValidCallsign } from "@/lib/validations/qso";
 
 export function mapEqslAdifRecord(
@@ -18,19 +19,19 @@ export function mapEqslAdifRecord(
   source: QsoSource = "eqsl",
 ): AdifMapResult & { skip?: AdifSkipReason } {
   if (!record || Object.keys(record).length === 0) {
-    return { ok: false, reason: "Empty record" };
+    return { ok: false, reason: adifImportError("emptyRecord") };
   }
 
   const workedCallsign = normalizeAdifCallsign(adifField(record, "call"));
   if (!workedCallsign || !isValidCallsign(workedCallsign)) {
-    return { ok: false, reason: "Missing or invalid CALL" };
+    return { ok: false, reason: adifImportError("invalidCall") };
   }
 
   const qsoDate = adifField(record, "qso_date");
   const timeOn = adifField(record, "time_on");
   const qsoAt = parseAdifDateTime(qsoDate, timeOn);
   if (!qsoAt) {
-    return { ok: false, reason: "Missing or invalid QSO_DATE / TIME_ON" };
+    return { ok: false, reason: adifImportError("invalidQsoDateTime") };
   }
 
   const notes = [adifField(record, "qslmsg"), adifField(record, "comment", "notes")]

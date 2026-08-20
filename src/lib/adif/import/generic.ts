@@ -12,6 +12,7 @@ import {
   type AdifMapResult,
   type AdifSkipReason,
 } from "@/lib/adif/import/shared";
+import { adifImportError } from "@/lib/adif/import/error-keys";
 import { isValidCallsign } from "@/lib/validations/qso";
 
 function genericQsoConfirmed(record: AdifRecord): boolean {
@@ -36,28 +37,30 @@ export function mapGenericAdifRecord(
   source: QsoSource = "adif",
 ): AdifMapResult & { skip?: AdifSkipReason } {
   if (!record || Object.keys(record).length === 0) {
-    return { ok: false, reason: "Empty record" };
+    return { ok: false, reason: adifImportError("emptyRecord") };
   }
 
   const recordStation = adifStationCallsign(record);
   if (recordStation && recordStation !== userCallsign) {
     return {
       ok: false,
-      reason: `Station callsign ${recordStation} does not match your callsign`,
+      reason: adifImportError("stationMismatch", {
+        stationCallsign: recordStation,
+      }),
       skip: "station_mismatch",
     };
   }
 
   const workedCallsign = normalizeAdifCallsign(adifField(record, "call"));
   if (!workedCallsign || !isValidCallsign(workedCallsign)) {
-    return { ok: false, reason: "Missing or invalid CALL" };
+    return { ok: false, reason: adifImportError("invalidCall") };
   }
 
   const qsoDate = adifField(record, "qso_date");
   const timeOn = adifField(record, "time_on");
   const qsoAt = parseAdifDateTime(qsoDate, timeOn);
   if (!qsoAt) {
-    return { ok: false, reason: "Missing or invalid QSO_DATE / TIME_ON" };
+    return { ok: false, reason: adifImportError("invalidQsoDateTime") };
   }
 
   return validateImportedCandidate(

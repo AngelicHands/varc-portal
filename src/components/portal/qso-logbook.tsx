@@ -23,6 +23,8 @@ import {
   updateQsoAction,
 } from "@/lib/qso-actions";
 import { importQsoAdifAction, type AdifImportRecordError } from "@/lib/qso-import-actions";
+import type { AdifImportErrorRef } from "@/lib/adif/import/error-keys";
+import { translateAdifImportError } from "@/lib/adif/import/translate-error";
 import {
   QSO_BANDS,
   QSO_MODES,
@@ -245,7 +247,9 @@ export function QsoLogbook({
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<AdifImportErrorRef | null>(
+    null,
+  );
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const [importRecordErrors, setImportRecordErrors] = useState<
     AdifImportRecordError[]
@@ -253,7 +257,7 @@ export function QsoLogbook({
   const [importRecordErrorsTruncated, setImportRecordErrorsTruncated] =
     useState(0);
   const [failedImportFiles, setFailedImportFiles] = useState<
-    { name: string; reason: string }[]
+    { name: string; reason: AdifImportErrorRef }[]
   >([]);
   const [isImporting, startImportTransition] = useTransition();
   const pending = isSubmitting || isDeleting || isImporting;
@@ -879,7 +883,7 @@ export function QsoLogbook({
       ) : null}
       {importError ? (
         <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {importError}
+          {translateAdifImportError(t, importError)}
         </p>
       ) : null}
       {importRecordErrors.length > 0 ? (
@@ -887,12 +891,14 @@ export function QsoLogbook({
           <p className="font-medium">{t("importRecordErrors")}</p>
           <ul className="mt-2 max-h-64 list-disc space-y-1 overflow-y-auto pl-5">
             {importRecordErrors.map((item) => (
-              <li key={`${item.fileName}:${item.recordLine}:${item.reason}`}>
+              <li
+                key={`${item.fileName}:${item.recordLine}:${item.reason.key}`}
+              >
                 <span className="font-medium">{item.fileName}</span>
                 {" · "}
                 {t("importRecordLine", { line: item.recordLine })}
                 {": "}
-                {item.reason}
+                {translateAdifImportError(t, item.reason)}
               </li>
             ))}
           </ul>
@@ -910,8 +916,9 @@ export function QsoLogbook({
           <p className="font-medium">{t("importFailedFiles")}</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             {failedImportFiles.map((file) => (
-              <li key={`${file.name}:${file.reason}`}>
-                <span className="font-medium">{file.name}</span>: {file.reason}
+              <li key={`${file.name}:${file.reason.key}`}>
+                <span className="font-medium">{file.name}</span>:{" "}
+                {translateAdifImportError(t, file.reason)}
               </li>
             ))}
           </ul>

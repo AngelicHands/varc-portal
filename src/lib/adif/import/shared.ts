@@ -9,6 +9,10 @@ import {
   type QsoInputValues,
 } from "@/lib/validations/qso";
 import type { QsoSource } from "@/lib/qso-source";
+import {
+  adifImportError,
+  type AdifImportErrorRef,
+} from "@/lib/adif/import/error-keys";
 
 export type AdifImportValues = Omit<QsoInputValues, "freqMhz"> & {
   freqMhz: number | null;
@@ -19,7 +23,7 @@ export type AdifImportValues = Omit<QsoInputValues, "freqMhz"> & {
 
 export type AdifMapResult =
   | { ok: true; value: AdifImportValues }
-  | { ok: false; reason: string };
+  | { ok: false; reason: AdifImportErrorRef };
 
 export type AdifSkipReason = "invalid" | "station_mismatch";
 
@@ -174,9 +178,15 @@ export function validateImportedCandidate(
 ): AdifMapResult {
   const parsed = adifQsoImportSchema.safeParse(candidate);
   if (!parsed.success) {
-    const message =
-      parsed.error.issues[0]?.message ?? "Record failed validation";
-    return { ok: false, reason: message };
+    const issue = parsed.error.issues[0];
+    const path = issue?.path[0];
+    if (path === "workedCallsign") {
+      return { ok: false, reason: adifImportError("invalidCallsign") };
+    }
+    if (path === "freqMhz") {
+      return { ok: false, reason: adifImportError("invalidFrequency") };
+    }
+    return { ok: false, reason: adifImportError("recordValidationFailed") };
   }
 
   return {

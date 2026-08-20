@@ -9,6 +9,11 @@ import {
   qsoDuplicateKey,
   qsoDuplicateKeyFromDoc,
 } from "@/lib/adif/import";
+import {
+  adifImportError,
+  parseErrorToImportError,
+  type AdifImportErrorRef,
+} from "@/lib/adif/import/error-keys";
 import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import { requireUserCallsign, listUserQsos } from "@/lib/qso";
@@ -21,13 +26,13 @@ const MAX_RECORD_ERRORS = 50;
 
 export type AdifImportFailedFile = {
   name: string;
-  reason: string;
+  reason: AdifImportErrorRef;
 };
 
 export type AdifImportRecordError = {
   fileName: string;
   recordLine: number;
-  reason: string;
+  reason: AdifImportErrorRef;
 };
 
 type CandidateWithFile = AdifImportValues & {
@@ -43,15 +48,15 @@ function importFailureReason(params: {
   recordCount: number;
   validCount: number;
   importedCount: number;
-}): string | null {
+}): AdifImportErrorRef | null {
   if (params.recordCount === 0) {
-    return "No QSO records in file";
+    return adifImportError("noRecordsInFile");
   }
   if (params.validCount === 0) {
-    return "No valid QSO records in file";
+    return adifImportError("noValidRecordsInFile");
   }
   if (params.importedCount === 0) {
-    return "All valid records were duplicates";
+    return adifImportError("allDuplicates");
   }
   return null;
 }
@@ -60,7 +65,13 @@ export async function importQsoAdifAction(formData: FormData) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return { ok: false as const, error: "Unauthorized", failedFiles: [] };
+      return {
+        ok: false as const,
+        error: adifImportError("unauthorized"),
+        failedFiles: [] as AdifImportFailedFile[],
+        recordErrors: [] as AdifImportRecordError[],
+        truncatedRecordErrors: 0,
+      };
     }
 
     const files = formData
@@ -69,15 +80,23 @@ export async function importQsoAdifAction(formData: FormData) {
     if (files.length === 0) {
       return {
         ok: false as const,
-        error: "Choose an ADIF file (.adi or .adif)",
+        error: adifImportError("chooseFile"),
         failedFiles: [],
+        recordErrors: [],
+        truncatedRecordErrors: 0,
       };
     }
 
     await connectDb();
     const callsignCheck = await requireUserCallsign(session.user.id);
     if (!callsignCheck.ok) {
-      return { ...callsignCheck, failedFiles: [] as AdifImportFailedFile[] };
+      return {
+        ok: false as const,
+        error: adifImportError("callsignRequired"),
+        failedFiles: [],
+        recordErrors: [],
+        truncatedRecordErrors: 0,
+      };
     }
 
     let skippedInvalid = 0;
@@ -96,7 +115,7 @@ export async function importQsoAdifAction(formData: FormData) {
       if (!isAdifFilename(file.name)) {
         failedFiles.push({
           name: file.name,
-          reason: "Invalid file extension (.adi or .adif required)",
+          reason: adifImportError("invalidExtension"),
         });
         continue;
       }
@@ -143,8 +162,7 @@ export async function importQsoAdifAction(formData: FormData) {
       } catch (error) {
         failedFiles.push({
           name: file.name,
-          reason:
-            error instanceof Error ? error.message : "Failed to parse ADIF file",
+          reason: parseErrorToImportError(error),
         });
       }
     }
@@ -163,7 +181,7 @@ export async function importQsoAdifAction(formData: FormData) {
 
       return {
         ok: false as const,
-        error: "No valid QSO records found in the uploaded ADIF file(s)",
+        error: adifImportError("noValidRecordsInUpload"),
         skippedInvalid,
         skippedStationMismatch,
         recordErrors,
@@ -262,6 +280,13 @@ export async function importQsoAdifAction(formData: FormData) {
       qsos,
     };
   } catch (error) {
-    return failAction(error, "Failed to import ADIF");
+    failAction(error, "Failed to import ADIF");
+    return {
+      ok: false as const,
+      error: adifImportError("importFailed"),
+      failedFiles: [],
+      recordErrors: [],
+      truncatedRecordErrors: 0,
+    };
   }
 }
