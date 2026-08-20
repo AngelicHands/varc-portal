@@ -3,12 +3,12 @@ import type { QsoSource } from "@/lib/qso-source";
 import {
   adifField,
   adifNotesFromRecord,
+  adifQsoAtFromRecord,
   adifStationCallsign,
   normalizeAdifBand,
   normalizeAdifCallsign,
   normalizeAdifFreq,
   parseAdifDateOnly,
-  parseAdifDateTime,
   validateImportedCandidate,
   type AdifMapResult,
   type AdifSkipReason,
@@ -54,9 +54,7 @@ export function mapQrzAdifRecord(
     return { ok: false, reason: adifImportError("invalidCall") };
   }
 
-  const qsoDate = adifField(record, "qso_date");
-  const timeOn = adifField(record, "time_on");
-  const qsoAt = parseAdifDateTime(qsoDate, timeOn);
+  const qsoAt = adifQsoAtFromRecord(record);
   if (!qsoAt) {
     return { ok: false, reason: adifImportError("invalidQsoDateTime") };
   }

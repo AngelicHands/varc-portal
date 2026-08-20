@@ -141,6 +141,25 @@ function fromCartesian(x: number, y: number, z: number): [number, number] {
   return [lng, lat];
 }
 
+/**
+ * Keep consecutive longitudes continuous (±180 jumps become ±360 unwrap).
+ * Without this, MapLibre draws a straight horizontal segment across the whole
+ * map when a geodesic crosses the antimeridian.
+ */
+function unwrapLngPath(coords: [number, number][]): [number, number][] {
+  if (coords.length <= 1) return coords;
+  const out: [number, number][] = [coords[0]!];
+  for (let i = 1; i < coords.length; i += 1) {
+    const [lng, lat] = coords[i]!;
+    const prevLng = out[i - 1]![0];
+    let unwrapped = lng;
+    while (unwrapped - prevLng > 180) unwrapped -= 360;
+    while (unwrapped - prevLng < -180) unwrapped += 360;
+    out.push([unwrapped, lat]);
+  }
+  return out;
+}
+
 /** Geodesic arc as [lng, lat] positions for MapLibre LineString. */
 export function greatCircleCoordinates(
   fromLng: number,
@@ -155,10 +174,10 @@ export function greatCircleCoordinates(
   dot = Math.min(1, Math.max(-1, dot));
   const omega = Math.acos(dot);
   if (!Number.isFinite(omega) || omega < 1e-8) {
-    return [
+    return unwrapLngPath([
       [fromLng, fromLat],
       [toLng, toLat],
-    ];
+    ]);
   }
 
   const sinOmega = Math.sin(omega);
@@ -171,7 +190,8 @@ export function greatCircleCoordinates(
       fromCartesian(s0 * a.x + s1 * b.x, s0 * a.y + s1 * b.y, s0 * a.z + s1 * b.z),
     );
   }
-  return coords;
+  // Anchor the path near the start longitude so world-copy rendering stays local.
+  return unwrapLngPath([[fromLng, fromLat], ...coords.slice(1)]);
 }
 
 /** Great-circle (line-of-sight along Earth surface) distance in kilometres. */

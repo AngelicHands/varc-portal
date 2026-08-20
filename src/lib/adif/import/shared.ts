@@ -159,6 +159,24 @@ export function parseAdifDateTime(qsoDate: string, timeOn: string): string | nul
   return date.toISOString();
 }
 
+/**
+ * QSO start time from ADIF. Prefer TIME_ON; fall back to TIME_OFF when some
+ * QRZ exports omit TIME_ON.
+ */
+export function adifQsoAtFromRecord(record: AdifRecord): string | null {
+  const qsoDate = adifField(record, "qso_date");
+  if (!qsoDate) return null;
+  const timeOn = adifField(record, "time_on");
+  if (timeOn) {
+    const fromOn = parseAdifDateTime(qsoDate, timeOn);
+    if (fromOn) return fromOn;
+  }
+  const timeOff = adifField(record, "time_off");
+  if (!timeOff) return null;
+  const dateOff = adifField(record, "qso_date_off") || qsoDate;
+  return parseAdifDateTime(dateOff, timeOff);
+}
+
 export function parseAdifDateOnly(raw: string): string | null {
   const match = /^(\d{4})(\d{2})(\d{2})$/.exec(raw.trim());
   if (!match) return null;
