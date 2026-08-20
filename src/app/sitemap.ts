@@ -5,15 +5,17 @@ import {
   getPageLocale,
 } from "@/lib/cms";
 import { listCallsignsForSitemap } from "@/lib/callsigns";
+import { listHamsForSitemap } from "@/lib/ham-profile";
 
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3099";
-  const [articles, pages, callsigns] = await Promise.all([
+  const [articles, pages, callsigns, hams] = await Promise.all([
     listPublishedForSitemap().catch(() => []),
     listPublishedPagesForSitemap().catch(() => []),
     listCallsignsForSitemap().catch(() => []),
+    listHamsForSitemap().catch(() => []),
   ]);
 
   const entries: MetadataRoute.Sitemap = [
@@ -137,6 +139,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         languages: {
           vi: `${siteUrl}/vi/callsigns/${sign}`,
           en: `${siteUrl}/en/callsigns/${sign}`,
+        },
+      },
+    });
+  }
+
+  for (const ham of hams) {
+    entries.push({
+      url: `${siteUrl}/${ham.sign}`,
+      lastModified: ham.updatedAt,
+      alternates: {
+        languages: {
+          vi: `${siteUrl}/vi/${ham.sign}`,
+          en: `${siteUrl}/en/${ham.sign}`,
         },
       },
     });

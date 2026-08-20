@@ -86,6 +86,11 @@ function buildHref(
     return { pathname: "/callsigns/[sign]", params: { sign } };
   }
 
+  const callsign = dynamicParams.callsign;
+  if (pathname === "/[callsign]" && typeof callsign === "string") {
+    return { pathname: "/[callsign]", params: { callsign } };
+  }
+
   if (Object.keys(dynamicParams).length === 0) {
     return "/";
   }

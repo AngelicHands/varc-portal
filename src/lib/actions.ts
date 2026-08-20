@@ -81,6 +81,10 @@ import { deleteObject } from "@/lib/media/storage";
 import { failAction, logServerError } from "@/lib/safe-error";
 import { createUniqueFormKey } from "@/lib/forms";
 import {
+  ensureUserCallsignIndex,
+  findUserByAssignedCallsign,
+} from "@/lib/ham-profile";
+import {
   CmsCacheKeys,
   CmsCacheTags,
   deleteCmsKeys,
@@ -1733,13 +1737,14 @@ export async function createUserAction(
 
     const data = parsed.data;
     await connectDb();
+    await ensureUserCallsignIndex();
 
     const email = data.email.toLowerCase();
     const existing = await User.findOne({ email });
     if (existing) return { ok: false, error: "Email already exists" };
 
     if (data.callsign) {
-      const callsignTaken = await User.findOne({ callsign: data.callsign });
+      const callsignTaken = await findUserByAssignedCallsign(data.callsign);
       if (callsignTaken) {
         return { ok: false, error: "Callsign is already assigned to another user" };
       }
@@ -1754,6 +1759,11 @@ export async function createUserAction(
       callsign: data.callsign,
       callsignVerified: false,
     });
+    if (data.callsign) {
+      revalidatePath(`/${data.callsign}`);
+      revalidatePath(`/vi/${data.callsign}`);
+      revalidatePath(`/en/${data.callsign}`);
+    }
     return { ok: true, id: String(created._id) };
   } catch (error) {
     return failAction(error, "Failed to create user");
@@ -1772,14 +1782,15 @@ export async function updateAdminUserAction(
     }
 
     await connectDb();
+    await ensureUserCallsignIndex();
     const user = await User.findById(userId);
     if (!user) return { ok: false, error: "User not found" };
 
     if (parsed.data.callsign) {
-      const callsignTaken = await User.findOne({
-        callsign: parsed.data.callsign,
-        _id: { $ne: user._id },
-      });
+      const callsignTaken = await findUserByAssignedCallsign(
+        parsed.data.callsign,
+        user._id,
+      );
       if (callsignTaken) {
         return { ok: false, error: "Callsign is already assigned to another user" };
       }
@@ -1823,6 +1834,16 @@ export async function updateAdminUserAction(
     revalidatePath("/logbook");
     revalidatePath("/vi", "layout");
     revalidatePath("/en", "layout");
+    if (previousCallsign) {
+      revalidatePath(`/${previousCallsign}`);
+      revalidatePath(`/vi/${previousCallsign}`);
+      revalidatePath(`/en/${previousCallsign}`);
+    }
+    if (nextCallsign && nextCallsign !== previousCallsign) {
+      revalidatePath(`/${nextCallsign}`);
+      revalidatePath(`/vi/${nextCallsign}`);
+      revalidatePath(`/en/${nextCallsign}`);
+    }
     return { ok: true };
   } catch (error) {
     return failAction(error, "Failed to update user");
@@ -1862,6 +1883,9 @@ export async function verifyUserCallsignAction(
     revalidatePath("/logbook");
     revalidatePath("/vi", "layout");
     revalidatePath("/en", "layout");
+    revalidatePath(`/${callsign}`);
+    revalidatePath(`/vi/${callsign}`);
+    revalidatePath(`/en/${callsign}`);
     return { ok: true, verified: Boolean(updated.callsignVerified) };
   } catch (error) {
     return failAction(error, "Failed to update callsign status");

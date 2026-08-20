@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { normalizeCallsignQuery } from "@/lib/callsigns-normalize";
+import { isReservedHamPath } from "@/lib/ham-reserved";
 
 /** Basic ham callsign shape (1–2 prefix letters/digits + suffix). */
 const CALLSIGN_PATTERN = /^[A-Z0-9/]{3,15}$/;
@@ -13,8 +14,11 @@ export function isValidCallsign(value: string): boolean {
   if (!normalized || normalized.length < 3 || normalized.length > 15) {
     return false;
   }
+  if (isReservedHamPath(normalized)) return false;
   return CALLSIGN_PATTERN.test(normalized);
 }
+
+const reservedCallsignMessage = "This callsign is reserved by the site";
 
 export const adminCallsignSchema = z
   .string()
@@ -23,7 +27,67 @@ export const adminCallsignSchema = z
   .transform((value) => normalizeProfileCallsign(value))
   .refine((value) => value === "" || isValidCallsign(value), {
     message: "Enter a valid callsign (e.g. XV1ABC)",
+  })
+  .refine((value) => value === "" || !isReservedHamPath(value), {
+    message: reservedCallsignMessage,
   });
+
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+const DATE_DMY = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+
+export const PROFILE_GENDERS = ["male", "female", "other"] as const;
+
+export function maxBirthdayYear(): number {
+  return new Date().getFullYear() - 10;
+}
+
+export function maxBirthdayIso(): string {
+  return `${maxBirthdayYear()}-12-31`;
+}
+
+export function formatBirthdayDmy(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const match = DATE_ONLY.exec(iso);
+  if (!match) return "";
+  const [, year, month, day] = match;
+  return `${day}/${month}/${year}`;
+}
+
+/** Parse dd/mm/yyyy (or yyyy-mm-dd) to ISO yyyy-mm-dd. Empty → "". Invalid → null. */
+export function parseBirthdayInput(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  let year: number;
+  let month: number;
+  let day: number;
+
+  const dmy = DATE_DMY.exec(trimmed);
+  const iso = DATE_ONLY.exec(trimmed);
+  if (dmy) {
+    day = Number(dmy[1]);
+    month = Number(dmy[2]);
+    year = Number(dmy[3]);
+  } else if (iso) {
+    year = Number(iso[1]);
+    month = Number(iso[2]);
+    day = Number(iso[3]);
+  } else {
+    return null;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  if (year < 1900 || year > maxBirthdayYear()) return null;
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 
 export const profileFormSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -35,7 +99,25 @@ export const profileFormSchema = z.object({
     .transform(normalizeProfileCallsign)
     .refine(isValidCallsign, {
       message: "Enter a valid callsign (e.g. XV1ABC)",
+    })
+    .refine((value) => !isReservedHamPath(value), {
+      message: reservedCallsignMessage,
     }),
+  birthday: z
+    .string()
+    .trim()
+    .transform((value) => parseBirthdayInput(value))
+    .refine((value): value is string => value !== null, {
+      message: "Enter a valid birthday",
+    }),
+  gender: z
+    .string()
+    .trim()
+    .transform((value) => value.toLowerCase())
+    .refine(
+      (value) => value === "" || PROFILE_GENDERS.includes(value as (typeof PROFILE_GENDERS)[number]),
+      { message: "Select a gender" },
+    ),
 });
 
 export const QSO_BANDS = [

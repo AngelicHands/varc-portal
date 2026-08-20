@@ -14,12 +14,24 @@ const UserSchema = new Schema(
     image: { type: String, default: null },
     callsign: { type: String, default: "", trim: true, uppercase: true },
     callsignVerified: { type: Boolean, default: false },
+    birthday: { type: Date, default: null },
+    gender: {
+      type: String,
+      enum: ["", "male", "female", "other"],
+      default: "",
+    },
     emailVerified: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
-UserSchema.index({ callsign: 1 }, { sparse: true });
+UserSchema.index(
+  { callsign: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { callsign: { $gt: "" } },
+  },
+);
 
 export type UserDocument = InferSchemaType<typeof UserSchema> & {
   _id: mongoose.Types.ObjectId;

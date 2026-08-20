@@ -292,6 +292,7 @@ type Props = {
   showRoles: boolean;
   userName?: string | null;
   userEmail?: string | null;
+  userCallsign?: string | null;
   signOutAction: () => Promise<void>;
 };
 
@@ -303,6 +304,7 @@ export function AdminSidebar({
   showRoles,
   userName,
   userEmail,
+  userCallsign,
   signOutAction,
 }: Props) {
   const pathname = usePathname();
@@ -455,7 +457,11 @@ export function AdminSidebar({
           VARC Admin
         </Link>
         <AdminAccountMenu
-          user={{ name: userName ?? null, email: userEmail ?? null }}
+          user={{
+            name: userName ?? null,
+            email: userEmail ?? null,
+            callsign: userCallsign?.trim() ?? "",
+          }}
           signOutAction={signOutAction}
           compact
         />

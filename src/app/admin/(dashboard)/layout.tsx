@@ -1,4 +1,5 @@
 import { auth, signOut } from "@/auth";
+import { getAccountProfile } from "@/lib/account";
 import {
   canManageEditorial,
   canManagePages,
@@ -17,6 +18,10 @@ export default async function AdminDashboardLayout({
 }) {
   const session = await auth();
   const user = session?.user;
+  const profile = user
+    ? await getAccountProfile(user.id, user.email)
+    : null;
+  const callsign = profile?.callsign?.trim() ?? "";
   const showEditorial = canManageEditorial(user);
   const showPages = canManagePages(user);
   const showSite = canManageSite(user);
@@ -38,6 +43,7 @@ export default async function AdminDashboardLayout({
         showRoles={showRoles}
         userName={session?.user?.name}
         userEmail={session?.user?.email}
+        userCallsign={callsign}
         signOutAction={signOutAction}
       />
       <div className="min-w-0 flex-1">
@@ -46,6 +52,7 @@ export default async function AdminDashboardLayout({
             user={{
               name: session?.user?.name ?? null,
               email: session?.user?.email ?? null,
+              callsign,
             }}
             signOutAction={signOutAction}
           />

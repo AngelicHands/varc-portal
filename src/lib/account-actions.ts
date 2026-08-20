@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { connectDb } from "@/lib/db";
+import {
+  ensureUserCallsignIndex,
+  findUserByAssignedCallsign,
+} from "@/lib/ham-profile";
 import { failAction } from "@/lib/safe-error";
 import { profileFormSchema } from "@/lib/validations/qso";
 import { User } from "@/models/User";
@@ -31,6 +35,7 @@ export async function updateProfileAction(raw: unknown) {
     }
 
     await connectDb();
+    await ensureUserCallsignIndex();
     const user = await User.findById(session.user.id);
     if (!user) {
       return { ok: false as const, error: "User not found" };
@@ -40,23 +45,50 @@ export async function updateProfileAction(raw: unknown) {
     const nextCallsign = parsed.data.callsign;
     const callsignChanged = nextCallsign !== previousCallsign;
 
+    if (nextCallsign) {
+      const taken = await findUserByAssignedCallsign(nextCallsign, user._id);
+      if (taken) {
+        return {
+          ok: false as const,
+          error: "Callsign is already assigned to another user",
+        };
+      }
+    }
+
+    const birthdayIso = parsed.data.birthday;
+    const update: Record<string, unknown> = {
+      name: parsed.data.name,
+      callsign: nextCallsign,
+      gender: parsed.data.gender,
+      callsignVerified:
+        Boolean(nextCallsign) &&
+        !callsignChanged &&
+        Boolean(user.callsignVerified),
+    };
+    if (birthdayIso) {
+      update.birthday = new Date(`${birthdayIso}T12:00:00.000Z`);
+    }
+
     await User.updateOne(
       { _id: user._id },
-      {
-        $set: {
-          name: parsed.data.name,
-          callsign: nextCallsign,
-          callsignVerified:
-            Boolean(nextCallsign) &&
-            !callsignChanged &&
-            Boolean(user.callsignVerified),
-        },
-      },
+      birthdayIso
+        ? { $set: update }
+        : { $set: update, $unset: { birthday: 1 } },
       { strict: false },
     );
 
     revalidatePath("/account");
     revalidatePath("/logbook");
+    if (previousCallsign) {
+      revalidatePath(`/${previousCallsign}`);
+      revalidatePath(`/vi/${previousCallsign}`);
+      revalidatePath(`/en/${previousCallsign}`);
+    }
+    if (nextCallsign) {
+      revalidatePath(`/${nextCallsign}`);
+      revalidatePath(`/vi/${nextCallsign}`);
+      revalidatePath(`/en/${nextCallsign}`);
+    }
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to update profile");

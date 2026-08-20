@@ -21,6 +21,14 @@ async function requireLogbookSession() {
   return session;
 }
 
+function revalidateLogbook(callsign: string) {
+  revalidatePath("/logbook");
+  if (!callsign) return;
+  revalidatePath(`/${callsign}`);
+  revalidatePath(`/vi/${callsign}`);
+  revalidatePath(`/en/${callsign}`);
+}
+
 function clientKeyFromHeaders(headerStore: Headers): string {
   const forwarded = headerStore.get("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() || "unknown";
@@ -71,7 +79,7 @@ export async function createQsoAction(raw: unknown) {
       }
     }
 
-    revalidatePath("/logbook");
+    revalidateLogbook(callsignCheck.callsign);
     const qso = toQsoListItemDto(created);
     if (emailSkipped) {
       return {
@@ -123,9 +131,10 @@ export async function updateQsoAction(id: string, raw: unknown) {
     existing.notes = parsed.data.notes;
     await existing.save();
 
+    const callsignCheck = await requireUserCallsign(session.user.id);
+
     let emailSkipped = false;
     if (parsed.data.qso_sent && !wasSent && !existing.qso_confirmed) {
-      const callsignCheck = await requireUserCallsign(session.user.id);
       if (callsignCheck.ok) {
         const headerStore = await headers();
         const enqueueResult = await enqueueQsoConfirmationRequest({
@@ -145,7 +154,7 @@ export async function updateQsoAction(id: string, raw: unknown) {
       }
     }
 
-    revalidatePath("/logbook");
+    revalidateLogbook(callsignCheck.ok ? callsignCheck.callsign : "");
     const qso = toQsoListItemDto(existing);
     if (emailSkipped) {
       return {
@@ -179,7 +188,8 @@ export async function deleteQsoAction(id: string) {
       return { ok: false as const, error: "Not found" };
     }
 
-    revalidatePath("/logbook");
+    const callsignCheck = await requireUserCallsign(session.user.id);
+    revalidateLogbook(callsignCheck.ok ? callsignCheck.callsign : "");
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to delete QSO");

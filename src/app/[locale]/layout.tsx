@@ -5,6 +5,7 @@ import { getMessages, setRequestLocale } from "next-intl/server";
 import { auth } from "@/auth";
 import { routing, type AppLocale } from "@/i18n/routing";
 import { getPublicSiteBranding, listPublicMenuLinks } from "@/lib/cms";
+import { getAccountProfile } from "@/lib/account";
 import { isAdminRole } from "@/lib/roles";
 import { SiteFooter } from "@/components/portal/site-footer";
 import { SiteHeader } from "@/components/portal/site-header";
@@ -69,11 +70,15 @@ export default async function LocaleLayout({ children, params }: Props) {
     getPublicSiteBranding(appLocale),
   ]);
 
+  const profile = session?.user
+    ? await getAccountProfile(session.user.id, session.user.email)
+    : null;
   const user = session?.user
     ? {
         name: session.user.name ?? null,
         email: session.user.email ?? null,
         isAdmin: isAdminRole(session.user),
+        callsign: profile?.callsign?.trim() ?? "",
       }
     : null;
 

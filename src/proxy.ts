@@ -3,6 +3,7 @@ import { getToken } from "next-auth/jwt";
 import createMiddleware from "next-intl/middleware";
 import { isAdminRole, canManageSite, canManagePages, canManageUsers, canManageRoles, pickRoleCapabilities, type Role } from "@/lib/roles";
 import { routing } from "@/i18n/routing";
+import { parseBareCallsignPath } from "@/lib/ham-reserved";
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -122,7 +123,28 @@ export default async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  return intlMiddleware(asPublicRequest(req));
+  const publicReq = asPublicRequest(req);
+  const bareCallsign = rewriteBareCallsign(publicReq);
+  if (bareCallsign) return bareCallsign;
+
+  return intlMiddleware(publicReq);
+}
+
+function rewriteBareCallsign(req: NextRequest): NextResponse | null {
+  const { pathname } = req.nextUrl;
+  const sign = parseBareCallsignPath(pathname);
+  if (!sign) return null;
+
+  const rawSegment = pathname.slice(1);
+  if (rawSegment !== sign) {
+    const canonical = req.nextUrl.clone();
+    canonical.pathname = `/${sign}`;
+    return NextResponse.redirect(canonical, 308);
+  }
+
+  const rewriteUrl = req.nextUrl.clone();
+  rewriteUrl.pathname = `/${routing.defaultLocale}/${sign}`;
+  return NextResponse.rewrite(rewriteUrl);
 }
 
 export const config = {

@@ -3,11 +3,11 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { routing } from "@/i18n/routing";
 
 export type AdminAccountUser = {
   name: string | null;
   email: string | null;
+  callsign: string;
 };
 
 type Props = {
@@ -24,8 +24,7 @@ export function AdminAccountMenu({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const displayName = user.name?.trim() || user.email || "Account";
-  const accountHref = `/${routing.defaultLocale}/account`;
-  const logbookHref = `/${routing.defaultLocale}/logbook`;
+  const profileHref = user.callsign ? `/${user.callsign}` : "/account";
 
   function onLogout() {
     startTransition(async () => {
@@ -104,18 +103,23 @@ export function AdminAccountMenu({
 
           <DropdownMenu.Item asChild>
             <Link
-              href={accountHref}
-              className="mt-1 flex cursor-pointer select-none items-center rounded px-3 py-2 text-sm text-gray-800 outline-none transition hover:bg-gray-50 data-[highlighted]:bg-gray-50"
+              href={profileHref}
+              className="mt-1 flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-gray-800 outline-none transition hover:bg-gray-50 data-[highlighted]:bg-gray-50"
             >
-              Account settings
-            </Link>
-          </DropdownMenu.Item>
-          <DropdownMenu.Item asChild>
-            <Link
-              href={logbookHref}
-              className="flex cursor-pointer select-none items-center rounded px-3 py-2 text-sm text-gray-800 outline-none transition hover:bg-gray-50 data-[highlighted]:bg-gray-50"
-            >
-              Logbook
+              <svg
+                viewBox="0 0 16 16"
+                className="h-4 w-4 shrink-0 text-gray-500"
+                aria-hidden
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="8" cy="5.25" r="2.25" />
+                <path d="M3.5 13c1.15-2.15 2.65-3.1 4.5-3.1s3.35.95 4.5 3.1" />
+              </svg>
+              My Profile
             </Link>
           </DropdownMenu.Item>
 

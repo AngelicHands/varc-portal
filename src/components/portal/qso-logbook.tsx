@@ -31,9 +31,10 @@ import {
 type Props = {
   initialQsos: QsoListItemDto[];
   stationCallsign: string;
+  canEdit?: boolean;
 };
 
-type SortKey = "qsoAt" | "workedCallsign" | "band" | "mode";
+type SortKey = "qsoAt" | "workedCallsign" | "band" | "mode" | "grid";
 type SortDir = "asc" | "desc";
 
 type FormState = Omit<QsoInputValues, "qsoAt" | "freqMhz"> & {
@@ -196,8 +197,14 @@ function sortIndicator(active: boolean, dir: SortDir): string {
 }
 
 const QSO_EMAIL_LIMIT_WARNING_KEY = "qso-email-limit-warning";
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 20;
 
-export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
+export function QsoLogbook({
+  initialQsos,
+  stationCallsign,
+  canEdit = true,
+}: Props) {
   const t = useTranslations("logbook");
   const { ask, modal: confirmModal } = usePortalConfirm();
   const [qsos, setQsos] = useState(initialQsos);
@@ -217,6 +224,8 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("qsoAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const pending = isSubmitting || isDeleting;
@@ -256,6 +265,18 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
       return sortDir === "asc" ? cmp : -cmp;
     });
   }, [qsos, search, sortKey, sortDir, t]);
+
+  const totalItems = filteredSorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const currentPage = Math.min(page, totalPages);
+
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredSorted.slice(start, start + pageSize);
+  }, [filteredSorted, currentPage, pageSize]);
+
+  const rangeStart = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, totalItems);
 
   function clearFieldErrors(...fields: QsoFieldKey[]) {
     if (fields.length === 0) return;
@@ -317,6 +338,7 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
   }
 
   function toggleSort(key: SortKey) {
+    setPage(1);
     if (sortKey === key) {
       setSortDir((current) => (current === "asc" ? "desc" : "asc"));
       return;
@@ -625,28 +647,30 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
 
   return (
     <div className="grid gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">
-          {t("stationCallsign", { callsign: stationCallsign })}
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-          >
-            {t("addQso")}
-          </button>
-          {/* API download — not a Next.js page route */}
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a
-            href="/api/account/qso/export"
-            className="rounded-md border border-border px-3 py-2 text-sm hover:bg-foreground/5"
-          >
-            {t("exportAdif")}
-          </a>
+      {canEdit ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted">
+            {t("stationCallsign", { callsign: stationCallsign })}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            >
+              {t("addQso")}
+            </button>
+            {/* API download — not a Next.js page route */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a
+              href="/api/account/qso/export"
+              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-foreground/5"
+            >
+              {t("exportAdif")}
+            </a>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {warning ? (
         <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -659,13 +683,15 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
           <p className="max-w-md text-muted">
             {t("emptyFor", { callsign: stationCallsign })}
           </p>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="mt-6 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
-          >
-            {t("addQso")}
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="mt-6 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+            >
+              {t("addQso")}
+            </button>
+          ) : null}
         </div>
       ) : (
         <>
@@ -673,13 +699,39 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
             <input
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder={t("searchPlaceholder")}
               className="min-w-[12rem] flex-1 rounded-md border border-border px-3 py-2 text-sm"
             />
             <p className="text-sm text-muted">
-              {t("resultCount", { count: filteredSorted.length })}
+              {totalItems > 0
+                ? t("showingRange", {
+                    start: rangeStart,
+                    end: rangeEnd,
+                    total: totalItems,
+                  })
+                : t("resultCount", { count: 0 })}
             </p>
+            <label className="flex items-center gap-2 text-sm text-muted">
+              <span>{t("rowsPerPage")}</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="overflow-x-auto rounded-lg border border-border">
@@ -734,20 +786,34 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
                       </span>
                     </button>
                   </th>
+                  <th className="px-3 py-2 font-medium">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort("grid")}
+                      className="inline-flex items-center gap-1 hover:text-foreground"
+                    >
+                      {t("grid")}
+                      <span aria-hidden>
+                        {sortIndicator(sortKey === "grid", sortDir)}
+                      </span>
+                    </button>
+                  </th>
                   <th className="px-3 py-2 font-medium">{t("rst")}</th>
                   <th className="px-3 py-2 font-medium">{t("status")}</th>
-                  <th className="px-3 py-2 font-medium">{t("actions")}</th>
+                  {canEdit ? (
+                    <th className="px-3 py-2 font-medium">{t("actions")}</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
                 {filteredSorted.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-muted">
+                    <td colSpan={canEdit ? 8 : 7} className="px-3 py-8 text-center text-muted">
                       {t("noSearchResults")}
                     </td>
                   </tr>
                 ) : (
-                  filteredSorted.map((item) => (
+                  paginatedItems.map((item) => (
                     <tr key={item.id} className="border-b border-border/70">
                       <td className="px-3 py-2 font-medium">
                         <span className="inline-flex items-center gap-2">
@@ -768,6 +834,7 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
                       </td>
                       <td className="px-3 py-2">{item.band}</td>
                       <td className="px-3 py-2">{item.mode}</td>
+                      <td className="px-3 py-2 font-mono uppercase">{item.grid}</td>
                       <td className="px-3 py-2">
                         {item.rstSent}/{item.rstRcvd}
                       </td>
@@ -787,47 +854,78 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2">
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(item)}
-                            aria-label={t("edit")}
-                            title={t("edit")}
-                            className="rounded-md p-2 text-accent hover:bg-accent/10"
-                          >
-                            <EditIcon />
-                          </button>
-                          <button
-                            type="button"
-                            disabled={pending}
-                            onClick={() => onDelete(item.id)}
-                            aria-label={t("delete")}
-                            title={t("delete")}
-                            className="rounded-md p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
-                          >
-                            <DeleteIcon />
-                          </button>
-                        </div>
-                      </td>
+                      {canEdit ? (
+                        <td className="px-3 py-2">
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(item)}
+                              aria-label={t("edit")}
+                              title={t("edit")}
+                              className="rounded-md p-2 text-accent hover:bg-accent/10"
+                            >
+                              <EditIcon />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => onDelete(item.id)}
+                              aria-label={t("delete")}
+                              title={t("delete")}
+                              className="rounded-md p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              <DeleteIcon />
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
+
+          {totalPages > 1 ? (
+            <nav
+              className="flex flex-wrap items-center justify-between gap-3 text-sm"
+              aria-label={t("pagination")}
+            >
+              <button
+                type="button"
+                onClick={() => setPage(currentPage - 1)}
+                disabled={currentPage <= 1}
+                className="rounded-md border border-border px-3 py-1.5 hover:bg-foreground/5 disabled:pointer-events-none disabled:opacity-40"
+              >
+                {t("previous")}
+              </button>
+              <span className="text-muted">
+                {t("pageOf", { page: currentPage, totalPages })}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                className="rounded-md border border-border px-3 py-1.5 hover:bg-foreground/5 disabled:pointer-events-none disabled:opacity-40"
+              >
+                {t("next")}
+              </button>
+            </nav>
+          ) : null}
         </>
       )}
 
-      <PortalDialog
-        open={modalOpen}
-        title={editingId ? t("editQso") : t("addQso")}
-        onClose={closeModal}
-        closeDisabled={pending}
-        size="lg"
-      >
-        {renderForm()}
-      </PortalDialog>
+      {canEdit ? (
+        <PortalDialog
+          open={modalOpen}
+          title={editingId ? t("editQso") : t("addQso")}
+          onClose={closeModal}
+          closeDisabled={pending}
+          size="lg"
+        >
+          {renderForm()}
+        </PortalDialog>
+      ) : null}
 
       {confirmModal}
     </div>

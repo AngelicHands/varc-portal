@@ -4,13 +4,13 @@ import { useState, useTransition } from "react";
 import NextLink from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useLocale, useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/lib/actions";
 
 export type SiteAccountUser = {
   name: string | null;
   email: string | null;
   isAdmin: boolean;
+  callsign: string;
 };
 
 export function SiteAccountMenu({
@@ -164,20 +164,25 @@ export function SiteAccountMenu({
           ) : null}
 
           <DropdownMenu.Item asChild>
-            <Link
-              href="/account"
+            <NextLink
+              href={user.callsign ? `/${user.callsign}` : `/${locale}/account`}
               className="flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[highlighted]:bg-foreground/5"
             >
-              {t("accountSettings")}
-            </Link>
-          </DropdownMenu.Item>
-          <DropdownMenu.Item asChild>
-            <Link
-              href="/logbook"
-              className="flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[highlighted]:bg-foreground/5"
-            >
-              {t("logbook")}
-            </Link>
+              <svg
+                viewBox="0 0 16 16"
+                className="h-4 w-4 shrink-0 text-muted"
+                aria-hidden
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="8" cy="5.25" r="2.25" />
+                <path d="M3.5 13c1.15-2.15 2.65-3.1 4.5-3.1s3.35.95 4.5 3.1" />
+              </svg>
+              {t("myProfile")}
+            </NextLink>
           </DropdownMenu.Item>
 
           <DropdownMenu.Separator className="my-1 h-px bg-border" />

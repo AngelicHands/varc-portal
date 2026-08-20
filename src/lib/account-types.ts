@@ -10,11 +10,15 @@ export type UserDocumentDto = {
   downloadUrl: string;
 };
 
+export type ProfileGender = "male" | "female" | "other" | "";
+
 export type AccountProfileDto = {
   id: string;
   name: string;
   email: string;
   callsign: string;
+  birthday: string | null;
+  gender: ProfileGender;
 };
 
 export type QsoListItemDto = {
