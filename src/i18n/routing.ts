@@ -16,6 +16,9 @@ export const routing = defineRouting({
     "/categories/[slug]": "/categories/[slug]",
     "/callsigns": "/callsigns",
     "/callsigns/[sign]": "/callsigns/[sign]",
+    "/account": "/account",
+    "/logbook": "/logbook",
+    "/qso/confirmed": "/qso/confirmed",
   },
 });
 

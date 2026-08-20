@@ -7,6 +7,7 @@ import {
   canManageUsers,
 } from "@/lib/roles";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { AdminAccountMenu } from "@/components/admin/admin-account-menu";
 import { AdminToaster } from "@/components/admin/admin-toast";
 
 export default async function AdminDashboardLayout({
@@ -35,10 +36,20 @@ export default async function AdminDashboardLayout({
         showSite={showSite}
         showUsers={showUsers}
         showRoles={showRoles}
+        userName={session?.user?.name}
         userEmail={session?.user?.email}
         signOutAction={signOutAction}
       />
       <div className="min-w-0 flex-1">
+        <header className="sticky top-0 z-20 hidden h-14 items-center justify-end border-b border-gray-200 bg-white px-3 sm:px-4 lg:flex lg:px-6 xl:px-8">
+          <AdminAccountMenu
+            user={{
+              name: session?.user?.name ?? null,
+              email: session?.user?.email ?? null,
+            }}
+            signOutAction={signOutAction}
+          />
+        </header>
         <div className="w-full min-w-0 overflow-x-visible px-3 py-5 sm:px-4 sm:py-8 lg:px-6 xl:px-8">
           {children}
         </div>

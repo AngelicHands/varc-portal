@@ -1,6 +1,9 @@
 export type LocaleHref =
   | "/"
   | "/callsigns"
+  | "/account"
+  | "/logbook"
+  | "/qso/confirmed"
   | {
       pathname: "/news/[slug]" | "/pages/[slug]" | "/categories/[slug]";
       params: { slug: string };

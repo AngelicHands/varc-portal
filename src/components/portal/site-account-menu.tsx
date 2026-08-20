@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import NextLink from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import { signOutAction } from "@/lib/actions";
 
 export type SiteAccountUser = {
@@ -20,13 +21,15 @@ export function SiteAccountMenu({
   compact?: boolean;
 }) {
   const t = useTranslations("nav");
+  const locale = useLocale();
+  const loginHref = `/admin/login?callbackUrl=${encodeURIComponent(`/${locale}/account`)}`;
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
   if (!user) {
     return (
       <NextLink
-        href="/admin/login"
+        href={loginHref}
         className="shrink-0 text-sm text-muted transition hover:text-foreground"
       >
         {t("login")}
@@ -159,6 +162,23 @@ export function SiteAccountMenu({
               </NextLink>
             </DropdownMenu.Item>
           ) : null}
+
+          <DropdownMenu.Item asChild>
+            <Link
+              href="/account"
+              className="flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[highlighted]:bg-foreground/5"
+            >
+              {t("accountSettings")}
+            </Link>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item asChild>
+            <Link
+              href="/logbook"
+              className="flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[highlighted]:bg-foreground/5"
+            >
+              {t("logbook")}
+            </Link>
+          </DropdownMenu.Item>
 
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
 

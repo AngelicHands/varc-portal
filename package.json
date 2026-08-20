@@ -7,13 +7,14 @@
     "dev": "next dev --port 3099",
     "dev:all": "./scripts/dev-local.sh",
     "build": "next build",
-    "build:worker": "node scripts/build-backup-worker.mjs",
+    "build:worker": "node scripts/build-backup-worker.mjs && node scripts/build-email-worker.mjs",
     "start": "next start --port 3099",
     "lint": "eslint",
     "seed": "tsx --env-file=.env scripts/seed-admin.ts",
     "seed:templates": "tsx --env-file=.env scripts/seed-templates.ts",
     "import:callsigns": "tsx --env-file=.env scripts/import-callsigns.ts",
-    "worker:backup": "pnpm build:worker && node --env-file=.env dist/worker/run-backup-worker.js"
+    "worker:backup": "pnpm build:worker && node --env-file=.env dist/worker/run-backup-worker.js",
+    "worker:email": "pnpm build:worker && node --env-file=.env dist/worker/run-email-worker.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1103.0",

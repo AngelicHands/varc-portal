@@ -18,7 +18,7 @@ function loginErrorMessage(error?: string) {
 
 export default async function AdminLoginPage({ searchParams }: Props) {
   const params = await searchParams;
-  const callbackUrl = params.callbackUrl || "/admin";
+  const callbackUrl = params.callbackUrl || `/${routing.defaultLocale}/account`;
   const hasGoogle = isGoogleAuthConfigured();
   const session = await auth();
   const errorMessage = loginErrorMessage(params.error);
@@ -26,18 +26,18 @@ export default async function AdminLoginPage({ searchParams }: Props) {
 
   if (session?.user) {
     if (isAdminRole(session.user)) {
-      redirect(callbackUrl.startsWith("/") ? callbackUrl : "/admin");
+      redirect(callbackUrl.startsWith("/admin") ? callbackUrl : "/admin");
     }
-    redirect(homePath);
+    redirect(callbackUrl.startsWith("/") ? callbackUrl : homePath);
   }
 
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-[var(--admin-bg)] px-4">
       <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-semibold text-gray-900">Admin sign in</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Sign in</h1>
         <p className="mt-2 text-sm text-gray-600">
-          Use the seeded admin account
-          {hasGoogle ? " or Google" : ""} (admin role required for access).
+          Sign in to manage your account, logbook, and documents
+          {hasGoogle ? ", or use Google" : ""}.
         </p>
 
         {errorMessage ? (

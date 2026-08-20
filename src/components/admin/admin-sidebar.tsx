@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { AdminAccountMenu } from "@/components/admin/admin-account-menu";
 
 const STORAGE_KEY = "varc-admin-sidebar-expanded";
 const SIDEBAR_EVENT = "varc-admin-sidebar";
@@ -289,6 +290,7 @@ type Props = {
   showSite: boolean;
   showUsers: boolean;
   showRoles: boolean;
+  userName?: string | null;
   userEmail?: string | null;
   signOutAction: () => Promise<void>;
 };
@@ -299,6 +301,7 @@ export function AdminSidebar({
   showSite,
   showUsers,
   showRoles,
+  userName,
   userEmail,
   signOutAction,
 }: Props) {
@@ -432,31 +435,6 @@ export function AdminSidebar({
           </div>
         ))}
       </nav>
-
-      <div className="space-y-2 border-t border-gray-200 p-2">
-        {showLabels && userEmail ? (
-          <p className="truncate px-2.5 text-xs text-gray-500" title={userEmail}>
-            {userEmail}
-          </p>
-        ) : null}
-
-        <form action={signOutAction}>
-          <button
-            type="submit"
-            title="Sign out"
-            className={`flex w-full cursor-pointer items-center gap-3 rounded-md border border-gray-200 px-2.5 py-2 text-sm text-gray-700 transition hover:bg-gray-50 ${
-              showLabels ? "" : "justify-center"
-            }`}
-          >
-            <Icon>
-              <path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
-              <path d="m15 16 4-4-4-4" />
-              <path d="M10 12h9" />
-            </Icon>
-            {showLabels ? <span>Sign out</span> : null}
-          </button>
-        </form>
-      </div>
     </div>
   );
 
@@ -473,9 +451,14 @@ export function AdminSidebar({
             <path d="M4 7h16M4 12h16M4 17h16" />
           </Icon>
         </button>
-        <Link href="/admin" className="font-semibold tracking-tight">
+        <Link href="/admin" className="min-w-0 flex-1 font-semibold tracking-tight">
           VARC Admin
         </Link>
+        <AdminAccountMenu
+          user={{ name: userName ?? null, email: userEmail ?? null }}
+          signOutAction={signOutAction}
+          compact
+        />
       </div>
 
       {mobileOpen ? (

@@ -89,9 +89,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           user.role = role;
           await user.save();
         }
-        const caps = await getRoleCapabilities(role);
-        if (!caps.canAccessAdmin) return null;
-
         return {
           id: String(user._id),
           email: user.email,

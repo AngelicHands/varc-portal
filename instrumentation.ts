@@ -4,5 +4,8 @@ export async function register() {
       "@/lib/backup/worker-runtime"
     );
     startBackupWorker();
+
+    const { startEmailWorker } = await import("@/lib/mail/worker-runtime");
+    startEmailWorker();
   }
 }

@@ -1,4 +1,5 @@
 import { connectDb } from "@/lib/db";
+import type { AdminMailMessageListItem } from "@/lib/mail/mailbox-types";
 import { logServerError } from "@/lib/safe-error";
 import {
   MailMessage,
@@ -6,19 +7,10 @@ import {
   type MailMessageKind,
   type MailMessageStatus,
 } from "@/models/MailMessage";
+import { createEmailJob } from "@/lib/mail/jobs";
+import type { AdminEmailJob } from "@/lib/mail/job-types";
 
-export type AdminMailMessageListItem = {
-  id: string;
-  to: string;
-  from: string;
-  subject: string;
-  status: MailMessageStatus;
-  kind: MailMessageKind;
-  formNameSnapshot: string;
-  formId: string | null;
-  submissionId: string | null;
-  createdAt: string | null;
-};
+export type { AdminMailMessageListItem } from "@/lib/mail/mailbox-types";
 
 export type AdminMailMessageDetail = AdminMailMessageListItem & {
   text: string;
@@ -108,8 +100,28 @@ export async function getMailMessageById(
   return toDetail(doc as MailMessageDocument);
 }
 
+export async function deleteMailMessage(id: string): Promise<boolean> {
+  if (!id) return false;
+  await connectDb();
+  const result = await MailMessage.deleteOne({ _id: id });
+  return result.deletedCount > 0;
+}
+
+export async function resendMailMessage(id: string): Promise<AdminEmailJob | null> {
+  const message = await getMailMessageById(id);
+  if (!message || message.status !== "failed") return null;
+  return createEmailJob({
+    kind: message.kind,
+    to: message.to,
+    subject: message.subject,
+    text: message.text,
+    html: message.html,
+  });
+}
+
 export function mailKindLabel(kind: MailMessageKind): string {
   if (kind === "form_submission_copy") return "Form submission copy";
   if (kind === "backup_artifact") return "Backup artifact";
+  if (kind === "qso_confirmation") return "QSO confirmation";
   return kind;
 }

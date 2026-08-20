@@ -3,6 +3,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 export const MAIL_MESSAGE_KINDS = [
   "form_submission_copy",
   "backup_artifact",
+  "qso_confirmation",
 ] as const;
 export type MailMessageKind = (typeof MAIL_MESSAGE_KINDS)[number];
 

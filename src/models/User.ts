@@ -12,10 +12,13 @@ const UserSchema = new Schema(
       index: true,
     },
     image: { type: String, default: null },
+    callsign: { type: String, default: "", trim: true, uppercase: true },
     emailVerified: { type: Date, default: null },
   },
   { timestamps: true },
 );
+
+UserSchema.index({ callsign: 1 }, { sparse: true });
 
 export type UserDocument = InferSchemaType<typeof UserSchema> & {
   _id: mongoose.Types.ObjectId;

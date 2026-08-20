@@ -1,3 +1,4 @@
+import NextLink from "next/link";
 import { CreateUserForm } from "@/components/admin/create-user-form";
 import { UserRoleControls } from "@/components/admin/user-role-controls";
 import { requireUsersPage } from "@/lib/admin-access";
@@ -41,12 +42,25 @@ export default async function AdminUsersPage() {
 
       {canCreate ? <CreateUserForm roles={allRoles} /> : null}
 
+      {canManage ? (
+        <div className="mt-4">
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a
+            href="/api/admin/qso/export"
+            className="inline-flex rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+          >
+            Export all QSOs (ADIF)
+          </a>
+        </div>
+      ) : null}
+
       <div className="mt-8 overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Email</th>
+              <th className="px-4 py-3 font-medium">Callsign</th>
               <th className="px-4 py-3 font-medium">Role</th>
             </tr>
           </thead>
@@ -65,8 +79,16 @@ export default async function AdminUsersPage() {
 
               return (
                 <tr key={userId} className="border-b border-gray-100">
-                  <td className="px-4 py-3">{user.name}</td>
+                  <td className="px-4 py-3">
+                    <NextLink
+                      href={`/admin/users/${userId}`}
+                      className="font-medium text-blue-700 hover:underline"
+                    >
+                      {user.name}
+                    </NextLink>
+                  </td>
                   <td className="px-4 py-3">{user.email}</td>
+                  <td className="px-4 py-3 uppercase">{user.callsign?.trim() || "—"}</td>
                   <td className="px-4 py-3">
                     {editable ? (
                       <UserRoleControls
