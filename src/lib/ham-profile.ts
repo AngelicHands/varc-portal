@@ -13,6 +13,8 @@ export type PublicHamProfile = {
   name: string;
   image: string | null;
   callsignVerified: boolean;
+  isProfilePublic: boolean;
+  isQsoPublic: boolean;
   birthday: string | null;
   gender: ProfileGender;
   archiveExists: boolean;
@@ -54,7 +56,9 @@ export async function findPublicHamByCallsign(
 
   const [user, archive] = await Promise.all([
     User.findOne({ callsign })
-      .select("_id name image callsign callsignVerified birthday gender")
+      .select(
+        "_id name image callsign callsignVerified isProfilePublic isQsoPublic birthday gender",
+      )
       .lean<
         Pick<
           UserDocument,
@@ -63,6 +67,8 @@ export async function findPublicHamByCallsign(
           | "image"
           | "callsign"
           | "callsignVerified"
+          | "isProfilePublic"
+          | "isQsoPublic"
           | "birthday"
           | "gender"
         > | null
@@ -78,6 +84,8 @@ export async function findPublicHamByCallsign(
     name: user.name,
     image: user.image ?? null,
     callsignVerified: Boolean(user.callsignVerified),
+    isProfilePublic: user.isProfilePublic !== false,
+    isQsoPublic: Boolean(user.isQsoPublic),
     birthday: user.birthday
       ? (() => {
           const date = new Date(user.birthday);

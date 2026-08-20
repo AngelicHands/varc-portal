@@ -19,6 +19,8 @@ export type AccountProfileDto = {
   callsign: string;
   birthday: string | null;
   gender: ProfileGender;
+  isProfilePublic: boolean;
+  isQsoPublic: boolean;
 };
 
 export type QsoListItemDto = {

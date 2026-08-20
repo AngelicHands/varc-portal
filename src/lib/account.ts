@@ -36,5 +36,7 @@ export async function getAccountProfile(
     callsign: user.callsign?.trim() ?? "",
     birthday: toDateOnly(user.birthday),
     gender: toGender(user.gender),
+    isProfilePublic: user.isProfilePublic !== false,
+    isQsoPublic: Boolean(user.isQsoPublic),
   };
 }

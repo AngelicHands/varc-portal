@@ -14,6 +14,8 @@ const UserSchema = new Schema(
     image: { type: String, default: null },
     callsign: { type: String, default: "", trim: true, uppercase: true },
     callsignVerified: { type: Boolean, default: false },
+    isProfilePublic: { type: Boolean, default: true },
+    isQsoPublic: { type: Boolean, default: false },
     birthday: { type: Date, default: null },
     gender: {
       type: String,

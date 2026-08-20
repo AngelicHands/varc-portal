@@ -94,3 +94,53 @@ export async function updateProfileAction(raw: unknown) {
     return failAction(error, "Failed to update profile");
   }
 }
+
+export async function updateSecuritySettingsAction(raw: unknown) {
+  try {
+    const session = await requireAccountSession();
+    if (!session) {
+      return { ok: false as const, error: "Unauthorized" };
+    }
+
+    if (
+      !raw ||
+      typeof raw !== "object" ||
+      typeof (raw as { isProfilePublic?: unknown }).isProfilePublic !== "boolean" ||
+      typeof (raw as { isQsoPublic?: unknown }).isQsoPublic !== "boolean"
+    ) {
+      return { ok: false as const, error: "Invalid security settings" };
+    }
+
+    await connectDb();
+    const user = await User.findById(session.user.id).select("callsign").lean();
+    if (!user) {
+      return { ok: false as const, error: "User not found" };
+    }
+
+    const isProfilePublic = (raw as { isProfilePublic: boolean }).isProfilePublic;
+    const isQsoPublic =
+      isProfilePublic && (raw as { isQsoPublic: boolean }).isQsoPublic;
+
+    await User.updateOne(
+      { _id: session.user.id },
+      {
+        $set: {
+          isProfilePublic,
+          isQsoPublic,
+        },
+      },
+    );
+
+    const callsign = user.callsign?.trim() ?? "";
+    revalidatePath("/account");
+    revalidatePath("/logbook");
+    if (callsign) {
+      revalidatePath(`/${callsign}`);
+      revalidatePath(`/vi/${callsign}`);
+      revalidatePath(`/en/${callsign}`);
+    }
+    return { ok: true as const };
+  } catch (error) {
+    return failAction(error, "Failed to update security settings");
+  }
+}

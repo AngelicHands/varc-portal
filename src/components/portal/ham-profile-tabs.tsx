@@ -15,10 +15,10 @@ const TABS: TabDef[] = [
   { id: "logbook", ownerOnly: false },
   { id: "documents", ownerOnly: true },
   { id: "qsl", ownerOnly: true },
+  { id: "security", ownerOnly: true },
 ];
 
-function tabHref(callsign: string, id: HamTabId, isOwner: boolean): string {
-  const firstVisible = isOwner ? "profile" : "logbook";
+function tabHref(callsign: string, id: HamTabId, firstVisible: HamTabId): string {
   if (id === firstVisible) return `/${callsign}`;
   return `/${callsign}?tab=${id}`;
 }
@@ -27,26 +27,38 @@ export function HamProfileTabs({
   callsign,
   active,
   isOwner,
+  canViewProfile = true,
+  canViewLogbook = true,
   logbook,
   profile,
   documents,
   qsl,
+  security,
 }: {
   callsign: string;
   active: HamTabId;
   isOwner: boolean;
+  canViewProfile?: boolean;
+  canViewLogbook?: boolean;
   logbook: ReactNode;
   profile?: ReactNode;
   documents?: ReactNode;
   qsl?: ReactNode;
+  security?: ReactNode;
 }) {
   const t = useTranslations("ham");
-  const visible = TABS.filter((tab) => !tab.ownerOnly || isOwner);
+  const visible = TABS.filter((tab) => {
+    if (tab.id === "profile" && !isOwner) return canViewProfile;
+    if (tab.id === "logbook" && !isOwner) return canViewLogbook;
+    return !tab.ownerOnly || isOwner;
+  });
+  const firstVisible = visible[0]?.id ?? "profile";
   const labels: Record<HamTabId, string> = {
     profile: t("tabProfile"),
     logbook: t("tabLogbook"),
     documents: t("tabDocuments"),
     qsl: t("tabQsl"),
+    security: t("tabSecurity"),
   };
 
   return (
@@ -65,7 +77,7 @@ export function HamProfileTabs({
               aria-selected={selected}
               id={`ham-tab-${tab.id}`}
               aria-controls={`ham-panel-${tab.id}`}
-              href={tabHref(callsign, tab.id, isOwner)}
+              href={tabHref(callsign, tab.id, firstVisible)}
               className={`-mb-px border-b-2 pb-3 text-sm font-medium transition-colors ${
                 selected
                   ? "border-accent text-foreground"
@@ -87,6 +99,7 @@ export function HamProfileTabs({
         {active === "logbook" ? logbook : null}
         {active === "documents" ? documents : null}
         {active === "qsl" ? qsl : null}
+        {active === "security" ? security : null}
       </div>
     </div>
   );

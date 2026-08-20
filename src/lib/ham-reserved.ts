@@ -45,15 +45,14 @@ export function parseHamPathParam(raw: string): string | null {
   return sign;
 }
 
-export type HamTabId = "profile" | "logbook" | "documents" | "qsl";
+export type HamTabId = "profile" | "logbook" | "documents" | "qsl" | "security";
 
 export function parseHamTab(
   raw: string | undefined,
-  isOwner: boolean,
+  visibleTabs: readonly HamTabId[],
 ): HamTabId {
-  if (raw === "logbook") return "logbook";
-  if (raw === "profile" || raw === "documents" || raw === "qsl") {
-    return isOwner ? raw : "logbook";
+  if (raw && visibleTabs.includes(raw as HamTabId)) {
+    return raw as HamTabId;
   }
-  return isOwner ? "profile" : "logbook";
+  return visibleTabs[0] ?? "profile";
 }
