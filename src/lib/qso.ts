@@ -37,13 +37,14 @@ export function toQsoListItemDto(doc: QsoDocLike): QsoListItemDto {
 
 export async function listUserQsos(
   userId: string,
-  limit = 200,
+  limit?: number,
 ): Promise<QsoListItemDto[]> {
   await connectDb();
-  const docs = await QsoLog.find({ userId })
-    .sort({ qsoAt: -1 })
-    .limit(limit)
-    .lean();
+  let query = QsoLog.find({ userId }).sort({ qsoAt: -1 });
+  if (limit != null && limit > 0) {
+    query = query.limit(limit);
+  }
+  const docs = await query.lean();
   return docs.map((doc) => toQsoListItemDto(doc));
 }
 

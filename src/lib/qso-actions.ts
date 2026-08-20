@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import mongoose from "mongoose";
 import { auth } from "@/auth";
@@ -8,10 +7,12 @@ import { connectDb } from "@/lib/db";
 import { enqueueQsoConfirmationRequest } from "@/lib/qso-confirmation";
 import { getQsoEmailLimit } from "@/lib/qso-email-limit";
 import { requireUserCallsign, toQsoListItemDto } from "@/lib/qso";
-import { isAdminRole } from "@/lib/roles";
+import { revalidateLogbook } from "@/lib/qso-revalidate";
+import { canManageUsers, isAdminRole } from "@/lib/roles";
 import { failAction } from "@/lib/safe-error";
 import { qsoInputSchema } from "@/lib/validations/qso";
 import { QsoLog } from "@/models/QsoLog";
+import { User } from "@/models/User";
 
 async function requireLogbookSession() {
   const session = await auth();
@@ -21,12 +22,17 @@ async function requireLogbookSession() {
   return session;
 }
 
-function revalidateLogbook(callsign: string) {
-  revalidatePath("/logbook");
-  if (!callsign) return;
-  revalidatePath(`/${callsign}`);
-  revalidatePath(`/vi/${callsign}`);
-  revalidatePath(`/en/${callsign}`);
+async function requireUserManager() {
+  const session = await requireLogbookSession();
+  if (!session || !canManageUsers(session.user)) {
+    return null;
+  }
+  return session;
+}
+
+async function callsignForUser(userId: string): Promise<string> {
+  const user = await User.findById(userId).select("callsign").lean();
+  return user?.callsign?.trim() ?? "";
 }
 
 function clientKeyFromHeaders(headerStore: Headers): string {
@@ -193,5 +199,48 @@ export async function deleteQsoAction(id: string) {
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to delete QSO");
+  }
+}
+
+export async function adminDeleteQsoAction(id: string, userId: string) {
+  try {
+    const session = await requireUserManager();
+    if (!session) {
+      return { ok: false as const, error: "Forbidden" };
+    }
+
+    await connectDb();
+    const result = await QsoLog.deleteOne({
+      _id: id,
+      userId,
+    });
+    if (result.deletedCount === 0) {
+      return { ok: false as const, error: "Not found" };
+    }
+
+    revalidateLogbook(await callsignForUser(userId));
+    return { ok: true as const };
+  } catch (error) {
+    return failAction(error, "Failed to delete QSO");
+  }
+}
+
+export async function deleteAllUserQsosAction(userId: string) {
+  try {
+    const session = await requireLogbookSession();
+    if (!session) {
+      return { ok: false as const, error: "Unauthorized" };
+    }
+    if (session.user.id !== userId && !canManageUsers(session.user)) {
+      return { ok: false as const, error: "Forbidden" };
+    }
+
+    await connectDb();
+    const callsign = await callsignForUser(userId);
+    const result = await QsoLog.deleteMany({ userId });
+    revalidateLogbook(callsign);
+    return { ok: true as const, deleted: result.deletedCount ?? 0 };
+  } catch (error) {
+    return failAction(error, "Failed to delete logbook");
   }
 }

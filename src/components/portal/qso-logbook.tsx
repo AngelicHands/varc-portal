@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "@/i18n/navigation";
 import { PortalDialog } from "@/components/portal/portal-dialog";
 import { usePortalConfirm } from "@/components/portal/use-confirm";
 import type { QsoListItemDto } from "@/lib/account-types";
@@ -15,10 +16,13 @@ import {
   type QsoTimeZoneMode,
 } from "@/lib/qso-datetime";
 import {
+  adminDeleteQsoAction,
   createQsoAction,
+  deleteAllUserQsosAction,
   deleteQsoAction,
   updateQsoAction,
 } from "@/lib/qso-actions";
+import { importQsoAdifAction } from "@/lib/qso-import-actions";
 import {
   QSO_BANDS,
   QSO_MODES,
@@ -33,6 +37,8 @@ type Props = {
   stationCallsign: string;
   canEdit?: boolean;
   canLogWithOperator?: boolean;
+  canAdminManage?: boolean;
+  logbookUserId?: string;
 };
 
 type SortKey = "qsoAt" | "workedCallsign" | "band" | "mode" | "grid";
@@ -209,9 +215,14 @@ export function QsoLogbook({
   stationCallsign,
   canEdit = true,
   canLogWithOperator = false,
+  canAdminManage = false,
+  logbookUserId,
 }: Props) {
   const t = useTranslations("logbook");
+  const router = useRouter();
+  const canManageLogbook = canEdit || canAdminManage;
   const { ask, modal: confirmModal } = usePortalConfirm();
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [qsos, setQsos] = useState(initialQsos);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<FormState>(() => emptyForm("utc"));
@@ -234,7 +245,10 @@ export function QsoLogbook({
   const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const pending = isSubmitting || isDeleting;
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSummary, setImportSummary] = useState<string | null>(null);
+  const [isImporting, startImportTransition] = useTransition();
+  const pending = isSubmitting || isDeleting || isImporting;
 
   const filteredSorted = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -451,7 +465,10 @@ export function QsoLogbook({
 
     setIsDeleting(true);
     try {
-      const result = await deleteQsoAction(id);
+      const result =
+        canAdminManage && logbookUserId
+          ? await adminDeleteQsoAction(id, logbookUserId)
+          : await deleteQsoAction(id);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -460,6 +477,72 @@ export function QsoLogbook({
     } finally {
       setIsDeleting(false);
     }
+  }
+
+  async function onDeleteAll() {
+    if ((!canEdit && !canAdminManage) || !logbookUserId) return;
+    const confirmed = await ask({
+      title: t("deleteAll"),
+      message: t("confirmDeleteAll", { callsign: stationCallsign }),
+      confirmLabel: t("deleteAll"),
+      cancelLabel: t("cancel"),
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    setError(null);
+    try {
+      const result = await deleteAllUserQsosAction(logbookUserId);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setQsos([]);
+      setPage(1);
+      setImportSummary(null);
+      setSuccessMessage(t("deletedAll", { count: result.deleted }));
+      router.refresh();
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  function onImportAdifSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setImportError(null);
+    setImportSummary(null);
+    setSuccessMessage(null);
+
+    startImportTransition(async () => {
+      const formData = new FormData();
+      formData.set("file", file);
+      const result = await importQsoAdifAction(formData);
+      if (!result.ok) {
+        setImportError(result.error);
+        return;
+      }
+
+      setImportSummary(
+        t("importSuccess", {
+          imported: result.imported,
+          skippedDuplicate: result.skippedDuplicate,
+          skippedInvalid: result.skippedInvalid,
+          skippedStationMismatch: result.skippedStationMismatch,
+        }),
+      );
+
+      if (result.errors.length > 0) {
+        setImportError(result.errors.join(" "));
+      }
+
+      if (result.imported > 0) {
+        router.refresh();
+      }
+    });
   }
 
   function renderForm() {
@@ -689,7 +772,50 @@ export function QsoLogbook({
             >
               {t("exportAdif")}
             </a>
+            <button
+              type="button"
+              disabled={isImporting}
+              onClick={() => importInputRef.current?.click()}
+              className="rounded-md border border-border px-3 py-2 text-sm hover:bg-foreground/5 disabled:opacity-60"
+            >
+              {isImporting ? t("importing") : t("importAdif")}
+            </button>
+            {qsos.length > 0 ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => void onDeleteAll()}
+                className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+              >
+                {pending ? t("deletingAll") : t("deleteAll")}
+              </button>
+            ) : null}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".adi,.adif,text/plain"
+              className="sr-only"
+              onChange={onImportAdifSelected}
+            />
           </div>
+        </div>
+      ) : null}
+
+      {canAdminManage ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted">
+            {t("adminViewingLogbook", { callsign: stationCallsign })}
+          </p>
+          {qsos.length > 0 ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void onDeleteAll()}
+              className="rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+            >
+              {pending ? t("deletingAll") : t("deleteAll")}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -713,6 +839,16 @@ export function QsoLogbook({
       {successMessage ? (
         <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
           {successMessage}
+        </p>
+      ) : null}
+      {importSummary ? (
+        <p className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {importSummary}
+        </p>
+      ) : null}
+      {importError ? (
+        <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {importError}
         </p>
       ) : null}
 
@@ -846,7 +982,7 @@ export function QsoLogbook({
                   </th>
                   <th className="px-3 py-2 font-medium">{t("rst")}</th>
                   <th className="px-3 py-2 font-medium">{t("status")}</th>
-                  {canEdit ? (
+                  {canManageLogbook ? (
                     <th className="px-3 py-2 font-medium">{t("actions")}</th>
                   ) : null}
                 </tr>
@@ -854,7 +990,7 @@ export function QsoLogbook({
               <tbody>
                 {filteredSorted.length === 0 ? (
                   <tr>
-                    <td colSpan={canEdit ? 8 : 7} className="px-3 py-8 text-center text-muted">
+                    <td colSpan={canManageLogbook ? 8 : 7} className="px-3 py-8 text-center text-muted">
                       {t("noSearchResults")}
                     </td>
                   </tr>
@@ -900,22 +1036,24 @@ export function QsoLogbook({
                           )}
                         </div>
                       </td>
-                      {canEdit ? (
+                      {canManageLogbook ? (
                         <td className="px-3 py-2">
                           <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(item)}
-                              aria-label={t("edit")}
-                              title={t("edit")}
-                              className="rounded-md p-2 text-accent hover:bg-accent/10"
-                            >
-                              <EditIcon />
-                            </button>
+                            {canEdit ? (
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(item)}
+                                aria-label={t("edit")}
+                                title={t("edit")}
+                                className="rounded-md p-2 text-accent hover:bg-accent/10"
+                              >
+                                <EditIcon />
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               disabled={pending}
-                              onClick={() => onDelete(item.id)}
+                              onClick={() => void onDelete(item.id)}
                               aria-label={t("delete")}
                               title={t("delete")}
                               className="rounded-md p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"

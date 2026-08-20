@@ -17,6 +17,7 @@ import { listUserQsos } from "@/lib/qso";
 import { listUserDocuments } from "@/lib/user-documents";
 import { callsignHref, hamHref } from "@/lib/locale-hrefs";
 import { formatBirthdayDmy } from "@/lib/validations/qso";
+import { canManageUsers } from "@/lib/roles";
 import type { AppLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +92,9 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
     getTranslations("account"),
   ]);
   const canEdit = session?.user?.id === ham.id;
+  const canAdminManage = Boolean(
+    session?.user?.id && !canEdit && canManageUsers(session.user),
+  );
   const viewerProfile =
     session?.user?.id && !canEdit
       ? await getAccountProfile(session.user.id, session.user.email)
@@ -185,6 +189,8 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
             stationCallsign={ham.callsign}
             canEdit={canEdit}
             canLogWithOperator={canLogWithOperator}
+            canAdminManage={canAdminManage}
+            logbookUserId={ham.id}
           />
         }
         documents={
