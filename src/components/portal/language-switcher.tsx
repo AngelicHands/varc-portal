@@ -6,6 +6,7 @@ import { Link, usePathname } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import { useLocaleAlternates } from "@/components/portal/locale-alternates";
 import type { LocaleHref } from "@/lib/locale-hrefs";
+import { hamPublicPath } from "@/lib/ham-reserved";
 
 function FlagVN({ className }: { className?: string }) {
   return (
@@ -127,6 +128,12 @@ function hrefForLocale(
   return buildHref(pathname, params);
 }
 
+function switchHamProfileLocale(target: AppLocale, callsign: string) {
+  document.cookie = `NEXT_LOCALE=${target};path=/;max-age=31536000;samesite=lax`;
+  const search = window.location.search;
+  window.location.assign(`${hamPublicPath(callsign)}${search}`);
+}
+
 export function LanguageSwitcher({
   align = "end",
 }: {
@@ -137,6 +144,10 @@ export function LanguageSwitcher({
   const params = useParams();
   const alternates = useLocaleAlternates();
   const paramRecord = params as Record<string, string | string[] | undefined>;
+  const hamCallsign =
+    pathname === "/[callsign]" && typeof paramRecord.callsign === "string"
+      ? paramRecord.callsign
+      : null;
 
   const hrefVi = hrefForLocale("vi", pathname, paramRecord, alternates);
   const hrefEn = hrefForLocale("en", pathname, paramRecord, alternates);
@@ -149,30 +160,61 @@ export function LanguageSwitcher({
       role="navigation"
       aria-label="Language"
     >
-      <Link
-        href={hrefVi}
-        locale="vi"
-        aria-label="Tiếng Việt"
-        aria-current={locale === "vi" ? "true" : undefined}
-        title="Tiếng Việt"
-        className={`inline-flex text-foreground transition ${
-          locale === "vi" ? "opacity-100" : "opacity-40 hover:opacity-80"
-        }`}
-      >
-        <FlagVN className="h-3.5 w-5" />
-      </Link>
-      <Link
-        href={hrefEn}
-        locale="en"
-        aria-label="English"
-        aria-current={locale === "en" ? "true" : undefined}
-        title="English"
-        className={`inline-flex text-foreground transition ${
-          locale === "en" ? "opacity-100" : "opacity-40 hover:opacity-80"
-        }`}
-      >
-        <FlagGB className="h-3.5 w-5" />
-      </Link>
+      {hamCallsign ? (
+        <>
+          <button
+            type="button"
+            onClick={() => switchHamProfileLocale("vi", hamCallsign)}
+            aria-label="Tiếng Việt"
+            aria-current={locale === "vi" ? "true" : undefined}
+            title="Tiếng Việt"
+            className={`inline-flex text-foreground transition ${
+              locale === "vi" ? "opacity-100" : "opacity-40 hover:opacity-80"
+            }`}
+          >
+            <FlagVN className="h-3.5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => switchHamProfileLocale("en", hamCallsign)}
+            aria-label="English"
+            aria-current={locale === "en" ? "true" : undefined}
+            title="English"
+            className={`inline-flex text-foreground transition ${
+              locale === "en" ? "opacity-100" : "opacity-40 hover:opacity-80"
+            }`}
+          >
+            <FlagGB className="h-3.5 w-5" />
+          </button>
+        </>
+      ) : (
+        <>
+          <Link
+            href={hrefVi}
+            locale="vi"
+            aria-label="Tiếng Việt"
+            aria-current={locale === "vi" ? "true" : undefined}
+            title="Tiếng Việt"
+            className={`inline-flex text-foreground transition ${
+              locale === "vi" ? "opacity-100" : "opacity-40 hover:opacity-80"
+            }`}
+          >
+            <FlagVN className="h-3.5 w-5" />
+          </Link>
+          <Link
+            href={hrefEn}
+            locale="en"
+            aria-label="English"
+            aria-current={locale === "en" ? "true" : undefined}
+            title="English"
+            className={`inline-flex text-foreground transition ${
+              locale === "en" ? "opacity-100" : "opacity-40 hover:opacity-80"
+            }`}
+          >
+            <FlagGB className="h-3.5 w-5" />
+          </Link>
+        </>
+      )}
     </div>
   );
 }

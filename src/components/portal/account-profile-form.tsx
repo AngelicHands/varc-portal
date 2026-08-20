@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useRouter } from "@/i18n/navigation";
 import { PortalDialog } from "@/components/portal/portal-dialog";
 import { UserDocumentsPanel } from "@/components/portal/user-documents-panel";
 import {
@@ -14,6 +14,7 @@ import type {
   ProfileGender,
   UserDocumentDto,
 } from "@/lib/account-types";
+import { hamPublicPath } from "@/lib/ham-reserved";
 import {
   formatBirthdayDmy,
   maxBirthdayIso,
@@ -279,11 +280,7 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
         setSavedCallsign(nextCallsign);
         setEditField(null);
         if (nextCallsign && nextCallsign !== previous) {
-          router.replace({
-            pathname: "/[callsign]",
-            params: { callsign: nextCallsign },
-            query: { tab: "profile" },
-          });
+          router.replace(`${hamPublicPath(nextCallsign)}?tab=profile`);
         }
         router.refresh();
       } else {

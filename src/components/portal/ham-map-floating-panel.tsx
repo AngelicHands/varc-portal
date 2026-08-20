@@ -2,7 +2,6 @@
 
 import NextLink from "next/link";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
 import type { HamMapTheme } from "@/lib/map/maptiler-style";
 import { formatMaidenheadDisplay } from "@/lib/maidenhead";
 
@@ -107,10 +106,7 @@ export function HamMapFloatingPanel({
   const verifiedClass = light ? "text-emerald-600" : "text-emerald-300";
 
   const initials = initialsFrom(operatorName, callsign);
-  const profileHref = {
-    pathname: "/[callsign]" as const,
-    params: { callsign },
-  };
+  const profileHref = `/${callsign}`;
   const profileHover = light ? "hover:opacity-80" : "hover:opacity-90";
 
   return (
@@ -143,7 +139,7 @@ export function HamMapFloatingPanel({
           )}
         </NextLink>
 
-        <Link
+        <NextLink
           href={profileHref}
           className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 transition ${avatarRing} ${profileHover}`}
           aria-label={t("backToProfile")}
@@ -160,16 +156,16 @@ export function HamMapFloatingPanel({
               {initials}
             </span>
           )}
-        </Link>
+        </NextLink>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <Link
+            <NextLink
               href={profileHref}
               className={`truncate font-display text-lg leading-tight tracking-wide transition ${strong} ${profileHover}`}
             >
               {callsign}
-            </Link>
+            </NextLink>
             {verified ? (
               <span
                 className={`inline-flex shrink-0 ${verifiedClass}`}
@@ -189,12 +185,12 @@ export function HamMapFloatingPanel({
             ) : null}
           </div>
           {operatorName ? (
-            <Link
+            <NextLink
               href={profileHref}
               className={`mt-0.5 block truncate text-sm leading-snug transition ${soft} ${profileHover}`}
             >
               {operatorName}
-            </Link>
+            </NextLink>
           ) : null}
           <div className="mt-1.5 flex items-center gap-2">
             <p className={`min-w-0 flex-1 truncate text-xs ${muted}`}>

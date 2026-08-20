@@ -7,7 +7,7 @@ import {
 } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import { normalizeCallsignQuery } from "@/lib/callsigns-normalize";
-import { isReservedHamPath } from "@/lib/ham-reserved";
+import { isReservedHamPath, hamPublicPath } from "@/lib/ham-reserved";
 import { getPublicBaseUrl } from "@/lib/public-url";
 import { Callsign } from "@/models/Callsign";
 import { User, type UserDocument } from "@/models/User";
@@ -33,9 +33,7 @@ const globalForHamIndex = globalThis as unknown as {
   hamCallsignIndexPromise?: Promise<void>;
 };
 
-export function hamPublicPath(sign: string): string {
-  return `/${normalizeCallsignQuery(sign)}`;
-}
+export { hamPublicPath };
 
 export function hamPublicUrl(sign: string): string {
   return `${getPublicBaseUrl()}${hamPublicPath(sign)}`;

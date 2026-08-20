@@ -36,6 +36,11 @@ export function parseBareCallsignPath(pathname: string): string | null {
   return sign;
 }
 
+/** Public profile path without locale prefix (e.g. XV1ABC → /XV1ABC). */
+export function hamPublicPath(sign: string): string {
+  return `/${normalizeCallsignQuery(sign)}`;
+}
+
 /** Valid ham URL segment, or null (punctuation / reserved / invalid). Case may still differ. */
 export function parseHamPathParam(raw: string): string | null {
   const sign = normalizeCallsignQuery(raw);

@@ -11,7 +11,7 @@ import { QsoLogbook } from "@/components/portal/qso-logbook";
 import { SecuritySettingsForm } from "@/components/portal/security-settings-form";
 import { UserDocumentsPanel } from "@/components/portal/user-documents-panel";
 import { getAccountProfile } from "@/lib/account";
-import { findPublicHamByCallsign, hamPublicUrl } from "@/lib/ham-profile";
+import { findPublicHamByCallsign, hamPublicPath, hamPublicUrl } from "@/lib/ham-profile";
 import { parseHamPathParam, parseHamTab, type HamTabId } from "@/lib/ham-reserved";
 import { getPublicSiteBranding } from "@/lib/cms";
 import {
@@ -21,7 +21,6 @@ import {
 } from "@/lib/ham-map-access";
 import { readMapTilerApiKey } from "@/lib/map/maptiler-style";
 import { buildHomeGridMarker } from "@/lib/qso-map";
-import { getPublicBaseUrl } from "@/lib/public-url";
 import { listUserQsos } from "@/lib/qso";
 import { listUserDocuments } from "@/lib/user-documents";
 import { callsignHref, hamHref } from "@/lib/locale-hrefs";
@@ -55,7 +54,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       })
     : t("privateDescription", { sign: ham.callsign });
   const canonical = hamPublicUrl(ham.callsign);
-  const base = getPublicBaseUrl();
 
   return {
     title: ham.callsign,
@@ -63,8 +61,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     alternates: {
       canonical,
       languages: {
-        vi: `${base}/vi/${ham.callsign}`,
-        en: `${base}/en/${ham.callsign}`,
+        vi: canonical,
+        en: canonical,
+        "x-default": canonical,
       },
     },
     openGraph: {
@@ -97,7 +96,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
     }
     if (isMapView) qs.set("view", "map");
     const query = qs.toString();
-    redirect(`/${locale}/${sign}${query ? `?${query}` : ""}`);
+    redirect(`${hamPublicPath(sign)}${query ? `?${query}` : ""}`);
   }
 
   const ham = await findPublicHamByCallsign(sign);
@@ -143,7 +142,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
 
   if (isMapView) {
     if (!mapAccess) {
-      redirect(`/${locale}/${ham.callsign}`);
+      redirect(hamPublicPath(ham.callsign));
     }
 
     const branding = await getPublicSiteBranding(locale);
@@ -271,12 +270,8 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
                   </p>
                 ) : null}
                 {mapAccess ? (
-                  <Link
-                    href={{
-                      pathname: "/[callsign]",
-                      params: { callsign: ham.callsign },
-                      query: { view: "map" },
-                    }}
+                  <a
+                    href={`${hamPublicPath(ham.callsign)}?view=map`}
                     className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-foreground transition hover:border-accent/40 hover:text-accent"
                   >
                     <svg
@@ -291,7 +286,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
                       <path d="M12 22V11M3 6.5 12 11l9-4.5" />
                     </svg>
                     {t("viewMap")}
-                  </Link>
+                  </a>
                 ) : null}
               </div>
             ) : null}

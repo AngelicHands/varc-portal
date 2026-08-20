@@ -2,13 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import createMiddleware from "next-intl/middleware";
 import { isAdminRole, canManageSite, canManagePages, canManageUsers, canManageRoles, pickRoleCapabilities, type Role } from "@/lib/roles";
-import { routing } from "@/i18n/routing";
-import { parseBareCallsignPath } from "@/lib/ham-reserved";
+import { routing, type AppLocale } from "@/i18n/routing";
+import { isReservedHamPath, parseBareCallsignPath } from "@/lib/ham-reserved";
 
 const intlMiddleware = createMiddleware(routing);
 
+const LOCALE_COOKIE = "NEXT_LOCALE";
+const PREFIXED_CALLSIGN_PATH = /^\/(vi|en)\/([A-Za-z0-9]{3,15})$/i;
+
 function pathMatches(pathname: string, base: string) {
   return pathname === base || pathname.startsWith(`${base}/`);
+}
+
+function isAppLocale(value: string): value is AppLocale {
+  return (routing.locales as readonly string[]).includes(value);
+}
+
+function localeFromCookie(req: NextRequest): AppLocale {
+  const raw = req.cookies.get(LOCALE_COOKIE)?.value;
+  if (raw && isAppLocale(raw)) return raw;
+  return routing.defaultLocale;
+}
+
+function setLocaleCookie(response: NextResponse, locale: AppLocale) {
+  response.cookies.set(LOCALE_COOKIE, locale, {
+    path: "/",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 365,
+  });
 }
 
 /**
@@ -124,12 +145,32 @@ export default async function proxy(req: NextRequest) {
   }
 
   const publicReq = asPublicRequest(req);
+  const prefixedCallsign = redirectPrefixedCallsign(publicReq);
+  if (prefixedCallsign) return prefixedCallsign;
+
   const bareCallsign = rewriteBareCallsign(publicReq);
   if (bareCallsign) return bareCallsign;
 
   return intlMiddleware(publicReq);
 }
 
+/** /vi/XV1ABC or /en/XV1ABC → /XV1ABC (locale kept via cookie). */
+function redirectPrefixedCallsign(req: NextRequest): NextResponse | null {
+  const match = PREFIXED_CALLSIGN_PATH.exec(req.nextUrl.pathname);
+  if (!match) return null;
+
+  const localeRaw = match[1].toLowerCase();
+  const sign = match[2].toUpperCase();
+  if (!isAppLocale(localeRaw) || isReservedHamPath(sign)) return null;
+
+  const canonical = req.nextUrl.clone();
+  canonical.pathname = `/${sign}`;
+  const response = NextResponse.redirect(canonical, 308);
+  setLocaleCookie(response, localeRaw);
+  return response;
+}
+
+/** Unprefixed /XV1ABC → rewrite to /{locale}/XV1ABC for the app router. */
 function rewriteBareCallsign(req: NextRequest): NextResponse | null {
   const { pathname } = req.nextUrl;
   const sign = parseBareCallsignPath(pathname);
@@ -142,8 +183,9 @@ function rewriteBareCallsign(req: NextRequest): NextResponse | null {
     return NextResponse.redirect(canonical, 308);
   }
 
+  const locale = localeFromCookie(req);
   const rewriteUrl = req.nextUrl.clone();
-  rewriteUrl.pathname = `/${routing.defaultLocale}/${sign}`;
+  rewriteUrl.pathname = `/${locale}/${sign}`;
   return NextResponse.rewrite(rewriteUrl);
 }
 

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { redirect } from "@/i18n/navigation";
 import { getAccountProfile } from "@/lib/account";
+import { hamPublicPath } from "@/lib/ham-reserved";
 import { requirePortalSession } from "@/lib/portal-access";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -29,18 +30,8 @@ export default async function LogbookPage({ params }: Props) {
   const callsign = profile?.callsign?.trim() ?? "";
 
   if (!callsign) {
-    redirect({
-      href: { pathname: "/account", query: { setup: "callsign" } },
-      locale,
-    });
+    redirect(`/${locale}/account?setup=callsign`);
   }
 
-  redirect({
-    href: {
-      pathname: "/[callsign]",
-      params: { callsign },
-      query: { tab: "logbook" },
-    },
-    locale,
-  });
+  redirect(`${hamPublicPath(callsign)}?tab=logbook`);
 }

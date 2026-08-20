@@ -32,8 +32,8 @@ export function HamMapQsoListPanel({
     ? "border-zinc-300/80 bg-white/95 text-zinc-900 shadow-xl shadow-zinc-900/15"
     : "border-white/10 bg-zinc-950/95 text-white shadow-2xl shadow-black/50";
   const handleClass = light
-    ? "border-zinc-300/80 bg-white/95 text-zinc-700 hover:bg-zinc-100"
-    : "border-white/10 bg-zinc-950/95 text-white/80 hover:bg-white/10";
+    ? "border-zinc-300/80 bg-white/95 text-zinc-800 shadow-xl shadow-zinc-900/15 hover:bg-zinc-50"
+    : "border-white/10 bg-zinc-950/95 text-white shadow-2xl shadow-black/50 hover:bg-zinc-900";
   const rowBorder = light ? "border-zinc-200" : "border-white/10";
   const muted = light ? "text-zinc-500" : "text-white/55";
   const strong = light ? "text-zinc-900" : "text-white";
@@ -107,14 +107,14 @@ export function HamMapQsoListPanel({
       <button
         type="button"
         onClick={() => onOpenChange(!open)}
-        className={`pointer-events-auto absolute top-1/2 right-0 z-10 flex h-24 w-8 translate-x-full -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-r-lg border border-l-0 backdrop-blur-md transition ${handleClass}`}
+        className={`pointer-events-auto absolute top-1/2 right-0 z-10 flex min-h-[9.5rem] w-11 translate-x-full -translate-y-1/2 flex-col items-center justify-center gap-2 rounded-r-xl border border-l-0 px-1.5 py-3 shadow-lg backdrop-blur-md transition ${handleClass}`}
         aria-expanded={open}
         aria-controls="ham-map-qso-list"
         title={open ? t("qsoListCollapse") : t("qsoListExpand")}
       >
         <svg
           viewBox="0 0 16 16"
-          className={`h-3.5 w-3.5 transition ${open ? "rotate-180" : ""}`}
+          className={`h-3.5 w-3.5 shrink-0 transition ${open ? "rotate-180" : ""}`}
           aria-hidden
           fill="none"
           stroke="currentColor"
@@ -125,7 +125,7 @@ export function HamMapQsoListPanel({
           <path d="M6 3.5 10.5 8 6 12.5" />
         </svg>
         <span
-          className="text-[9px] font-medium uppercase tracking-wide"
+          className="max-h-[7rem] text-[10px] font-semibold tracking-[0.14em] uppercase"
           style={{ writingMode: "vertical-rl" }}
         >
           {t("qsoListHandle")}

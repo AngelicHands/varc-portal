@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AccountProfileForm } from "@/components/portal/account-profile-form";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { getAccountProfile } from "@/lib/account";
+import { hamPublicPath } from "@/lib/ham-reserved";
 import { requirePortalSession } from "@/lib/portal-access";
 import { listUserDocuments } from "@/lib/user-documents";
-import { redirect } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -46,14 +47,7 @@ export default async function AccountPage({ params, searchParams }: Props) {
 
   const callsign = profile.callsign.trim();
   if (callsign) {
-    redirect({
-      href: {
-        pathname: "/[callsign]",
-        params: { callsign },
-        query: { tab: "profile" },
-      },
-      locale,
-    });
+    redirect(`${hamPublicPath(callsign)}?tab=profile`);
   }
 
   return (
