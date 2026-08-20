@@ -26,6 +26,7 @@ type OwnerTabContextValue = {
   error: string | null;
   data: OwnerTabData | null;
   reload: () => void;
+  ensureLoaded: () => void;
 };
 
 const OwnerTabContext = createContext<OwnerTabContextValue | null>(null);
@@ -64,16 +65,24 @@ function useOwnerTabData(): OwnerTabContextValue {
 }
 
 export function HamOwnerTabDataProvider({ children }: { children: ReactNode }) {
-  const [loading, setLoading] = useState(true);
+  const [wanted, setWanted] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<OwnerTabData | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
+  const ensureLoaded = useCallback(() => {
+    setWanted(true);
+  }, []);
+
   const reload = useCallback(() => {
+    setWanted(true);
     setReloadToken((n) => n + 1);
   }, []);
 
   useEffect(() => {
+    if (!wanted) return;
+
     let cancelled = false;
 
     queueMicrotask(() => {
@@ -96,11 +105,11 @@ export function HamOwnerTabDataProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [wanted, reloadToken]);
 
   const value = useMemo(
-    () => ({ loading, error, data, reload }),
-    [loading, error, data, reload],
+    () => ({ loading, error, data, reload, ensureLoaded }),
+    [loading, error, data, reload, ensureLoaded],
   );
 
   return (
@@ -114,9 +123,13 @@ function OwnerTabGate({
   children: (data: OwnerTabData) => ReactNode;
 }) {
   const t = useTranslations("ham");
-  const { loading, error, data, reload } = useOwnerTabData();
+  const { loading, error, data, reload, ensureLoaded } = useOwnerTabData();
 
-  if (loading && !data) {
+  useEffect(() => {
+    ensureLoaded();
+  }, [ensureLoaded]);
+
+  if ((loading || !data) && !error) {
     return (
       <TabStatus>
         <span className="inline-flex items-center gap-2 text-sm text-muted">

@@ -104,6 +104,7 @@ export function AdminAccountMenu({
           <DropdownMenu.Item asChild>
             <Link
               href={profileHref}
+              prefetch={false}
               className="mt-1 flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-gray-800 outline-none transition hover:bg-gray-50 data-[highlighted]:bg-gray-50"
             >
               <svg

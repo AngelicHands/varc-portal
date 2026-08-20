@@ -1,5 +1,4 @@
 import { auth, signOut } from "@/auth";
-import { getAccountProfile } from "@/lib/account";
 import {
   canManageEditorial,
   canManagePages,
@@ -18,10 +17,8 @@ export default async function AdminDashboardLayout({
 }) {
   const session = await auth();
   const user = session?.user;
-  const profile = user
-    ? await getAccountProfile(user.id, user.email)
-    : null;
-  const callsign = profile?.callsign?.trim() ?? "";
+  // Prefer session JWT callsign — avoid a Mongo round-trip on every admin nav.
+  const callsign = user?.callsign?.trim() ?? "";
   const showEditorial = canManageEditorial(user);
   const showPages = canManagePages(user);
   const showSite = canManageSite(user);

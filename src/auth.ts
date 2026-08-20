@@ -24,6 +24,7 @@ import { ensureDefaultRoles, getRoleCapabilities } from "@/lib/app-roles";
 declare module "next-auth" {
   interface User {
     role?: Role;
+    callsign?: string | null;
   }
   interface Session {
     user: {
@@ -32,6 +33,7 @@ declare module "next-auth" {
       name?: string | null;
       image?: string | null;
       role: Role;
+      callsign?: string;
     } & RoleCapabilityFlags;
   }
 }
@@ -40,6 +42,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     id?: string;
     role?: Role;
+    callsign?: string;
     canAccessAdmin?: boolean;
     canManageContent?: boolean;
     canManagePages?: boolean;
@@ -95,6 +98,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           image: user.image,
           role,
+          callsign: user.callsign?.trim() ?? "",
         };
       },
     }),
@@ -152,22 +156,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.role = normalizeRoleKey(user.role as string | undefined);
         if (user.email) token.email = String(user.email).toLowerCase();
+        if (typeof user.callsign === "string") {
+          token.callsign = user.callsign.trim();
+        }
       }
 
       const email = token.email ? String(token.email).toLowerCase() : null;
-      if (
-        email &&
+      const shouldRefreshUser =
+        Boolean(email) &&
         (account?.provider === "google" ||
           trigger === "signIn" ||
+          trigger === "update" ||
           !token.role ||
-          !token.id)
-      ) {
+          !token.id ||
+          token.callsign === undefined);
+
+      if (email && shouldRefreshUser) {
         await connectDb();
         await ensureDefaultRoles();
-        const dbUser = await User.findOne({ email });
+        const dbUser = await User.findOne({ email }).select(
+          "role callsign",
+        );
         if (dbUser) {
           token.id = String(dbUser._id);
           token.role = normalizeRoleKey(dbUser.role);
+          token.callsign = dbUser.callsign?.trim() ?? "";
+        } else if (token.callsign === undefined) {
+          token.callsign = "";
         }
       } else if (token.role) {
         token.role = normalizeRoleKey(token.role as string);
@@ -191,6 +206,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = String(token.id ?? "");
         session.user.role = normalizeRoleKey(token.role as string | undefined);
+        session.user.callsign = token.callsign?.trim() ?? "";
         const caps = resolveCapabilities({
           role: session.user.role,
           ...pickRoleCapabilities(token),

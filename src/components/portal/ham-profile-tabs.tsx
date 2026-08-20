@@ -52,11 +52,15 @@ export function HamProfileTabs({
   const router = useRouter();
   const [displayTab, setDisplayTab] = useState(active);
   const [syncedActive, setSyncedActive] = useState(active);
+  const [mountedTabs, setMountedTabs] = useState<HamTabId[]>(() => [active]);
   const [, startTransition] = useTransition();
 
   if (active !== syncedActive) {
     setSyncedActive(active);
     setDisplayTab(active);
+    if (!mountedTabs.includes(active)) {
+      setMountedTabs([...mountedTabs, active]);
+    }
   }
 
   const visible = TABS.filter((tab) => {
@@ -77,6 +81,9 @@ export function HamProfileTabs({
     if (tabId === displayTab) return;
     const href = tabHref(callsign, tabId, firstVisible);
     setDisplayTab(tabId);
+    setMountedTabs((prev) =>
+      prev.includes(tabId) ? prev : [...prev, tabId],
+    );
     startTransition(() => {
       router.push(href, { scroll: false });
     });
@@ -123,7 +130,7 @@ export function HamProfileTabs({
         })}
       </div>
       {panels.map(({ id, node }) => {
-        if (node == null) return null;
+        if (node == null || !mountedTabs.includes(id)) return null;
         const selected = displayTab === id;
         return (
           <div
