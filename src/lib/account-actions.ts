@@ -36,8 +36,12 @@ export async function updateProfileAction(raw: unknown) {
       return { ok: false as const, error: "User not found" };
     }
 
+    const previousCallsign = user.callsign?.trim() ?? "";
     user.name = parsed.data.name;
     user.callsign = parsed.data.callsign;
+    if (parsed.data.callsign !== previousCallsign) {
+      user.callsignVerified = false;
+    }
     await user.save();
 
     revalidatePath("/account");

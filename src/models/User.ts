@@ -13,6 +13,7 @@ const UserSchema = new Schema(
     },
     image: { type: String, default: null },
     callsign: { type: String, default: "", trim: true, uppercase: true },
+    callsignVerified: { type: Boolean, default: false },
     emailVerified: { type: Date, default: null },
   },
   { timestamps: true },
@@ -25,5 +26,10 @@ export type UserDocument = InferSchemaType<typeof UserSchema> & {
   role: Role | string;
 };
 
+// Recompile on HMR so new fields (e.g. callsignVerified) take effect in dev.
+if (mongoose.models.User) {
+  delete mongoose.models.User;
+}
+
 export const User: Model<UserDocument> =
-  mongoose.models.User ?? mongoose.model<UserDocument>("User", UserSchema);
+  mongoose.model<UserDocument>("User", UserSchema);

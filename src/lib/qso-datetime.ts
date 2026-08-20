@@ -1,4 +1,4 @@
-import { PORTAL_TIMEZONE } from "@/lib/datetime-local";
+export type QsoTimeZoneMode = "utc" | "local";
 
 function part(
   parts: Intl.DateTimeFormatPart[],
@@ -7,11 +7,14 @@ function part(
   return parts.find((item) => item.type === type)?.value ?? "";
 }
 
-function utc7Parts(iso: string): Intl.DateTimeFormatPart[] | null {
+function formatParts(
+  iso: string,
+  timeZone?: string,
+): Intl.DateTimeFormatPart[] | null {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat("en-US", {
-    timeZone: PORTAL_TIMEZONE,
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -22,53 +25,69 @@ function utc7Parts(iso: string): Intl.DateTimeFormatPart[] | null {
   }).formatToParts(date);
 }
 
-/** Display format for tables and search (UTC+7 wall time). */
-export function formatQsoDateTime(iso: string): string {
-  const parts = utc7Parts(iso);
-  if (!parts) return "";
-  const day = part(parts, "day");
-  const month = part(parts, "month");
-  const year = part(parts, "year");
-  const hour = part(parts, "hour");
-  const minute = part(parts, "minute");
-  const second = part(parts, "second");
-  return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
-}
-
-/** Value for `<input type="date">` in UTC+7. */
-export function toQsoDateValue(iso: string): string {
-  const parts = utc7Parts(iso);
-  if (!parts) return "";
+function partsToDateTime(
+  parts: Intl.DateTimeFormatPart[] | null,
+): { date: string; time: string } | null {
+  if (!parts) return null;
   const year = part(parts, "year");
   const month = part(parts, "month");
   const day = part(parts, "day");
-  if (!year || !month || !day) return "";
-  return `${year}-${month}-${day}`;
-}
-
-/** Value for `<input type="time">` in UTC+7 (includes seconds). */
-export function toQsoTimeValue(iso: string): string {
-  const parts = utc7Parts(iso);
-  if (!parts) return "";
   const hour = part(parts, "hour");
   const minute = part(parts, "minute");
   const second = part(parts, "second");
-  if (!hour || !minute || !second) return "";
-  return `${hour}:${minute}:${second}`;
-}
-
-export function qsoDateTimeNow(): { date: string; time: string } {
-  const now = new Date().toISOString();
+  if (!year || !month || !day || !hour || !minute || !second) return null;
   return {
-    date: toQsoDateValue(now),
-    time: toQsoTimeValue(now),
+    date: `${year}-${month}-${day}`,
+    time: `${hour}:${minute}:${second}`,
   };
 }
 
-/** Parse date + time picker values (UTC+7 wall time) to UTC ISO. */
+/** Display format for tables and search. Always UTC. */
+export function formatQsoDateTime(iso: string): string {
+  const values = partsToDateTime(formatParts(iso, "UTC"));
+  if (!values) return "";
+  const [year, month, day] = values.date.split("-");
+  return `${day}/${month}/${year} ${values.time} UTC`;
+}
+
+export function toQsoDateValue(
+  iso: string,
+  zone: QsoTimeZoneMode = "utc",
+): string {
+  const values = partsToDateTime(
+    formatParts(iso, zone === "utc" ? "UTC" : undefined),
+  );
+  return values?.date ?? "";
+}
+
+export function toQsoTimeValue(
+  iso: string,
+  zone: QsoTimeZoneMode = "utc",
+): string {
+  const values = partsToDateTime(
+    formatParts(iso, zone === "utc" ? "UTC" : undefined),
+  );
+  return values?.time ?? "";
+}
+
+export function qsoDateTimeNow(
+  zone: QsoTimeZoneMode = "utc",
+): { date: string; time: string } {
+  const now = new Date().toISOString();
+  return {
+    date: toQsoDateValue(now, zone),
+    time: toQsoTimeValue(now, zone),
+  };
+}
+
+/**
+ * Parse date + time picker values in UTC or the browser local zone
+ * and return a UTC ISO timestamp.
+ */
 export function fromQsoDateTimeParts(
   dateValue: string,
   timeValue: string,
+  zone: QsoTimeZoneMode = "utc",
 ): string | null {
   const date = dateValue.trim();
   const time = timeValue.trim();
@@ -78,7 +97,28 @@ export function fromQsoDateTimeParts(
   const normalizedTime = /^\d{2}:\d{2}$/.test(time) ? `${time}:00` : time;
   if (!/^\d{2}:\d{2}:\d{2}$/.test(normalizedTime)) return null;
 
-  const parsed = new Date(`${date}T${normalizedTime}+07:00`);
+  const parsed =
+    zone === "utc"
+      ? new Date(`${date}T${normalizedTime}Z`)
+      : new Date(`${date}T${normalizedTime}`);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString();
+}
+
+/** Convert the same instant between UTC and local picker values. */
+export function convertQsoDateTimeParts(
+  dateValue: string,
+  timeValue: string,
+  fromZone: QsoTimeZoneMode,
+  toZone: QsoTimeZoneMode,
+): { date: string; time: string } | null {
+  if (fromZone === toZone) {
+    return { date: dateValue, time: timeValue };
+  }
+  const iso = fromQsoDateTimeParts(dateValue, timeValue, fromZone);
+  if (!iso) return null;
+  const date = toQsoDateValue(iso, toZone);
+  const time = toQsoTimeValue(iso, toZone);
+  if (!date || !time) return null;
+  return { date, time };
 }

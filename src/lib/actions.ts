@@ -36,6 +36,7 @@ import {
   reorderMenuSchema,
   roleFormSchema,
   siteSettingsFormSchema,
+  updateAdminUserSchema,
 } from "@/lib/validations/article";
 import {
   FORM_SUBMISSION_STATUSES,
@@ -1737,16 +1738,127 @@ export async function createUserAction(
     const existing = await User.findOne({ email });
     if (existing) return { ok: false, error: "Email already exists" };
 
+    if (data.callsign) {
+      const callsignTaken = await User.findOne({ callsign: data.callsign });
+      if (callsignTaken) {
+        return { ok: false, error: "Callsign is already assigned to another user" };
+      }
+    }
+
     const passwordHash = await bcrypt.hash(data.password, 12);
     const created = await User.create({
       email,
       name: data.name,
       passwordHash,
       role: normalizeRoleKey(data.role),
+      callsign: data.callsign,
+      callsignVerified: Boolean(data.callsign) && Boolean(data.callsignVerified),
     });
     return { ok: true, id: String(created._id) };
   } catch (error) {
     return failAction(error, "Failed to create user");
+  }
+}
+
+export async function updateAdminUserAction(
+  userId: string,
+  raw: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await requireUserManager();
+    const parsed = updateAdminUserSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
+    }
+
+    await connectDb();
+    const user = await User.findById(userId);
+    if (!user) return { ok: false, error: "User not found" };
+
+    if (parsed.data.callsign) {
+      const callsignTaken = await User.findOne({
+        callsign: parsed.data.callsign,
+        _id: { $ne: user._id },
+      });
+      if (callsignTaken) {
+        return { ok: false, error: "Callsign is already assigned to another user" };
+      }
+    }
+
+    user.name = parsed.data.name;
+    const previousCallsign = user.callsign?.trim() ?? "";
+    const nextCallsign = parsed.data.callsign;
+    user.callsign = nextCallsign;
+    if (!nextCallsign) {
+      user.callsignVerified = false;
+    } else if (typeof parsed.data.callsignVerified === "boolean") {
+      user.callsignVerified = parsed.data.callsignVerified;
+    } else if (nextCallsign !== previousCallsign) {
+      user.callsignVerified = false;
+    }
+    user.markModified("callsignVerified");
+    await user.save();
+    await invalidateCmsTags(
+      CmsCacheTags.callsigns,
+      ...(nextCallsign ? [CmsCacheTags.callsign(nextCallsign)] : []),
+      ...(previousCallsign && previousCallsign !== nextCallsign
+        ? [CmsCacheTags.callsign(previousCallsign)]
+        : []),
+    );
+    if (nextCallsign) {
+      await deleteCmsKeys(CmsCacheKeys.callsignBySign(nextCallsign));
+    }
+    if (previousCallsign && previousCallsign !== nextCallsign) {
+      await deleteCmsKeys(CmsCacheKeys.callsignBySign(previousCallsign));
+    }
+    revalidatePath("/admin/users", "layout");
+    revalidatePath(`/admin/users/${userId}`, "page");
+    revalidatePath("/account");
+    revalidatePath("/logbook");
+    revalidatePath("/vi", "layout");
+    revalidatePath("/en", "layout");
+    return { ok: true };
+  } catch (error) {
+    return failAction(error, "Failed to update user");
+  }
+}
+
+export async function verifyUserCallsignAction(
+  userId: string,
+  verified = true,
+): Promise<{ ok: true; verified: boolean } | { ok: false; error: string }> {
+  try {
+    await requireUserManager();
+    await connectDb();
+    const user = await User.findById(userId);
+    if (!user) return { ok: false, error: "User not found" };
+
+    const callsign = user.callsign?.trim() ?? "";
+    if (!callsign) {
+      return { ok: false, error: "Assign a callsign before verifying" };
+    }
+
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      { $set: { callsignVerified: verified } },
+      { returnDocument: "after", runValidators: true, strict: false },
+    );
+    if (!updated) return { ok: false, error: "User not found" };
+
+    await invalidateCmsTags(
+      CmsCacheTags.callsigns,
+      CmsCacheTags.callsign(callsign),
+    );
+    await deleteCmsKeys(CmsCacheKeys.callsignBySign(callsign));
+    revalidatePath("/admin/users", "layout");
+    revalidatePath(`/admin/users/${userId}`, "page");
+    revalidatePath("/account");
+    revalidatePath("/logbook");
+    revalidatePath("/vi", "layout");
+    revalidatePath("/en", "layout");
+    return { ok: true, verified: Boolean(updated.callsignVerified) };
+  } catch (error) {
+    return failAction(error, "Failed to update callsign status");
   }
 }
 

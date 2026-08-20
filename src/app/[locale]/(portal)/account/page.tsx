@@ -74,6 +74,16 @@ export default async function AccountPage({ params, searchParams }: Props) {
         <UserDocumentsPanel
           initialDocuments={documents}
           uploadEndpoint="/api/account/documents"
+          labels={{
+            certificate: t("certificate"),
+            license: t("license"),
+            upload: t("upload"),
+            uploading: t("uploading"),
+            uploadFailed: t("uploadFailed"),
+            delete: t("delete"),
+            deleteFailed: t("deleteFailed"),
+            noDocuments: t("noDocuments"),
+          }}
         />
       </section>
     </div>

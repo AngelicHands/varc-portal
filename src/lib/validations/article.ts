@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isEmptyHtml, sanitizeHtml } from "@/lib/html";
 import { isSafePublicUrl } from "@/lib/safe-url";
+import { adminCallsignSchema } from "@/lib/validations/qso";
 
 const MAX_HTML_CHARS = 500_000;
 const MAX_TEXT_CHARS = 5_000;
@@ -219,9 +220,19 @@ export const createUserSchema = z.object({
     .min(8, "Password must be at least 8 characters")
     .max(MAX_PASSWORD_CHARS, "Password is too long"),
   role: z.enum(["setup_admin", "administrator", "editor", "reader"]),
+  callsign: adminCallsignSchema.optional().default(""),
+  callsignVerified: z.boolean().optional().default(false),
 });
 
 export type CreateUserValues = z.infer<typeof createUserSchema>;
+
+export const updateAdminUserSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+  callsign: adminCallsignSchema.optional().default(""),
+  callsignVerified: z.boolean().optional(),
+});
+
+export type UpdateAdminUserValues = z.infer<typeof updateAdminUserSchema>;
 
 export const roleFormSchema = z.object({
   label: z.string().trim().min(1, "Label is required").max(200),

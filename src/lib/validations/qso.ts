@@ -16,6 +16,15 @@ export function isValidCallsign(value: string): boolean {
   return CALLSIGN_PATTERN.test(normalized);
 }
 
+export const adminCallsignSchema = z
+  .string()
+  .trim()
+  .max(15)
+  .transform((value) => normalizeProfileCallsign(value))
+  .refine((value) => value === "" || isValidCallsign(value), {
+    message: "Enter a valid callsign (e.g. XV1ABC)",
+  });
+
 export const profileFormSchema = z.object({
   name: z.string().trim().min(1).max(120),
   callsign: z

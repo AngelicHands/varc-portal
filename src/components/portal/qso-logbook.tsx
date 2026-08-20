@@ -6,11 +6,13 @@ import { PortalDialog } from "@/components/portal/portal-dialog";
 import { usePortalConfirm } from "@/components/portal/use-confirm";
 import type { QsoListItemDto } from "@/lib/account-types";
 import {
+  convertQsoDateTimeParts,
   formatQsoDateTime,
   fromQsoDateTimeParts,
   qsoDateTimeNow,
   toQsoDateValue,
   toQsoTimeValue,
+  type QsoTimeZoneMode,
 } from "@/lib/qso-datetime";
 import {
   createQsoAction,
@@ -49,14 +51,17 @@ type QsoFieldKey =
 
 type FieldErrors = Partial<Record<QsoFieldKey, boolean>>;
 
-function mandatoryFieldErrors(form: FormState): FieldErrors {
+function mandatoryFieldErrors(
+  form: FormState,
+  zone: QsoTimeZoneMode,
+): FieldErrors {
   const errors: FieldErrors = {};
 
   if (!form.workedCallsign.trim()) {
     errors.workedCallsign = true;
   }
 
-  const qsoAt = fromQsoDateTimeParts(form.qsoDate, form.qsoTime);
+  const qsoAt = fromQsoDateTimeParts(form.qsoDate, form.qsoTime, zone);
   if (!form.qsoDate.trim()) {
     errors.qsoDate = true;
   }
@@ -141,8 +146,8 @@ function DeleteIcon() {
   );
 }
 
-function emptyForm(): FormState {
-  const { date, time } = qsoDateTimeNow();
+function emptyForm(zone: QsoTimeZoneMode = "utc"): FormState {
+  const { date, time } = qsoDateTimeNow(zone);
   return {
     workedCallsign: "",
     qsoDate: date,
@@ -158,11 +163,14 @@ function emptyForm(): FormState {
   };
 }
 
-function formFromItem(item: QsoListItemDto): FormState {
+function formFromItem(
+  item: QsoListItemDto,
+  zone: QsoTimeZoneMode = "utc",
+): FormState {
   return {
     workedCallsign: item.workedCallsign,
-    qsoDate: toQsoDateValue(item.qsoAt),
-    qsoTime: toQsoTimeValue(item.qsoAt),
+    qsoDate: toQsoDateValue(item.qsoAt, zone),
+    qsoTime: toQsoTimeValue(item.qsoAt, zone),
     band: item.band as QsoInputValues["band"],
     freqMhz: item.freqMhz != null ? String(item.freqMhz) : "",
     mode: item.mode as QsoMode,
@@ -194,8 +202,9 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
   const { ask, modal: confirmModal } = usePortalConfirm();
   const [qsos, setQsos] = useState(initialQsos);
   const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<FormState>(emptyForm);
+  const [form, setForm] = useState<FormState>(() => emptyForm("utc"));
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [timeZoneMode, setTimeZoneMode] = useState<QsoTimeZoneMode>("utc");
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [warning] = useState<string | null>(() => {
@@ -261,7 +270,8 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
 
   function openCreateModal() {
     setEditingId(null);
-    setForm(emptyForm());
+    setTimeZoneMode("utc");
+    setForm(emptyForm("utc"));
     setError(null);
     setFieldErrors({});
     setModalOpen(true);
@@ -269,10 +279,29 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
 
   function openEditModal(item: QsoListItemDto) {
     setEditingId(item.id);
-    setForm(formFromItem(item));
+    setTimeZoneMode("utc");
+    setForm(formFromItem(item, "utc"));
     setError(null);
     setFieldErrors({});
     setModalOpen(true);
+  }
+
+  function switchTimeZone(nextZone: QsoTimeZoneMode) {
+    if (nextZone === timeZoneMode) return;
+    const converted = convertQsoDateTimeParts(
+      form.qsoDate,
+      form.qsoTime,
+      timeZoneMode,
+      nextZone,
+    );
+    if (converted) {
+      setForm((prev) => ({
+        ...prev,
+        qsoDate: converted.date,
+        qsoTime: converted.time,
+      }));
+    }
+    setTimeZoneMode(nextZone);
   }
 
   function resetModal() {
@@ -300,7 +329,7 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
     event.preventDefault();
     setError(null);
 
-    const nextFieldErrors = mandatoryFieldErrors(form);
+    const nextFieldErrors = mandatoryFieldErrors(form, timeZoneMode);
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
       setError(t("fixFields"));
@@ -308,7 +337,11 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
     }
     setFieldErrors({});
 
-    const qsoAt = fromQsoDateTimeParts(form.qsoDate, form.qsoTime);
+    const qsoAt = fromQsoDateTimeParts(
+      form.qsoDate,
+      form.qsoTime,
+      timeZoneMode,
+    );
     if (!qsoAt) {
       setFieldErrors({ qsoDate: true, qsoTime: true });
       setError(t("invalidDateTime"));
@@ -406,7 +439,25 @@ export function QsoLogbook({ initialQsos, stationCallsign }: Props) {
           />
         </label>
         <fieldset className="md:col-span-2">
-          <legend className="mb-2 block text-sm font-medium">{t("dateTime")}</legend>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <legend className="text-sm font-medium">
+              {t("dateTime")}{" "}
+              <span className="font-normal text-muted">
+                {timeZoneMode === "utc" ? t("timeZoneUtc") : t("timeZoneLocal")}
+              </span>
+            </legend>
+            <button
+              type="button"
+              onClick={() =>
+                switchTimeZone(timeZoneMode === "utc" ? "local" : "utc")
+              }
+              className="shrink-0 text-right text-xs font-normal text-accent hover:underline"
+            >
+              {timeZoneMode === "utc"
+                ? t("switchToLocalTime")
+                : t("switchToUtc")}
+            </button>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
               <span className="mb-1 block text-muted">{t("date")}</span>

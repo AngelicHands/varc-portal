@@ -1,14 +1,37 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { useTranslations } from "next-intl";
 import type { UserDocumentDto } from "@/lib/account-types";
 import type { UserDocumentKind } from "@/lib/validations/qso";
+
+type DocumentLabels = {
+  certificate: string;
+  license: string;
+  upload: string;
+  uploading: string;
+  uploadFailed: string;
+  delete: string;
+  deleteFailed: string;
+  noDocuments: string;
+};
+
+const DEFAULT_LABELS: DocumentLabels = {
+  certificate: "Certificate",
+  license: "License",
+  upload: "Upload file",
+  uploading: "Uploading…",
+  uploadFailed: "Upload failed",
+  delete: "Delete",
+  deleteFailed: "Delete failed",
+  noDocuments: "No files uploaded yet.",
+};
 
 type Props = {
   initialDocuments: UserDocumentDto[];
   uploadEndpoint: string;
   canDelete?: boolean;
+  labels?: Partial<DocumentLabels>;
+  tone?: "portal" | "admin";
 };
 
 type PendingPreview = {
@@ -91,8 +114,27 @@ export function UserDocumentsPanel({
   initialDocuments,
   uploadEndpoint,
   canDelete = true,
+  labels: labelsProp,
+  tone = "portal",
 }: Props) {
-  const t = useTranslations("account");
+  const t = { ...DEFAULT_LABELS, ...labelsProp };
+  const cardClass =
+    tone === "admin"
+      ? "rounded-lg border border-gray-200 bg-white p-5"
+      : "rounded-lg border border-border bg-surface p-4";
+  const rowClass =
+    tone === "admin"
+      ? "flex items-start gap-3 rounded border border-gray-200 px-3 py-2 text-sm"
+      : "flex items-start gap-3 rounded border border-border px-3 py-2 text-sm";
+  const titleClass =
+    tone === "admin"
+      ? "font-medium text-gray-900"
+      : "font-medium text-foreground";
+  const mutedClass = tone === "admin" ? "text-sm text-gray-600" : "text-sm text-muted";
+  const uploadBtnClass =
+    tone === "admin"
+      ? "inline-flex cursor-pointer items-center gap-2 rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
+      : "inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-foreground/5";
   const [documents, setDocuments] = useState(initialDocuments);
   const [pendingKind, setPendingKind] = useState<UserDocumentKind | null>(null);
   const [pendingPreview, setPendingPreview] = useState<PendingPreview | null>(null);
@@ -144,12 +186,12 @@ export function UserDocumentsPanel({
         error?: string;
       };
       if (!response.ok || !payload.ok || !payload.document) {
-        throw new Error(payload.error || t("uploadFailed"));
+        throw new Error(payload.error || t.uploadFailed);
       }
       setDocuments((current) => [payload.document!, ...current]);
     } catch (uploadError) {
       setError(
-        uploadError instanceof Error ? uploadError.message : t("uploadFailed"),
+        uploadError instanceof Error ? uploadError.message : t.uploadFailed,
       );
     } finally {
       setPendingKind(null);
@@ -168,7 +210,7 @@ export function UserDocumentsPanel({
       });
       const payload = (await response.json()) as { ok?: boolean; error?: string };
       if (!response.ok || !payload.ok) {
-        setError(payload.error || t("deleteFailed"));
+        setError(payload.error || t.deleteFailed);
         return;
       }
       setDocuments((current) => current.filter((doc) => doc.id !== id));
@@ -179,7 +221,7 @@ export function UserDocumentsPanel({
     return (
       <li
         key={doc.id}
-        className="flex items-start gap-3 rounded border border-border px-3 py-2 text-sm"
+        className={rowClass}
       >
         <DocumentThumbnail
           contentType={doc.contentType}
@@ -205,7 +247,7 @@ export function UserDocumentsPanel({
             onClick={() => onDelete(doc.id)}
             className="shrink-0 text-xs text-red-600 hover:underline disabled:opacity-50"
           >
-            {t("delete")}
+            {t.delete}
           </button>
         ) : null}
       </li>
@@ -214,7 +256,7 @@ export function UserDocumentsPanel({
 
   function renderPendingRow(preview: PendingPreview) {
     return (
-      <li className="flex items-start gap-3 rounded border border-border px-3 py-2 text-sm opacity-80">
+      <li className={`${rowClass} opacity-80`}>
         <DocumentThumbnail
           contentType={preview.contentType}
           src={preview.url}
@@ -222,7 +264,9 @@ export function UserDocumentsPanel({
         />
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium text-foreground">{preview.originalName}</p>
-          <p className="text-xs text-muted">{t("uploading")}</p>
+          <p className={`text-xs ${tone === "admin" ? "text-gray-500" : "text-muted"}`}>
+            {t.uploading}
+          </p>
         </div>
       </li>
     );
@@ -233,10 +277,10 @@ export function UserDocumentsPanel({
     const showPending = pendingPreview?.kind === kind;
 
     return (
-      <section className="rounded-lg border border-border bg-surface p-4">
+      <section className={cardClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-medium text-foreground">{title}</h3>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-foreground/5">
+          <h3 className={titleClass}>{title}</h3>
+          <label className={uploadBtnClass}>
             <input
               type="file"
               accept=".pdf,image/jpeg,image/png,image/webp"
@@ -248,11 +292,11 @@ export function UserDocumentsPanel({
                 event.target.value = "";
               }}
             />
-            {pendingKind === kind ? t("uploading") : t("upload")}
+            {pendingKind === kind ? t.uploading : t.upload}
           </label>
         </div>
         {items.length === 0 && !showPending ? (
-          <p className="mt-3 text-sm text-muted">{t("noDocuments")}</p>
+          <p className={`mt-3 ${mutedClass}`}>{t.noDocuments}</p>
         ) : (
           <ul className="mt-3 space-y-2">
             {showPending && pendingPreview ? renderPendingRow(pendingPreview) : null}
@@ -264,14 +308,14 @@ export function UserDocumentsPanel({
   }
 
   return (
-    <div className="grid gap-4">
+    <div className={tone === "admin" ? "grid gap-4 md:grid-cols-2" : "grid gap-4"}>
       {error ? (
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       ) : null}
-      {renderSection("certificate", t("certificate"))}
-      {renderSection("license", t("license"))}
+      {renderSection("certificate", t.certificate)}
+      {renderSection("license", t.license)}
     </div>
   );
 }
