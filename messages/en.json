@@ -174,7 +174,39 @@
       "qsoListNoGrid": "No grid",
       "traceDistanceKm": "{km} km",
       "enterBrowserFullscreen": "Enter fullscreen",
-      "exitBrowserFullscreen": "Exit fullscreen"
+      "exitBrowserFullscreen": "Exit fullscreen",
+      "tourHelp": "Map help",
+      "tourSkip": "Skip",
+      "tourNext": "Next",
+      "tourBack": "Back",
+      "tourFinish": "Done",
+      "tourStepOf": "{step} / {total}",
+      "tourSteps": {
+        "welcome": {
+          "title": "QSO map",
+          "body": "See your station and recent contacts on the map. By default only QSOs from the last 24 hours are shown."
+        },
+        "timeFilter": {
+          "title": "Time range",
+          "body": "Use these chips to change how far back contacts are shown — from minutes to all time."
+        },
+        "layers": {
+          "title": "Map layers",
+          "body": "Toggle grid squares, location pins, great-circle traces, and browser fullscreen."
+        },
+        "qsoList": {
+          "title": "QSO logbook",
+          "body": "Open the side list to browse contacts. Select one to focus that grid and path on the map."
+        },
+        "pins": {
+          "title": "Pins and grids",
+          "body": "Click a pin for QSO details. Grid rectangles use 4-character Maidenhead fields (for example OL20)."
+        },
+        "done": {
+          "title": "You’re set",
+          "body": "Open this help button anytime to replay the tour."
+        }
+      }
     }
   },
   "account": {

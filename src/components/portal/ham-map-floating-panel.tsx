@@ -111,6 +111,7 @@ export function HamMapFloatingPanel({
 
   return (
     <aside
+      id="ham-map-tour-welcome"
       className="pointer-events-auto absolute top-3 z-20 flex max-w-[min(100%-1.5rem,22rem)] flex-col gap-2 transition-[left] duration-300 ease-out"
       style={{ left: 12 + offsetLeft }}
     >

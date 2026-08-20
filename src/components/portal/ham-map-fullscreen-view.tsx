@@ -29,6 +29,7 @@ import {
   type QsoTraceFeatureCollection,
 } from "@/lib/qso-map";
 import { HamMapFloatingPanel } from "@/components/portal/ham-map-floating-panel";
+import { HamMapTour, HamMapTourHelpButton } from "@/components/portal/ham-map-tour";
 import { HamMapControlsPanel } from "@/components/portal/ham-map-controls-panel";
 import { HamMapQsoTimeFilter } from "@/components/portal/ham-map-qso-time-filter";
 import {
@@ -717,7 +718,7 @@ export function HamMapFullscreenView({
   const [showGridRectangles, setShowGridRectangles] = useState(true);
   const [showLocationMarkers, setShowLocationMarkers] = useState(true);
   const [showTraces, setShowTraces] = useState(true);
-  const [qsoTimeRange, setQsoTimeRange] = useState<HamMapQsoTimeRange>("all");
+  const [qsoTimeRange, setQsoTimeRange] = useState<HamMapQsoTimeRange>("24h");
   const [qsoListOpen, setQsoListOpen] = useState(false);
   const [selectedQsoId, setSelectedQsoId] = useState<string | null>(null);
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
@@ -1320,6 +1321,7 @@ export function HamMapFullscreenView({
         // (inset collapses to height 0 → black map, no tiles). See .cursor/rules/maplibre-container.mdc
         <div
           ref={containerRef}
+          id="ham-map-tour-pins"
           className="h-full w-full"
           aria-label={t("title")}
         />
@@ -1351,36 +1353,57 @@ export function HamMapFullscreenView({
       />
 
       <div className="pointer-events-none absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
-        <HamMapControlsPanel
+        <HamMapTour
           mapTheme={panelTheme}
-          showGridRectangles={showGridRectangles}
-          onToggleGridRectangles={() =>
-            setShowGridRectangles((current) => !current)
-          }
-          showLocationMarkers={showLocationMarkers}
-          onToggleLocationMarkers={() =>
-            setShowLocationMarkers((current) => !current)
-          }
-          showTraces={showTraces}
-          onToggleTraces={() => setShowTraces((current) => !current)}
-          tracesAvailable={
-            showQsoMarkers &&
-            Boolean(activeHomeMarker) &&
-            qsoMarkers.length > 0
-          }
-          isBrowserFullscreen={isBrowserFullscreen}
-          onToggleBrowserFullscreen={() => {
-            void toggleBrowserFullscreen();
-          }}
-          fullscreenSupported={fullscreenSupported}
-        />
-        {showQsoMarkers ? (
-          <HamMapQsoTimeFilter
-            mapTheme={panelTheme}
-            value={qsoTimeRange}
-            onChange={setQsoTimeRange}
-          />
-        ) : null}
+          enabled={Boolean(mapTilerKey) && themeReady}
+          autoStart={Boolean(mapTilerKey) && themeReady}
+        >
+          {({ startTour }) => (
+            <>
+              <div
+                id="ham-map-tour-layers"
+                className="flex items-center gap-2"
+              >
+                <HamMapTourHelpButton
+                  mapTheme={panelTheme}
+                  onClick={startTour}
+                />
+                <HamMapControlsPanel
+                  mapTheme={panelTheme}
+                  showGridRectangles={showGridRectangles}
+                  onToggleGridRectangles={() =>
+                    setShowGridRectangles((current) => !current)
+                  }
+                  showLocationMarkers={showLocationMarkers}
+                  onToggleLocationMarkers={() =>
+                    setShowLocationMarkers((current) => !current)
+                  }
+                  showTraces={showTraces}
+                  onToggleTraces={() => setShowTraces((current) => !current)}
+                  tracesAvailable={
+                    showQsoMarkers &&
+                    Boolean(activeHomeMarker) &&
+                    qsoMarkers.length > 0
+                  }
+                  isBrowserFullscreen={isBrowserFullscreen}
+                  onToggleBrowserFullscreen={() => {
+                    void toggleBrowserFullscreen();
+                  }}
+                  fullscreenSupported={fullscreenSupported}
+                />
+              </div>
+              {showQsoMarkers ? (
+                <div id="ham-map-tour-time-filter">
+                  <HamMapQsoTimeFilter
+                    mapTheme={panelTheme}
+                    value={qsoTimeRange}
+                    onChange={setQsoTimeRange}
+                  />
+                </div>
+              ) : null}
+            </>
+          )}
+        </HamMapTour>
       </div>
 
       {showQsoMarkers ? (

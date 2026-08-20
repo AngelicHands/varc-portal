@@ -174,7 +174,39 @@
       "qsoListNoGrid": "Không có lưới",
       "traceDistanceKm": "{km} km",
       "enterBrowserFullscreen": "Toàn màn hình",
-      "exitBrowserFullscreen": "Thoát toàn màn hình"
+      "exitBrowserFullscreen": "Thoát toàn màn hình",
+      "tourHelp": "Hướng dẫn bản đồ",
+      "tourSkip": "Bỏ qua",
+      "tourNext": "Tiếp",
+      "tourBack": "Quay lại",
+      "tourFinish": "Xong",
+      "tourStepOf": "{step} / {total}",
+      "tourSteps": {
+        "welcome": {
+          "title": "Bản đồ QSO",
+          "body": "Xem trạm của bạn và các liên lạc gần đây trên bản đồ. Mặc định chỉ hiện QSO trong 24 giờ qua."
+        },
+        "timeFilter": {
+          "title": "Khoảng thời gian",
+          "body": "Dùng các nút này để đổi khoảng thời gian lọc liên lạc — từ vài phút đến toàn bộ."
+        },
+        "layers": {
+          "title": "Lớp bản đồ",
+          "body": "Bật/tắt ô lưới, ghim vị trí, đường cung QSO và chế độ toàn màn hình."
+        },
+        "qsoList": {
+          "title": "Nhật ký QSO",
+          "body": "Mở danh sách bên cạnh để xem liên lạc. Chọn một QSO để phóng to ô lưới và đường nối trên bản đồ."
+        },
+        "pins": {
+          "title": "Ghim và ô lưới",
+          "body": "Bấm ghim để xem chi tiết QSO. Hình chữ nhật lưới dùng ô Maidenhead 4 ký tự (ví dụ OL20)."
+        },
+        "done": {
+          "title": "Sẵn sàng",
+          "body": "Bấm nút trợ giúp (?) bất cứ lúc nào để xem lại hướng dẫn."
+        }
+      }
     }
   },
   "account": {

@@ -106,6 +106,7 @@ export function HamMapQsoListPanel({
 
       <button
         type="button"
+        id="ham-map-tour-qso-list"
         onClick={() => onOpenChange(!open)}
         className={`pointer-events-auto absolute top-1/2 right-0 z-10 flex min-h-[9.5rem] w-11 translate-x-full -translate-y-1/2 flex-col items-center justify-center gap-2 rounded-r-xl border border-l-0 px-1.5 py-3 shadow-lg backdrop-blur-md transition ${handleClass}`}
         aria-expanded={open}
