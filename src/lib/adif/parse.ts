@@ -11,6 +11,9 @@ export const ADIF_MAX_RECORDS = 5000;
 /** ADIF tags: <NAME:length> or <NAME:length:type> (e.g. <QSO_DATE:8:D>). */
 const FIELD_TAG_WITH_LENGTH_RE = /^([^:>]+):(\d+)(?::[^>]*)?$/;
 
+/** Some loggers (e.g. JT65-HF) omit `<EOH>`; first QSO field marks start of body. */
+const QSO_BODY_START_FIELDS = new Set(["call", "qso_date", "time_on"]);
+
 function parseFieldAt(
   content: string,
   index: number,
@@ -78,6 +81,10 @@ export function parseAdifContent(content: string): ParsedAdif {
       continue;
     }
 
+    if (inHeader && QSO_BODY_START_FIELDS.has(name)) {
+      inHeader = false;
+    }
+
     if (inHeader) {
       header[name] = value;
     } else {
@@ -87,6 +94,11 @@ export function parseAdifContent(content: string): ParsedAdif {
 
   if (Object.keys(current).length > 0) {
     records.push(current);
+  } else if (
+    inHeader &&
+    (header.call || header.qso_date || header.time_on)
+  ) {
+    records.push({ ...header });
   }
 
   return { header, records };

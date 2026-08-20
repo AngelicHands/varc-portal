@@ -38,7 +38,7 @@ export const adifQsoImportSchema = z.object({
     if (typeof value === "number") {
       return Number.isFinite(value) ? value : null;
     }
-    const trimmed = String(value).trim();
+    const trimmed = normalizeAdifFreq(String(value));
     if (!trimmed) return null;
     if (!FREQ_MHZ_PATTERN.test(trimmed)) return Number.NaN;
     return Number(trimmed);
@@ -59,6 +59,23 @@ export const adifQsoImportSchema = z.object({
     .optional()
     .transform((value) => value || ""),
 });
+
+/** European decimal comma in legacy JT65-HF exports (e.g. `14,076` MHz). */
+export function normalizeAdifFreq(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  if (trimmed.includes(",") && !trimmed.includes(".")) {
+    return trimmed.replace(",", ".");
+  }
+  return trimmed;
+}
+
+/** Salvage callsigns from corrupted tags (e.g. `RU6BU<` from a broken `<CALL>` field). */
+export function normalizeAdifCallsign(raw: string): string {
+  const trimmed = raw.trim();
+  const match = /^[A-Z0-9/-]+/i.exec(trimmed);
+  return normalizeProfileCallsign(match?.[0] ?? trimmed);
+}
 
 export function adifField(record: AdifRecord, ...names: string[]): string {
   for (const name of names) {

@@ -22,7 +22,7 @@ import {
   deleteQsoAction,
   updateQsoAction,
 } from "@/lib/qso-actions";
-import { importQsoAdifAction } from "@/lib/qso-import-actions";
+import { importQsoAdifAction, type AdifImportRecordError } from "@/lib/qso-import-actions";
 import {
   QSO_BANDS,
   QSO_MODES,
@@ -247,6 +247,14 @@ export function QsoLogbook({
   const [isDeleting, setIsDeleting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
+  const [importRecordErrors, setImportRecordErrors] = useState<
+    AdifImportRecordError[]
+  >([]);
+  const [importRecordErrorsTruncated, setImportRecordErrorsTruncated] =
+    useState(0);
+  const [failedImportFiles, setFailedImportFiles] = useState<
+    { name: string; reason: string }[]
+  >([]);
   const [isImporting, startImportTransition] = useTransition();
   const pending = isSubmitting || isDeleting || isImporting;
 
@@ -501,6 +509,9 @@ export function QsoLogbook({
       setQsos([]);
       setPage(1);
       setImportSummary(null);
+      setImportRecordErrors([]);
+      setImportRecordErrorsTruncated(0);
+      setFailedImportFiles([]);
       setSuccessMessage(t("deletedAll", { count: result.deleted }));
       router.refresh();
     } finally {
@@ -515,6 +526,9 @@ export function QsoLogbook({
 
     setImportError(null);
     setImportSummary(null);
+    setImportRecordErrors([]);
+    setImportRecordErrorsTruncated(0);
+    setFailedImportFiles([]);
     setSuccessMessage(null);
 
     startImportTransition(async () => {
@@ -523,6 +537,23 @@ export function QsoLogbook({
         formData.append("file", file);
       }
       const result = await importQsoAdifAction(formData);
+      const failedFiles =
+        "failedFiles" in result && Array.isArray(result.failedFiles)
+          ? result.failedFiles
+          : [];
+      const recordErrors =
+        "recordErrors" in result && Array.isArray(result.recordErrors)
+          ? result.recordErrors
+          : [];
+      const truncatedRecordErrors =
+        "truncatedRecordErrors" in result &&
+        typeof result.truncatedRecordErrors === "number"
+          ? result.truncatedRecordErrors
+          : 0;
+      setFailedImportFiles(failedFiles);
+      setImportRecordErrors(recordErrors);
+      setImportRecordErrorsTruncated(truncatedRecordErrors);
+
       if (!result.ok) {
         setImportError(result.error);
         return;
@@ -537,12 +568,9 @@ export function QsoLogbook({
         }),
       );
 
-      if (result.errors.length > 0) {
-        setImportError(result.errors.join(" "));
-      }
-
-      if (result.imported > 0) {
-        router.refresh();
+      if (result.qsos) {
+        setQsos(result.qsos);
+        setPage(1);
       }
     });
   }
@@ -853,6 +881,41 @@ export function QsoLogbook({
         <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {importError}
         </p>
+      ) : null}
+      {importRecordErrors.length > 0 ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <p className="font-medium">{t("importRecordErrors")}</p>
+          <ul className="mt-2 max-h-64 list-disc space-y-1 overflow-y-auto pl-5">
+            {importRecordErrors.map((item) => (
+              <li key={`${item.fileName}:${item.recordLine}:${item.reason}`}>
+                <span className="font-medium">{item.fileName}</span>
+                {" · "}
+                {t("importRecordLine", { line: item.recordLine })}
+                {": "}
+                {item.reason}
+              </li>
+            ))}
+          </ul>
+          {importRecordErrorsTruncated > 0 ? (
+            <p className="mt-2 text-red-700">
+              {t("importRecordErrorsTruncated", {
+                count: importRecordErrorsTruncated,
+              })}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {failedImportFiles.length > 0 ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-medium">{t("importFailedFiles")}</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            {failedImportFiles.map((file) => (
+              <li key={`${file.name}:${file.reason}`}>
+                <span className="font-medium">{file.name}</span>: {file.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       {qsos.length === 0 ? (

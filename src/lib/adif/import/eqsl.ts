@@ -3,12 +3,14 @@ import type { QsoSource } from "@/lib/qso-source";
 import {
   adifField,
   normalizeAdifBand,
+  normalizeAdifCallsign,
+  normalizeAdifFreq,
   parseAdifDateTime,
   validateImportedCandidate,
   type AdifMapResult,
   type AdifSkipReason,
 } from "@/lib/adif/import/shared";
-import { isValidCallsign, normalizeProfileCallsign } from "@/lib/validations/qso";
+import { isValidCallsign } from "@/lib/validations/qso";
 
 export function mapEqslAdifRecord(
   record: AdifRecord,
@@ -19,7 +21,7 @@ export function mapEqslAdifRecord(
     return { ok: false, reason: "Empty record" };
   }
 
-  const workedCallsign = normalizeProfileCallsign(adifField(record, "call"));
+  const workedCallsign = normalizeAdifCallsign(adifField(record, "call"));
   if (!workedCallsign || !isValidCallsign(workedCallsign)) {
     return { ok: false, reason: "Missing or invalid CALL" };
   }
@@ -40,7 +42,7 @@ export function mapEqslAdifRecord(
       workedCallsign,
       qsoAt,
       band: normalizeAdifBand(adifField(record, "band")),
-      freqMhz: adifField(record, "freq"),
+      freqMhz: normalizeAdifFreq(adifField(record, "freq")),
       mode: adifField(record, "mode").toUpperCase() || "OTHER",
       rstSent: adifField(record, "rst_sent") || "59",
       rstRcvd: adifField(record, "rst_rcvd") || "59",

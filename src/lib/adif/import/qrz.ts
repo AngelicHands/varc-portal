@@ -4,13 +4,15 @@ import {
   adifField,
   adifStationCallsign,
   normalizeAdifBand,
+  normalizeAdifCallsign,
+  normalizeAdifFreq,
   parseAdifDateOnly,
   parseAdifDateTime,
   validateImportedCandidate,
   type AdifMapResult,
   type AdifSkipReason,
 } from "@/lib/adif/import/shared";
-import { isValidCallsign, normalizeProfileCallsign } from "@/lib/validations/qso";
+import { isValidCallsign } from "@/lib/validations/qso";
 
 function qrzQsoConfirmed(record: AdifRecord): boolean {
   return adifField(record, "app_qrzlog_status").toUpperCase() === "C";
@@ -43,7 +45,7 @@ export function mapQrzAdifRecord(
     };
   }
 
-  const workedCallsign = normalizeProfileCallsign(adifField(record, "call"));
+  const workedCallsign = normalizeAdifCallsign(adifField(record, "call"));
   if (!workedCallsign || !isValidCallsign(workedCallsign)) {
     return { ok: false, reason: "Missing or invalid CALL" };
   }
@@ -60,7 +62,9 @@ export function mapQrzAdifRecord(
       workedCallsign,
       qsoAt,
       band: normalizeAdifBand(adifField(record, "band")),
-      freqMhz: adifField(record, "freq") || adifField(record, "freq_rx"),
+      freqMhz:
+        normalizeAdifFreq(adifField(record, "freq")) ||
+        normalizeAdifFreq(adifField(record, "freq_rx")),
       mode: adifField(record, "mode").toUpperCase() || "OTHER",
       rstSent: adifField(record, "rst_sent") || "59",
       rstRcvd: adifField(record, "rst_rcvd") || "59",

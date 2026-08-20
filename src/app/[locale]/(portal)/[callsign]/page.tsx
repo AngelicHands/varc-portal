@@ -157,7 +157,6 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
     : ([null, null] as const);
   const [profile, documents] = ownerData;
   const qsos = canViewLogbook ? await listUserQsos(ham.id) : [];
-  const qsoLogbookKey = `${ham.id}:${qsos.length}:${qsos[0]?.id ?? "empty"}`;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
@@ -317,7 +316,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
         logbook={
           canViewLogbook ? (
             <QsoLogbook
-              key={qsoLogbookKey}
+              key={ham.id}
               initialQsos={qsos}
               stationCallsign={ham.callsign}
               canEdit={canEdit}
