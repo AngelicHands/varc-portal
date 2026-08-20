@@ -509,9 +509,9 @@ export function QsoLogbook({
   }
 
   function onImportAdifSelected(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!file) return;
+    if (files.length === 0) return;
 
     setImportError(null);
     setImportSummary(null);
@@ -519,7 +519,9 @@ export function QsoLogbook({
 
     startImportTransition(async () => {
       const formData = new FormData();
-      formData.set("file", file);
+      for (const file of files) {
+        formData.append("file", file);
+      }
       const result = await importQsoAdifAction(formData);
       if (!result.ok) {
         setImportError(result.error);
@@ -794,6 +796,7 @@ export function QsoLogbook({
               ref={importInputRef}
               type="file"
               accept=".adi,.adif,text/plain"
+              multiple
               className="sr-only"
               onChange={onImportAdifSelected}
             />

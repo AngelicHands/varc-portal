@@ -31,11 +31,14 @@ export async function importQsoAdifAction(formData: FormData) {
       return { ok: false as const, error: "Unauthorized" };
     }
 
-    const file = formData.get("file");
-    if (!(file instanceof File) || file.size === 0) {
+    const files = formData
+      .getAll("file")
+      .filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    if (files.length === 0) {
       return { ok: false as const, error: "Choose an ADIF file (.adi or .adif)" };
     }
-    if (!isAdifFilename(file.name)) {
+    const invalidFile = files.find((file) => !isAdifFilename(file.name));
+    if (invalidFile) {
       return {
         ok: false as const,
         error: "Upload an ADIF file with a .adi or .adif extension",
@@ -46,33 +49,37 @@ export async function importQsoAdifAction(formData: FormData) {
     const callsignCheck = await requireUserCallsign(session.user.id);
     if (!callsignCheck.ok) return callsignCheck;
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = parseAdifFile(buffer);
-    const fileSource = detectAdifImportSource(parsed.header);
-
     let skippedInvalid = 0;
     let skippedStationMismatch = 0;
     const errors: string[] = [];
     const candidates: AdifImportValues[] = [];
+    const detectedSources = new Set<string>();
 
-    for (const [index, record] of parsed.records.entries()) {
-      const mapped = mapAdifRecordToQsoInput(
-        record,
-        callsignCheck.callsign,
-        fileSource,
-      );
-      if (!mapped.ok) {
-        if (mapped.skip === "station_mismatch") {
-          skippedStationMismatch += 1;
-        } else {
-          skippedInvalid += 1;
-          if (errors.length < MAX_ERROR_LINES) {
-            errors.push(`Record ${index + 1}: ${mapped.reason}`);
+    for (const file of files) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const parsed = parseAdifFile(buffer);
+      const fileSource = detectAdifImportSource(parsed.header);
+      detectedSources.add(fileSource);
+
+      for (const [index, record] of parsed.records.entries()) {
+        const mapped = mapAdifRecordToQsoInput(
+          record,
+          callsignCheck.callsign,
+          fileSource,
+        );
+        if (!mapped.ok) {
+          if (mapped.skip === "station_mismatch") {
+            skippedStationMismatch += 1;
+          } else {
+            skippedInvalid += 1;
+            if (errors.length < MAX_ERROR_LINES) {
+              errors.push(`${file.name} record ${index + 1}: ${mapped.reason}`);
+            }
           }
+          continue;
         }
-        continue;
+        candidates.push(mapped.value);
       }
-      candidates.push(mapped.value);
     }
 
     if (candidates.length === 0) {
@@ -143,7 +150,9 @@ export async function importQsoAdifAction(formData: FormData) {
     return {
       ok: true as const,
       imported: toInsert.length,
-      source: fileSource,
+      files: files.length,
+      source:
+        detectedSources.size === 1 ? [...detectedSources][0] : "adif",
       skippedDuplicate,
       skippedInvalid,
       skippedStationMismatch,
