@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import {
   ensureUserCallsignIndex,
@@ -89,6 +90,10 @@ export async function updateProfileAction(raw: unknown) {
       revalidatePath(`/vi/${nextCallsign}`);
       revalidatePath(`/en/${nextCallsign}`);
     }
+    await invalidateQsoAndHamCache({
+      userId: session.user.id,
+      callsigns: [previousCallsign, nextCallsign],
+    });
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to update profile");
@@ -139,6 +144,10 @@ export async function updateSecuritySettingsAction(raw: unknown) {
       revalidatePath(`/vi/${callsign}`);
       revalidatePath(`/en/${callsign}`);
     }
+    await invalidateQsoAndHamCache({
+      userId: session.user.id,
+      callsigns: callsign ? [callsign] : [],
+    });
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to update security settings");

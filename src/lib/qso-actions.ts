@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import mongoose from "mongoose";
 import { auth } from "@/auth";
+import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import { enqueueQsoConfirmationRequest } from "@/lib/qso-confirmation";
 import { getQsoEmailLimit } from "@/lib/qso-email-limit";
@@ -86,6 +87,10 @@ export async function createQsoAction(raw: unknown) {
     }
 
     revalidateLogbook(callsignCheck.callsign);
+    await invalidateQsoAndHamCache({
+      userId: session.user.id,
+      callsigns: [callsignCheck.callsign],
+    });
     const qso = toQsoListItemDto(created);
     if (emailSkipped) {
       return {
@@ -161,6 +166,10 @@ export async function updateQsoAction(id: string, raw: unknown) {
     }
 
     revalidateLogbook(callsignCheck.ok ? callsignCheck.callsign : "");
+    await invalidateQsoAndHamCache({
+      userId: session.user.id,
+      callsigns: callsignCheck.ok ? [callsignCheck.callsign] : [],
+    });
     const qso = toQsoListItemDto(existing);
     if (emailSkipped) {
       return {
@@ -196,6 +205,10 @@ export async function deleteQsoAction(id: string) {
 
     const callsignCheck = await requireUserCallsign(session.user.id);
     revalidateLogbook(callsignCheck.ok ? callsignCheck.callsign : "");
+    await invalidateQsoAndHamCache({
+      userId: session.user.id,
+      callsigns: callsignCheck.ok ? [callsignCheck.callsign] : [],
+    });
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to delete QSO");
@@ -218,7 +231,12 @@ export async function adminDeleteQsoAction(id: string, userId: string) {
       return { ok: false as const, error: "Not found" };
     }
 
-    revalidateLogbook(await callsignForUser(userId));
+    const callsign = await callsignForUser(userId);
+    revalidateLogbook(callsign);
+    await invalidateQsoAndHamCache({
+      userId,
+      callsigns: callsign ? [callsign] : [],
+    });
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to delete QSO");
@@ -239,6 +257,10 @@ export async function deleteAllUserQsosAction(userId: string) {
     const callsign = await callsignForUser(userId);
     const result = await QsoLog.deleteMany({ userId });
     revalidateLogbook(callsign);
+    await invalidateQsoAndHamCache({
+      userId,
+      callsigns: callsign ? [callsign] : [],
+    });
     return { ok: true as const, deleted: result.deletedCount ?? 0 };
   } catch (error) {
     return failAction(error, "Failed to delete logbook");

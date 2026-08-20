@@ -1,4 +1,10 @@
 import type { ProfileGender } from "@/lib/account-types";
+import {
+  HAM_PUBLIC_CACHE_TTL_SEC,
+  QsoCacheKeys,
+  QsoCacheTags,
+  qsoCacheAside,
+} from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import { normalizeCallsignQuery } from "@/lib/callsigns-normalize";
 import { isReservedHamPath } from "@/lib/ham-reserved";
@@ -50,58 +56,64 @@ export async function findPublicHamByCallsign(
 ): Promise<PublicHamProfile | null> {
   const callsign = normalizeCallsignQuery(rawSign);
   if (!callsign || isReservedHamPath(callsign)) return null;
+  return qsoCacheAside(
+    QsoCacheKeys.hamPublic(callsign),
+    [QsoCacheTags.ham(callsign)],
+    async () => {
+      await connectDb();
+      await ensureUserCallsignIndex();
 
-  await connectDb();
-  await ensureUserCallsignIndex();
+      const [user, archive] = await Promise.all([
+        User.findOne({ callsign })
+          .select(
+            "_id name image callsign callsignVerified isProfilePublic isQsoPublic birthday gender",
+          )
+          .lean<
+            Pick<
+              UserDocument,
+              | "_id"
+              | "name"
+              | "image"
+              | "callsign"
+              | "callsignVerified"
+              | "isProfilePublic"
+              | "isQsoPublic"
+              | "birthday"
+              | "gender"
+            > | null
+          >(),
+        Callsign.exists({ sign: callsign }),
+      ]);
 
-  const [user, archive] = await Promise.all([
-    User.findOne({ callsign })
-      .select(
-        "_id name image callsign callsignVerified isProfilePublic isQsoPublic birthday gender",
-      )
-      .lean<
-        Pick<
-          UserDocument,
-          | "_id"
-          | "name"
-          | "image"
-          | "callsign"
-          | "callsignVerified"
-          | "isProfilePublic"
-          | "isQsoPublic"
-          | "birthday"
-          | "gender"
-        > | null
-      >(),
-    Callsign.exists({ sign: callsign }),
-  ]);
+      if (!user?.callsign) return null;
 
-  if (!user?.callsign) return null;
-
-  return {
-    id: String(user._id),
-    callsign: user.callsign,
-    name: user.name,
-    image: user.image ?? null,
-    callsignVerified: Boolean(user.callsignVerified),
-    isProfilePublic: user.isProfilePublic !== false,
-    isQsoPublic: Boolean(user.isQsoPublic),
-    birthday: user.birthday
-      ? (() => {
-          const date = new Date(user.birthday);
-          if (Number.isNaN(date.getTime())) return null;
-          const year = date.getUTCFullYear();
-          const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-          const day = String(date.getUTCDate()).padStart(2, "0");
-          return `${year}-${month}-${day}`;
-        })()
-      : null,
-    gender:
-      user.gender === "male" || user.gender === "female" || user.gender === "other"
-        ? user.gender
-        : "",
-    archiveExists: Boolean(archive),
-  };
+      return {
+        id: String(user._id),
+        callsign: user.callsign,
+        name: user.name,
+        image: user.image ?? null,
+        callsignVerified: Boolean(user.callsignVerified),
+        isProfilePublic: user.isProfilePublic !== false,
+        isQsoPublic: Boolean(user.isQsoPublic),
+        birthday: user.birthday
+          ? (() => {
+              const date = new Date(user.birthday);
+              if (Number.isNaN(date.getTime())) return null;
+              const year = date.getUTCFullYear();
+              const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+              const day = String(date.getUTCDate()).padStart(2, "0");
+              return `${year}-${month}-${day}`;
+            })()
+          : null,
+        gender:
+          user.gender === "male" || user.gender === "female" || user.gender === "other"
+            ? user.gender
+            : "",
+        archiveExists: Boolean(archive),
+      };
+    },
+    HAM_PUBLIC_CACHE_TTL_SEC,
+  );
 }
 
 export async function listHamsForSitemap(): Promise<

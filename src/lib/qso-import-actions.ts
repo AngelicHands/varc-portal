@@ -8,6 +8,7 @@ import {
   qsoDuplicateKey,
   qsoDuplicateKeyFromDoc,
 } from "@/lib/adif/import";
+import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import { requireUserCallsign } from "@/lib/qso";
 import { revalidateLogbook } from "@/lib/qso-revalidate";
@@ -127,6 +128,10 @@ export async function importQsoAdifAction(formData: FormData) {
     }
 
     revalidateLogbook(callsignCheck.callsign);
+    await invalidateQsoAndHamCache({
+      userId: session.user.id,
+      callsigns: [callsignCheck.callsign],
+    });
 
     return {
       ok: true as const,

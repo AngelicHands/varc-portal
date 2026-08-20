@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "crypto";
+import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import { createEmailJob } from "@/lib/mail/jobs";
 import { buildQsoConfirmationEmail } from "@/lib/mail/qso-confirmation-email";
@@ -143,6 +144,12 @@ export async function confirmQsoByToken(token: string): Promise<
   qso.confirmationTokenHash = "";
   qso.confirmationExpiresAt = null;
   await qso.save();
+  const owner = await User.findById(qso.userId).select("callsign").lean();
+  const callsign = owner?.callsign?.trim() ?? "";
+  await invalidateQsoAndHamCache({
+    userId: String(qso.userId),
+    callsigns: callsign ? [callsign] : [],
+  });
 
   return { ok: true, qsoId: String(qso._id) };
 }

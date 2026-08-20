@@ -91,6 +91,7 @@ import {
   invalidateCmsTags,
   type CmsCacheTag,
 } from "@/lib/cache/cms-cache";
+import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
 
 async function loadMenuParentRefs(location: "navigation" | "footer") {
   const docs = await MenuItem.find({ location, ...notDeletedFilter })
@@ -1844,6 +1845,10 @@ export async function updateAdminUserAction(
       revalidatePath(`/vi/${nextCallsign}`);
       revalidatePath(`/en/${nextCallsign}`);
     }
+    await invalidateQsoAndHamCache({
+      userId,
+      callsigns: [previousCallsign, nextCallsign],
+    });
     return { ok: true };
   } catch (error) {
     return failAction(error, "Failed to update user");
@@ -1886,6 +1891,10 @@ export async function verifyUserCallsignAction(
     revalidatePath(`/${callsign}`);
     revalidatePath(`/vi/${callsign}`);
     revalidatePath(`/en/${callsign}`);
+    await invalidateQsoAndHamCache({
+      userId,
+      callsigns: [callsign],
+    });
     return { ok: true, verified: Boolean(updated.callsignVerified) };
   } catch (error) {
     return failAction(error, "Failed to update callsign status");

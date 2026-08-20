@@ -1,4 +1,11 @@
 import type { QsoListItemDto } from "@/lib/account-types";
+import {
+  QSO_COUNT_CACHE_TTL_SEC,
+  QSO_LIST_CACHE_TTL_SEC,
+  QsoCacheKeys,
+  QsoCacheTags,
+  qsoCacheAside,
+} from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import { QsoLog } from "@/models/QsoLog";
 import { User } from "@/models/User";
@@ -39,18 +46,32 @@ export async function listUserQsos(
   userId: string,
   limit?: number,
 ): Promise<QsoListItemDto[]> {
-  await connectDb();
-  let query = QsoLog.find({ userId }).sort({ qsoAt: -1 });
-  if (limit != null && limit > 0) {
-    query = query.limit(limit);
-  }
-  const docs = await query.lean();
-  return docs.map((doc) => toQsoListItemDto(doc));
+  return qsoCacheAside(
+    QsoCacheKeys.qsoList(userId, limit),
+    [QsoCacheTags.user(userId)],
+    async () => {
+      await connectDb();
+      let query = QsoLog.find({ userId }).sort({ qsoAt: -1 });
+      if (limit != null && limit > 0) {
+        query = query.limit(limit);
+      }
+      const docs = await query.lean();
+      return docs.map((doc) => toQsoListItemDto(doc));
+    },
+    QSO_LIST_CACHE_TTL_SEC,
+  );
 }
 
 export async function countUserQsos(userId: string) {
-  await connectDb();
-  return QsoLog.countDocuments({ userId });
+  return qsoCacheAside(
+    QsoCacheKeys.qsoCount(userId),
+    [QsoCacheTags.user(userId)],
+    async () => {
+      await connectDb();
+      return QsoLog.countDocuments({ userId });
+    },
+    QSO_COUNT_CACHE_TTL_SEC,
+  );
 }
 
 export async function requireUserCallsign(userId: string) {
