@@ -521,3 +521,58 @@ body.ham-map-view footer[data-site-footer] {
 body.ham-map-view main {
   padding: 0;
 }
+
+/* Themed MapLibre popups on the ham operator map */
+.ham-map-popup {
+  z-index: 40 !important;
+}
+
+.maplibregl-marker {
+  z-index: 20;
+}
+
+.ham-map-popup .maplibregl-popup-content {
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  pointer-events: auto;
+}
+
+.ham-map-popup .maplibregl-popup-close-button {
+  font-size: 1rem;
+  padding: 0.15rem 0.4rem;
+  color: inherit;
+  opacity: 0.55;
+}
+
+.ham-map-popup .maplibregl-popup-close-button:hover {
+  background: transparent;
+  opacity: 1;
+}
+
+.ham-map-popup--light .maplibregl-popup-content {
+  background: rgba(255, 255, 255, 0.96);
+  color: #18181b;
+  border: 1px solid rgba(113, 113, 122, 0.35);
+}
+
+.ham-map-popup--light .maplibregl-popup-tip {
+  border-top-color: rgba(255, 255, 255, 0.96);
+}
+
+.ham-map-popup--dark .maplibregl-popup-content {
+  background: rgba(9, 9, 11, 0.96);
+  color: #fafafa;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ham-map-popup--dark .maplibregl-popup-tip {
+  border-top-color: rgba(9, 9, 11, 0.96);
+}
+
+.ham-map-popup--dark .maplibregl-popup-close-button {
+  color: #fafafa;
+}

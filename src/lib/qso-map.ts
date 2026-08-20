@@ -7,6 +7,14 @@ import {
   type MaidenheadBounds,
 } from "@/lib/maidenhead";
 
+export type QsoGridMarkerEntry = {
+  id: string;
+  workedCallsign: string;
+  qsoAt: string;
+  band: string;
+  mode: string;
+};
+
 export type QsoGridMarker = {
   grid: string;
   lat: number;
@@ -14,6 +22,7 @@ export type QsoGridMarker = {
   bounds: MaidenheadBounds;
   qsoCount: number;
   workedCallsigns: string[];
+  qsos: QsoGridMarkerEntry[];
 };
 
 export type HomeGridMarker = {
@@ -28,17 +37,35 @@ export type HomeGridMarker = {
 };
 
 export function aggregateQsoGridMarkers(qsos: QsoListItemDto[]): QsoGridMarker[] {
-  const byGrid = new Map<string, { qsoCount: number; workedCallsigns: string[] }>();
+  const byGrid = new Map<
+    string,
+    {
+      qsoCount: number;
+      workedCallsigns: string[];
+      qsos: QsoGridMarkerEntry[];
+    }
+  >();
 
   for (const qso of qsos) {
     const grid = normalizeGrid(qso.grid);
     if (!grid || !isValidMaidenheadGrid(grid)) continue;
 
-    const entry = byGrid.get(grid) ?? { qsoCount: 0, workedCallsigns: [] };
+    const entry = byGrid.get(grid) ?? {
+      qsoCount: 0,
+      workedCallsigns: [],
+      qsos: [],
+    };
     entry.qsoCount += 1;
     if (!entry.workedCallsigns.includes(qso.workedCallsign)) {
       entry.workedCallsigns.push(qso.workedCallsign);
     }
+    entry.qsos.push({
+      id: qso.id,
+      workedCallsign: qso.workedCallsign,
+      qsoAt: qso.qsoAt,
+      band: qso.band,
+      mode: qso.mode,
+    });
     byGrid.set(grid, entry);
   }
 
@@ -54,6 +81,7 @@ export function aggregateQsoGridMarkers(qsos: QsoListItemDto[]): QsoGridMarker[]
       bounds,
       qsoCount: stats.qsoCount,
       workedCallsigns: stats.workedCallsigns.sort(),
+      qsos: stats.qsos.sort((a, b) => b.qsoAt.localeCompare(a.qsoAt)),
     });
   }
 

@@ -144,6 +144,7 @@
       "homeLocationFromGps": "Từ vị trí đã lưu",
       "homeLocationFromGrid": "Tâm ô lưới (chưa có GPS)",
       "qsoCount": "{count, plural, one {# QSO} other {# QSO}}",
+      "qsoMarkerMore": "+{count} nữa",
       "mapUnavailable": "Không thể hiển thị bản đồ",
       "mapUnavailableHint": "Cần cấu hình NEXT_PUBLIC_MAPTILER_API_KEY để bật bản đồ.",
       "logbookPrivateNotice": "Các điểm QSO bị ẩn vì nhật ký đang ở chế độ riêng tư.",

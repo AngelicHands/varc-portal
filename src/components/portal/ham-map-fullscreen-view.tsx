@@ -41,10 +41,12 @@ import {
   formatMaidenheadDisplay,
   latLngToMaidenhead,
   maidenheadBounds,
+  maidenheadToLatLng,
   normalizeGrid,
   pointInMaidenheadBounds,
   truncateMaidenhead,
 } from "@/lib/maidenhead";
+import { formatQsoDateTime } from "@/lib/qso-datetime";
 
 const GRID_SOURCE_ID = "ham-grid-squares";
 const GRID_FILL_LAYER_ID = "ham-grid-squares-fill";
@@ -400,6 +402,120 @@ function formatTraceDistanceKm(km: number): string {
   return String(Math.round(km));
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function hamMapPopupClassName(theme: HamMapTheme | null): string {
+  return theme === "dark"
+    ? "ham-map-popup ham-map-popup--dark"
+    : "ham-map-popup ham-map-popup--light";
+}
+
+function buildQsoMarkerPopupHtml(
+  marker: QsoGridMarker,
+  labels: {
+    qsoCount: string;
+    more: string | null;
+  },
+  options?: {
+    highlightId?: string | null;
+    theme?: HamMapTheme | null;
+  },
+): string {
+  const highlightId = options?.highlightId ?? null;
+  const dark = options?.theme === "dark";
+  const muted = dark ? "rgba(255,255,255,0.62)" : "rgba(24,24,27,0.62)";
+  const soft = dark ? "rgba(255,255,255,0.78)" : "rgba(24,24,27,0.78)";
+  const highlightBg = dark
+    ? "rgba(56,189,248,0.16)"
+    : "rgba(2,132,199,0.1)";
+  const highlightBorder = dark
+    ? "rgba(125,211,252,0.45)"
+    : "rgba(3,105,161,0.35)";
+
+  const ordered = highlightId
+    ? [
+        ...marker.qsos.filter((qso) => qso.id === highlightId),
+        ...marker.qsos.filter((qso) => qso.id !== highlightId),
+      ]
+    : marker.qsos;
+
+  const maxRows = 8;
+  const rows = ordered.slice(0, maxRows);
+  const list = rows
+    .map((qso) => {
+      const meta = [qso.band, qso.mode].filter(Boolean).join(" · ");
+      const highlighted = highlightId === qso.id;
+      return `<div style="margin-top:8px;padding:6px 8px;border-radius:8px;${
+        highlighted
+          ? `background:${highlightBg};border:1px solid ${highlightBorder};`
+          : ""
+      }">
+        <div style="font-weight:600">${escapeHtml(qso.workedCallsign)}${
+          meta
+            ? ` <span style="font-weight:400;color:${soft}">· ${escapeHtml(meta)}</span>`
+            : ""
+        }</div>
+        <div style="font-size:11px;color:${muted};margin-top:2px">${escapeHtml(formatQsoDateTime(qso.qsoAt))}</div>
+      </div>`;
+    })
+    .join("");
+  const more = labels.more
+    ? `<div style="margin-top:8px;font-size:11px;color:${muted}">${escapeHtml(labels.more)}</div>`
+    : "";
+
+  return `<div style="min-width:11rem;max-width:16rem">
+    <div style="font-weight:700">${escapeHtml(formatMaidenheadDisplay(marker.grid))}</div>
+    <div style="font-size:12px;color:${muted};margin-top:2px">${escapeHtml(labels.qsoCount)}</div>
+    ${list}${more}
+  </div>`;
+}
+
+function bindMarkerPopupToggle(
+  marker: Marker,
+  onActivate?: () => void,
+) {
+  const el = marker.getElement();
+  el.style.cursor = "pointer";
+  // MapLibre 6 opens marker popups from map `click` when the target is the
+  // marker. Stopping propagation (to avoid grid-pick) means we must toggle
+  // the popup ourselves on the element click.
+  el.addEventListener("click", (event) => {
+    event.stopPropagation();
+    onActivate?.();
+    marker.togglePopup();
+  });
+  el.addEventListener("dblclick", (event) => {
+    event.stopPropagation();
+  });
+}
+
+function createQsoMarkerPopup(
+  marker: QsoGridMarker,
+  theme: HamMapTheme | null,
+  labels: { qsoCount: string; more: string | null },
+  highlightId?: string | null,
+): Popup {
+  return new Popup({
+    offset: 12,
+    maxWidth: "280px",
+    className: hamMapPopupClassName(theme),
+    closeButton: true,
+    // Avoid the same map click that opens the popup also closing it.
+    closeOnClick: false,
+  }).setHTML(
+    buildQsoMarkerPopupHtml(marker, labels, {
+      highlightId,
+      theme,
+    }),
+  );
+}
+
 function fitMapToBounds(
   map: MapLibreMap,
   bounds: LngLatBounds,
@@ -590,6 +706,7 @@ export function HamMapFullscreenView({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const qsoMarkersByGridRef = useRef(new Map<string, Marker>());
   const appliedThemeRef = useRef<HamMapTheme | null>(null);
   const hasFittedCameraRef = useRef(false);
   const [mapTheme, setMapTheme] = useState<HamMapTheme | null>(null);
@@ -639,14 +756,37 @@ export function HamMapFullscreenView({
   const mapPickedGrid = focusGrid ? null : pickedGrid;
   const mapQsoMarkers = useMemo(() => {
     if (!focusGrid) return qsoMarkers;
-    const match = qsoMarkers.find(
-      (marker) => truncateMaidenhead(marker.grid, 4) === focusGrid,
+
+    const fieldQsos = filteredQsos.filter(
+      (item) =>
+        Boolean(item.grid) && truncateMaidenhead(item.grid, 4) === focusGrid,
     );
-    if (!match) return [];
+    const aggregated = aggregateQsoGridMarkers(fieldQsos);
+    if (aggregated.length === 0) return [];
+
     const bounds = maidenheadBounds(focusGrid);
-    if (!bounds) return [];
-    return [{ ...match, grid: focusGrid, bounds }];
-  }, [focusGrid, qsoMarkers]);
+    const center = maidenheadToLatLng(focusGrid);
+    if (!bounds || !center) return [];
+
+    const qsos = aggregated
+      .flatMap((marker) => marker.qsos)
+      .sort((a, b) => b.qsoAt.localeCompare(a.qsoAt));
+    const workedCallsigns = [
+      ...new Set(qsos.map((item) => item.workedCallsign)),
+    ].sort();
+
+    return [
+      {
+        grid: focusGrid,
+        lat: center.lat,
+        lng: center.lng,
+        bounds,
+        qsoCount: qsos.length,
+        workedCallsigns,
+        qsos,
+      },
+    ];
+  }, [focusGrid, filteredQsos, qsoMarkers]);
 
   const activeHomeRef = useRef(activeHomeMarker);
   const pickedGridRef = useRef(pickedGrid);
@@ -782,6 +922,7 @@ export function HamMapFullscreenView({
     const applyMarkers = (fitCamera: boolean) => {
       markersRef.current.forEach((marker) => marker.remove());
       markersRef.current = [];
+      qsoMarkersByGridRef.current.clear();
 
       const bounds = new LngLatBounds();
       let hasBounds = false;
@@ -794,7 +935,7 @@ export function HamMapFullscreenView({
           mapQsoMarkers,
           showQsoMarkers,
           t("homeMarkerLabel"),
-          mapPickedGrid,
+          pickedGridRef.current,
           t("pickedGridLabel"),
         ),
         mapTheme,
@@ -829,11 +970,19 @@ export function HamMapFullscreenView({
         const marker = new Marker({ element: el })
           .setLngLat([mapHomeMarker.lng, mapHomeMarker.lat])
           .setPopup(
-            new Popup({ offset: 12 }).setHTML(
-              `<strong>${mapHomeMarker.callsign}</strong><br/>${t("homeMarkerLabel")}: ${formatMaidenheadDisplay(mapHomeMarker.grid)}<br/>${t("homeLocationLabel")}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${mapHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid")}</span>`,
+            new Popup({
+              offset: 12,
+              className: hamMapPopupClassName(mapTheme),
+              closeButton: true,
+              closeOnClick: false,
+            }).setHTML(
+              `<strong>${escapeHtml(mapHomeMarker.callsign)}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${escapeHtml(mapHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid"))}</span>`,
             ),
           )
           .addTo(map);
+        bindMarkerPopupToggle(marker, () => {
+          if (pickedGridRef.current) setPickedGrid(null);
+        });
         markersRef.current.push(marker);
       }
 
@@ -852,31 +1001,67 @@ export function HamMapFullscreenView({
       }
 
       if (showQsoMarkers) {
+        const showQsoPins = showLocationMarkersRef.current || focusMode;
+        let focusedQsoMarker: Marker | null = null;
         for (const item of mapQsoMarkers) {
-          if (showLocationMarkersRef.current) {
+          if (showQsoPins) {
             const el = document.createElement("div");
             el.className =
               mapTheme === "dark"
-                ? "h-3 w-3 rounded-full border border-white/80 bg-sky-400 shadow"
-                : "h-3 w-3 rounded-full border border-white bg-sky-600 shadow";
-            const callsignPreview = item.workedCallsigns.slice(0, 5).join(", ");
-            const extra =
-              item.workedCallsigns.length > 5
-                ? ` +${item.workedCallsigns.length - 5}`
-                : "";
+                ? "h-3.5 w-3.5 rounded-full border border-white/80 bg-sky-400 shadow"
+                : "h-3.5 w-3.5 rounded-full border border-white bg-sky-600 shadow";
+            const extra = Math.max(0, item.qsos.length - 8);
+            const selectedId = activeSelectedQsoIdRef.current;
+            const popup = createQsoMarkerPopup(
+              item,
+              mapTheme,
+              {
+                qsoCount: t("qsoCount", { count: item.qsoCount }),
+                more:
+                  extra > 0
+                    ? t("qsoMarkerMore", { count: extra })
+                    : null,
+              },
+              focusMode ? selectedId : null,
+            );
             const marker = new Marker({ element: el })
               .setLngLat([item.lng, item.lat])
-              .setPopup(
-                new Popup({ offset: 10 }).setHTML(
-                  `<strong>${formatMaidenheadDisplay(item.grid)}</strong><br/>${t("qsoCount", { count: item.qsoCount })}<br/><span style="font-size:12px">${callsignPreview}${extra}</span>`,
-                ),
-              )
+              .setPopup(popup)
               .addTo(map);
+            bindMarkerPopupToggle(marker, () => {
+              if (pickedGridRef.current) setPickedGrid(null);
+            });
             markersRef.current.push(marker);
+            qsoMarkersByGridRef.current.set(normalizeGrid(item.grid), marker);
+            focusedQsoMarker = marker;
           }
           bounds.extend([item.bounds.west, item.bounds.south]);
           bounds.extend([item.bounds.east, item.bounds.north]);
           hasBounds = true;
+        }
+
+        const selectedId = activeSelectedQsoIdRef.current;
+        const willFitFocus =
+          focusMode &&
+          hasBounds &&
+          Boolean(selectedId) &&
+          lastFittedQsoIdRef.current !== selectedId;
+
+        if (focusMode && focusedQsoMarker) {
+          const markerToOpen = focusedQsoMarker;
+          const openPopup = () => {
+            const popup = markerToOpen.getPopup();
+            if (popup && !popup.isOpen()) {
+              markerToOpen.togglePopup();
+            }
+          };
+          if (willFitFocus) {
+            map.once("moveend", openPopup);
+            // Fallback if fitBounds does not emit moveend.
+            window.setTimeout(openPopup, 900);
+          } else {
+            window.setTimeout(openPopup, 0);
+          }
         }
       }
 
@@ -910,7 +1095,7 @@ export function HamMapFullscreenView({
     return () => {
       map.off("style.load", onStyleLoad);
     };
-  }, [activeHomeMarker, focusGrid, mapHomeMarker, mapQsoMarkers, mapPickedGrid, showQsoMarkers, mapTheme, mapTilerKey, t]);
+  }, [activeHomeMarker, focusGrid, mapHomeMarker, mapQsoMarkers, showQsoMarkers, showLocationMarkers, mapTheme, mapTilerKey, t]);
 
   // Keep pick rectangle on the grid layer without re-fitting the camera.
   useEffect(() => {
@@ -948,65 +1133,6 @@ export function HamMapFullscreenView({
     if (!map || !mapTilerKey || !map.isStyleLoaded()) return;
     setGridRectangleVisibility(map, showGridRectangles);
   }, [showGridRectangles, mapTilerKey, mapTheme]);
-
-  // Rebuild pin markers when the location-marker toggle changes (no camera jump).
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapTilerKey || !map.isStyleLoaded()) return;
-
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current = [];
-    if (!showLocationMarkers) return;
-
-    if (mapHomeMarker) {
-      const el = document.createElement("div");
-      el.className =
-        "flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-lg";
-      markersRef.current.push(
-        new Marker({ element: el })
-          .setLngLat([mapHomeMarker.lng, mapHomeMarker.lat])
-          .setPopup(
-            new Popup({ offset: 12 }).setHTML(
-              `<strong>${mapHomeMarker.callsign}</strong><br/>${t("homeMarkerLabel")}: ${formatMaidenheadDisplay(mapHomeMarker.grid)}<br/>${t("homeLocationLabel")}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${mapHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid")}</span>`,
-            ),
-          )
-          .addTo(map),
-      );
-    }
-
-    if (showQsoMarkers) {
-      for (const item of mapQsoMarkers) {
-        const el = document.createElement("div");
-        el.className =
-          mapTheme === "dark"
-            ? "h-3 w-3 rounded-full border border-white/80 bg-sky-400 shadow"
-            : "h-3 w-3 rounded-full border border-white bg-sky-600 shadow";
-        const callsignPreview = item.workedCallsigns.slice(0, 5).join(", ");
-        const extra =
-          item.workedCallsigns.length > 5
-            ? ` +${item.workedCallsigns.length - 5}`
-            : "";
-        markersRef.current.push(
-          new Marker({ element: el })
-            .setLngLat([item.lng, item.lat])
-            .setPopup(
-              new Popup({ offset: 10 }).setHTML(
-                `<strong>${formatMaidenheadDisplay(item.grid)}</strong><br/>${t("qsoCount", { count: item.qsoCount })}<br/><span style="font-size:12px">${callsignPreview}${extra}</span>`,
-              ),
-            )
-            .addTo(map),
-        );
-      }
-    }
-  }, [
-    showLocationMarkers,
-    mapHomeMarker,
-    mapQsoMarkers,
-    showQsoMarkers,
-    mapTheme,
-    mapTilerKey,
-    t,
-  ]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1097,7 +1223,18 @@ export function HamMapFullscreenView({
     const map = mapRef.current;
     if (!map || !mapTilerKey || !themeReady) return;
 
-    const onMapClick = (event: { lngLat: { lat: number; lng: number } }) => {
+    const onMapClick = (event: {
+      lngLat: { lat: number; lng: number };
+      originalEvent?: Event;
+    }) => {
+      const target = event.originalEvent?.target;
+      if (
+        target instanceof Element &&
+        target.closest(".maplibregl-marker, .maplibregl-popup, .ham-map-popup")
+      ) {
+        return;
+      }
+
       const { lat, lng } = event.lngLat;
       const home = activeHomeRef.current;
 
@@ -1120,6 +1257,12 @@ export function HamMapFullscreenView({
 
       const bounds = maidenheadBounds(grid);
       if (!bounds) return;
+
+      // Close any open QSO popups when picking an empty grid square.
+      for (const marker of qsoMarkersByGridRef.current.values()) {
+        const popup = marker.getPopup();
+        if (popup?.isOpen()) marker.togglePopup();
+      }
 
       setPickedGrid({ grid, bounds, lat, lng });
     };

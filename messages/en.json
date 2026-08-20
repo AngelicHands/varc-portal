@@ -144,6 +144,7 @@
       "homeLocationFromGps": "From saved location",
       "homeLocationFromGrid": "Grid center (no GPS saved)",
       "qsoCount": "{count, plural, one {# QSO} other {# QSOs}}",
+      "qsoMarkerMore": "+{count} more",
       "mapUnavailable": "Map unavailable",
       "mapUnavailableHint": "Set NEXT_PUBLIC_MAPTILER_API_KEY to enable the map.",
       "logbookPrivateNotice": "QSO log markers are hidden because this logbook is private.",
