@@ -180,9 +180,31 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
           />
         ) : null}
         <div className="min-w-0">
-          <h1 className="font-display text-5xl tracking-wide text-foreground md:text-6xl">
-            {ham.callsign}
-          </h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-display text-5xl tracking-wide text-foreground md:text-6xl">
+              {ham.callsign}
+            </h1>
+            {verified ? (
+              <span
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-700"
+                aria-label="Verified callsign"
+                title="Verified callsign"
+              >
+                <svg
+                  viewBox="0 0 16 16"
+                  className="h-4 w-4"
+                  aria-hidden
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3.5 8.5 6.5 11.5 12.5 5.5" />
+                </svg>
+              </span>
+            ) : null}
+          </div>
           {canViewProfile && !verified ? (
             <p className="mt-2 text-xs text-amber-800">{t("unverified")}</p>
           ) : null}
@@ -236,9 +258,12 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
                 name: profile.name,
                 email: profile.email,
                 callsign: profile.callsign,
+                callsignVerified: profile.callsignVerified,
+                callsignVerificationStatus: profile.callsignVerificationStatus,
                 birthday: profile.birthday,
                 gender: profile.gender,
               }}
+              initialDocuments={documents ?? []}
             />
           ) : canViewProfile ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -252,7 +277,29 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
                 <p className="text-xs font-medium uppercase tracking-wide text-muted">
                   {accountT("callsign")}
                 </p>
-                <p className="mt-2 text-sm text-foreground">{ham.callsign}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <p className="text-sm text-foreground">{ham.callsign}</p>
+                  {verified ? (
+                    <span
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700"
+                      aria-label="Verified callsign"
+                      title="Verified callsign"
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        className="h-3.5 w-3.5"
+                        aria-hidden
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M3.5 8.5 6.5 11.5 12.5 5.5" />
+                      </svg>
+                    </span>
+                  ) : null}
+                </div>
               </div>
               {genderLabel || birthdayLabel ? (
                 <div className="rounded-lg border border-border bg-surface p-4 md:p-5">

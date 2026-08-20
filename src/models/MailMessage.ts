@@ -4,6 +4,7 @@ export const MAIL_MESSAGE_KINDS = [
   "form_submission_copy",
   "backup_artifact",
   "qso_confirmation",
+  "callsign_verification_request",
 ] as const;
 export type MailMessageKind = (typeof MAIL_MESSAGE_KINDS)[number];
 

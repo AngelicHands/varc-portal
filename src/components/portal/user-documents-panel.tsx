@@ -32,6 +32,7 @@ type Props = {
   canDelete?: boolean;
   labels?: Partial<DocumentLabels>;
   tone?: "portal" | "admin";
+  onDocumentsChange?: (documents: UserDocumentDto[]) => void;
 };
 
 type PendingPreview = {
@@ -116,6 +117,7 @@ export function UserDocumentsPanel({
   canDelete = true,
   labels: labelsProp,
   tone = "portal",
+  onDocumentsChange,
 }: Props) {
   const t = { ...DEFAULT_LABELS, ...labelsProp };
   const cardClass =
@@ -188,7 +190,9 @@ export function UserDocumentsPanel({
       if (!response.ok || !payload.ok || !payload.document) {
         throw new Error(payload.error || t.uploadFailed);
       }
-      setDocuments((current) => [payload.document!, ...current]);
+      const next = [payload.document, ...documents];
+      setDocuments(next);
+      onDocumentsChange?.(next);
     } catch (uploadError) {
       setError(
         uploadError instanceof Error ? uploadError.message : t.uploadFailed,
@@ -213,7 +217,9 @@ export function UserDocumentsPanel({
         setError(payload.error || t.deleteFailed);
         return;
       }
-      setDocuments((current) => current.filter((doc) => doc.id !== id));
+      const next = documents.filter((doc) => doc.id !== id);
+      setDocuments(next);
+      onDocumentsChange?.(next);
     });
   }
 

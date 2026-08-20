@@ -8,7 +8,10 @@ import {
   ensureUserCallsignIndex,
   findUserByAssignedCallsign,
 } from "@/lib/ham-profile";
+import { createEmailJob } from "@/lib/mail/jobs";
+import { buildCallsignVerificationRequestEmail } from "@/lib/mail/callsign-verification-email";
 import { failAction } from "@/lib/safe-error";
+import { listUserDocuments } from "@/lib/user-documents";
 import { profileFormSchema } from "@/lib/validations/qso";
 import { User } from "@/models/User";
 
@@ -18,6 +21,13 @@ async function requireAccountSession() {
     return null;
   }
   return session;
+}
+
+function revalidateUserCallsignPaths(callsign: string) {
+  if (!callsign) return;
+  revalidatePath(`/${callsign}`);
+  revalidatePath(`/vi/${callsign}`);
+  revalidatePath(`/en/${callsign}`);
 }
 
 export async function updateProfileAction(raw: unknown) {
@@ -65,6 +75,10 @@ export async function updateProfileAction(raw: unknown) {
         Boolean(nextCallsign) &&
         !callsignChanged &&
         Boolean(user.callsignVerified),
+      callsignVerificationStatus:
+        Boolean(nextCallsign) && !callsignChanged && Boolean(user.callsignVerified)
+          ? "verified"
+          : "unverified",
     };
     if (birthdayIso) {
       update.birthday = new Date(`${birthdayIso}T12:00:00.000Z`);
@@ -80,16 +94,8 @@ export async function updateProfileAction(raw: unknown) {
 
     revalidatePath("/account");
     revalidatePath("/logbook");
-    if (previousCallsign) {
-      revalidatePath(`/${previousCallsign}`);
-      revalidatePath(`/vi/${previousCallsign}`);
-      revalidatePath(`/en/${previousCallsign}`);
-    }
-    if (nextCallsign) {
-      revalidatePath(`/${nextCallsign}`);
-      revalidatePath(`/vi/${nextCallsign}`);
-      revalidatePath(`/en/${nextCallsign}`);
-    }
+    revalidateUserCallsignPaths(previousCallsign);
+    revalidateUserCallsignPaths(nextCallsign);
     await invalidateQsoAndHamCache({
       userId: session.user.id,
       callsigns: [previousCallsign, nextCallsign],
@@ -97,6 +103,110 @@ export async function updateProfileAction(raw: unknown) {
     return { ok: true as const };
   } catch (error) {
     return failAction(error, "Failed to update profile");
+  }
+}
+
+export async function requestCallsignVerificationAction(): Promise<
+  | { ok: true; status: "pending" }
+  | { ok: false; error: string; missing?: Array<"certificate" | "license"> }
+> {
+  try {
+    const session = await requireAccountSession();
+    if (!session) {
+      return { ok: false, error: "Unauthorized" };
+    }
+
+    await connectDb();
+    const user = await User.findById(session.user.id);
+    if (!user) {
+      return { ok: false, error: "User not found" };
+    }
+
+    const callsign = user.callsign?.trim().toUpperCase() ?? "";
+    if (!callsign) {
+      return { ok: false, error: "Set your callsign before requesting verification" };
+    }
+
+    const documents = await listUserDocuments(session.user.id);
+    const hasCertificate = documents.some((doc) => doc.kind === "certificate");
+    const hasLicense = documents.some((doc) => doc.kind === "license");
+    const missing = [
+      ...(hasCertificate ? [] : (["certificate"] as const)),
+      ...(hasLicense ? [] : (["license"] as const)),
+    ];
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        error: "Upload both certificate and license before requesting verification",
+        missing: [...missing],
+      };
+    }
+
+    const status =
+      user.callsignVerificationStatus === "pending" ||
+      user.callsignVerificationStatus === "verified" ||
+      user.callsignVerificationStatus === "rejected"
+        ? user.callsignVerificationStatus
+        : Boolean(user.callsignVerified)
+          ? "verified"
+          : "unverified";
+
+    if (status === "pending") {
+      return { ok: false, error: "This callsign is already pending verification" };
+    }
+    if (status === "verified") {
+      return { ok: false, error: "This callsign is already verified" };
+    }
+
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          callsignVerified: false,
+          callsignVerificationStatus: "pending",
+        },
+      },
+      { strict: false },
+    );
+
+    const reviewers = await User.find({
+      role: { $in: ["setup_admin", "system_admin"] },
+      email: { $exists: true, $ne: "" },
+    })
+      .select("email")
+      .lean();
+
+    const message = buildCallsignVerificationRequestEmail({
+      userId: String(user._id),
+      name: user.name?.trim() || callsign,
+      email: user.email?.trim() || "",
+      callsign,
+    });
+
+    await Promise.all(
+      reviewers.map((reviewer) =>
+        createEmailJob({
+          kind: "callsign_verification_request",
+          to: reviewer.email,
+          subject: message.subject,
+          text: message.text,
+          html: message.html,
+          relatedId: String(user._id),
+        }),
+      ),
+    );
+
+    revalidatePath("/account");
+    revalidatePath("/logbook");
+    revalidateUserCallsignPaths(callsign);
+    await invalidateQsoAndHamCache({
+      userId: session.user.id,
+      callsigns: [callsign],
+    });
+
+    return { ok: true, status: "pending" };
+  } catch (error) {
+    return failAction(error, "Failed to request callsign verification");
   }
 }
 

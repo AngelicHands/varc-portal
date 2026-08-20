@@ -123,5 +123,8 @@ export function mailKindLabel(kind: MailMessageKind): string {
   if (kind === "form_submission_copy") return "Form submission copy";
   if (kind === "backup_artifact") return "Backup artifact";
   if (kind === "qso_confirmation") return "QSO confirmation";
+  if (kind === "callsign_verification_request") {
+    return "Callsign verification request";
+  }
   return kind;
 }

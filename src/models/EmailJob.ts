@@ -14,7 +14,12 @@ const EmailJobSchema = new Schema(
   {
     kind: {
       type: String,
-      enum: ["form_submission_copy", "backup_artifact", "qso_confirmation"],
+      enum: [
+        "form_submission_copy",
+        "backup_artifact",
+        "qso_confirmation",
+        "callsign_verification_request",
+      ],
       required: true,
       index: true,
     },

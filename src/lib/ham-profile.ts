@@ -196,7 +196,13 @@ async function reconcileDuplicateUserCallsigns() {
     if (extras.length === 0) continue;
     await User.updateMany(
       { _id: { $in: extras } },
-      { $set: { callsign: "", callsignVerified: false } },
+      {
+        $set: {
+          callsign: "",
+          callsignVerified: false,
+          callsignVerificationStatus: "unverified",
+        },
+      },
     );
   }
 }

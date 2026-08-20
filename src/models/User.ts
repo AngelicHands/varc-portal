@@ -1,6 +1,13 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 import type { Role } from "@/lib/roles";
 
+export const CALLSIGN_VERIFICATION_STATUSES = [
+  "unverified",
+  "pending",
+  "verified",
+  "rejected",
+] as const;
+
 const UserSchema = new Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -14,6 +21,11 @@ const UserSchema = new Schema(
     image: { type: String, default: null },
     callsign: { type: String, default: "", trim: true, uppercase: true },
     callsignVerified: { type: Boolean, default: false },
+    callsignVerificationStatus: {
+      type: String,
+      enum: CALLSIGN_VERIFICATION_STATUSES,
+      default: "unverified",
+    },
     isProfilePublic: { type: Boolean, default: true },
     isQsoPublic: { type: Boolean, default: false },
     birthday: { type: Date, default: null },

@@ -102,7 +102,30 @@ export default async function AdminUserDetailPage({ params }: Props) {
   const roleLabel =
     roles.find((role) => role.key === roleKey)?.label || roleKey;
   const callsign = user.callsign?.trim() || "";
-  const callsignVerified = Boolean(user.callsignVerified) && Boolean(callsign);
+  const callsignVerificationStatus =
+    user.callsignVerificationStatus === "pending" ||
+    user.callsignVerificationStatus === "verified" ||
+    user.callsignVerificationStatus === "rejected"
+      ? user.callsignVerificationStatus
+      : Boolean(user.callsignVerified)
+        ? "verified"
+        : "unverified";
+  const callsignStatusLabel =
+    callsignVerificationStatus === "verified"
+      ? "verified"
+      : callsignVerificationStatus === "pending"
+        ? "pending verification"
+        : callsignVerificationStatus === "rejected"
+          ? "rejected"
+          : "not verified";
+  const callsignStatusClass =
+    callsignVerificationStatus === "verified"
+      ? "text-green-700"
+      : callsignVerificationStatus === "pending"
+        ? "text-blue-700"
+        : callsignVerificationStatus === "rejected"
+          ? "text-red-700"
+          : "text-amber-700";
   const certificateCount = documents.filter(
     (doc) => doc.kind === "certificate",
   ).length;
@@ -125,10 +148,10 @@ export default async function AdminUserDetailPage({ params }: Props) {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <CallsignStatusCard
-          key={`${callsign}:${callsignVerified ? "1" : "0"}`}
+          key={`${callsign}:${callsignVerificationStatus}`}
           userId={id}
           callsign={callsign}
-          verified={callsignVerified}
+          status={callsignVerificationStatus}
         />
         <StatCard label="Role" value={roleLabel} />
         <StatCard
@@ -174,11 +197,9 @@ export default async function AdminUserDetailPage({ params }: Props) {
                 {callsign || "—"}
                 {callsign ? (
                   <span
-                    className={`ml-2 font-normal normal-case ${
-                      callsignVerified ? "text-green-700" : "text-amber-700"
-                    }`}
+                    className={`ml-2 font-normal normal-case ${callsignStatusClass}`}
                   >
-                    ({callsignVerified ? "verified" : "not verified"})
+                    ({callsignStatusLabel})
                   </span>
                 ) : null}
               </dd>

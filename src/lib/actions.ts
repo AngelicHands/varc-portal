@@ -1804,6 +1804,7 @@ export async function updateAdminUserAction(
       Boolean(nextCallsign) &&
       !callsignChanged &&
       Boolean(user.callsignVerified);
+    const nextVerificationStatus = nextVerified ? "verified" : "unverified";
 
     await User.updateOne(
       { _id: user._id },
@@ -1812,6 +1813,7 @@ export async function updateAdminUserAction(
           name: parsed.data.name,
           callsign: nextCallsign,
           callsignVerified: nextVerified,
+          callsignVerificationStatus: nextVerificationStatus,
         },
       },
       { strict: false },
@@ -1857,8 +1859,11 @@ export async function updateAdminUserAction(
 
 export async function verifyUserCallsignAction(
   userId: string,
-  verified = true,
-): Promise<{ ok: true; verified: boolean } | { ok: false; error: string }> {
+  decision: "approve" | "reject",
+): Promise<
+  | { ok: true; verified: boolean; status: "verified" | "rejected" }
+  | { ok: false; error: string }
+> {
   try {
     await requireUserManager();
     await connectDb();
@@ -1872,7 +1877,13 @@ export async function verifyUserCallsignAction(
 
     const updated = await User.findByIdAndUpdate(
       userId,
-      { $set: { callsignVerified: verified } },
+      {
+        $set: {
+          callsignVerified: decision === "approve",
+          callsignVerificationStatus:
+            decision === "approve" ? "verified" : "rejected",
+        },
+      },
       { returnDocument: "after", runValidators: true, strict: false },
     );
     if (!updated) return { ok: false, error: "User not found" };
@@ -1895,7 +1906,12 @@ export async function verifyUserCallsignAction(
       userId,
       callsigns: [callsign],
     });
-    return { ok: true, verified: Boolean(updated.callsignVerified) };
+    return {
+      ok: true,
+      verified: Boolean(updated.callsignVerified),
+      status:
+        updated.callsignVerificationStatus === "rejected" ? "rejected" : "verified",
+    };
   } catch (error) {
     return failAction(error, "Failed to update callsign status");
   }

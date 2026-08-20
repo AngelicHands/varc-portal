@@ -8,7 +8,8 @@ export type EmailJobStatus =
 export type EmailJobKind =
   | "form_submission_copy"
   | "backup_artifact"
-  | "qso_confirmation";
+  | "qso_confirmation"
+  | "callsign_verification_request";
 
 export type AdminEmailJob = {
   id: string;
@@ -31,5 +32,8 @@ export function emailJobKindLabel(kind: EmailJobKind): string {
   if (kind === "form_submission_copy") return "Form submission copy";
   if (kind === "backup_artifact") return "Backup artifact";
   if (kind === "qso_confirmation") return "QSO confirmation";
+  if (kind === "callsign_verification_request") {
+    return "Callsign verification request";
+  }
   return kind;
 }

@@ -4,6 +4,7 @@ import { AccountProfileForm } from "@/components/portal/account-profile-form";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { getAccountProfile } from "@/lib/account";
 import { requirePortalSession } from "@/lib/portal-access";
+import { listUserDocuments } from "@/lib/user-documents";
 import { redirect } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -30,7 +31,10 @@ export default async function AccountPage({ params, searchParams }: Props) {
   const { setup } = await searchParams;
   const session = await requirePortalSession(locale);
   const t = await getTranslations("account");
-  const profile = await getAccountProfile(session.user.id, session.user.email);
+  const [profile, documents] = await Promise.all([
+    getAccountProfile(session.user.id, session.user.email),
+    listUserDocuments(session.user.id),
+  ]);
 
   if (!profile) {
     return (
@@ -71,9 +75,12 @@ export default async function AccountPage({ params, searchParams }: Props) {
             name: profile.name,
             email: profile.email,
             callsign: profile.callsign,
+            callsignVerified: profile.callsignVerified,
+            callsignVerificationStatus: profile.callsignVerificationStatus,
             birthday: profile.birthday,
             gender: profile.gender,
           }}
+          initialDocuments={documents}
         />
       </section>
     </div>

@@ -34,6 +34,15 @@ export async function getAccountProfile(
     name: user.name?.trim() ?? "",
     email: user.email ?? "",
     callsign: user.callsign?.trim() ?? "",
+    callsignVerified: Boolean(user.callsignVerified),
+    callsignVerificationStatus:
+      user.callsignVerificationStatus === "pending" ||
+      user.callsignVerificationStatus === "verified" ||
+      user.callsignVerificationStatus === "rejected"
+        ? user.callsignVerificationStatus
+        : Boolean(user.callsignVerified)
+          ? "verified"
+          : "unverified",
     birthday: toDateOnly(user.birthday),
     gender: toGender(user.gender),
     isProfilePublic: user.isProfilePublic !== false,

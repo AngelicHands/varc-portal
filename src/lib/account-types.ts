@@ -11,12 +11,19 @@ export type UserDocumentDto = {
 };
 
 export type ProfileGender = "male" | "female" | "other" | "";
+export type CallsignVerificationStatus =
+  | "unverified"
+  | "pending"
+  | "verified"
+  | "rejected";
 
 export type AccountProfileDto = {
   id: string;
   name: string;
   email: string;
   callsign: string;
+  callsignVerified: boolean;
+  callsignVerificationStatus: CallsignVerificationStatus;
   birthday: string | null;
   gender: ProfileGender;
   isProfilePublic: boolean;
