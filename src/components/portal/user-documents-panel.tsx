@@ -223,61 +223,6 @@ export function UserDocumentsPanel({
     });
   }
 
-  function renderDocumentRow(doc: UserDocumentDto) {
-    return (
-      <li
-        key={doc.id}
-        className={rowClass}
-      >
-        <DocumentThumbnail
-          contentType={doc.contentType}
-          src={previewUrl(doc.downloadUrl)}
-          alt={doc.originalName}
-          href={doc.downloadUrl}
-        />
-        <div className="min-w-0 flex-1">
-          <a
-            href={doc.downloadUrl}
-            className="truncate font-medium text-accent hover:underline"
-          >
-            {doc.originalName}
-          </a>
-          <p className="text-xs text-muted">
-            {formatBytes(doc.size)} · {new Date(doc.createdAt).toLocaleString()}
-          </p>
-        </div>
-        {canDelete ? (
-          <button
-            type="button"
-            disabled={pendingDelete}
-            onClick={() => onDelete(doc.id)}
-            className="shrink-0 text-xs text-red-600 hover:underline disabled:opacity-50"
-          >
-            {t.delete}
-          </button>
-        ) : null}
-      </li>
-    );
-  }
-
-  function renderPendingRow(preview: PendingPreview) {
-    return (
-      <li className={`${rowClass} opacity-80`}>
-        <DocumentThumbnail
-          contentType={preview.contentType}
-          src={preview.url}
-          alt={preview.originalName}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-foreground">{preview.originalName}</p>
-          <p className={`text-xs ${tone === "admin" ? "text-gray-500" : "text-muted"}`}>
-            {t.uploading}
-          </p>
-        </div>
-      </li>
-    );
-  }
-
   function renderSection(kind: UserDocumentKind, title: string) {
     const items = grouped[kind];
     const showPending = pendingPreview?.kind === kind;
@@ -305,8 +250,57 @@ export function UserDocumentsPanel({
           <p className={`mt-3 ${mutedClass}`}>{t.noDocuments}</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {showPending && pendingPreview ? renderPendingRow(pendingPreview) : null}
-            {items.map((doc) => renderDocumentRow(doc))}
+            {showPending && pendingPreview ? (
+              <li key="pending-upload" className={`${rowClass} opacity-80`}>
+                <DocumentThumbnail
+                  contentType={pendingPreview.contentType}
+                  src={pendingPreview.url}
+                  alt={pendingPreview.originalName}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-foreground">
+                    {pendingPreview.originalName}
+                  </p>
+                  <p
+                    className={`text-xs ${tone === "admin" ? "text-gray-500" : "text-muted"}`}
+                  >
+                    {t.uploading}
+                  </p>
+                </div>
+              </li>
+            ) : null}
+            {items.map((doc) => (
+              <li key={doc.id} className={rowClass}>
+                <DocumentThumbnail
+                  contentType={doc.contentType}
+                  src={previewUrl(doc.downloadUrl)}
+                  alt={doc.originalName}
+                  href={doc.downloadUrl}
+                />
+                <div className="min-w-0 flex-1">
+                  <a
+                    href={doc.downloadUrl}
+                    className="truncate font-medium text-accent hover:underline"
+                  >
+                    {doc.originalName}
+                  </a>
+                  <p className="text-xs text-muted">
+                    {formatBytes(doc.size)} ·{" "}
+                    {new Date(doc.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                {canDelete ? (
+                  <button
+                    type="button"
+                    disabled={pendingDelete}
+                    onClick={() => onDelete(doc.id)}
+                    className="shrink-0 text-xs text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    {t.delete}
+                  </button>
+                ) : null}
+              </li>
+            ))}
           </ul>
         )}
       </section>

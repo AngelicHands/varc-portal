@@ -156,7 +156,8 @@
       "homeLocationPromptWorking": "Getting location…",
       "homeLocationUnsupported": "Geolocation is not available in this browser.",
       "homeLocationFailed": "Could not get your location. Check browser permissions and try again.",
-      "focusHomeGrid": "Center map on home grid"
+      "focusHomeGrid": "Center map on home grid",
+      "pickedGridLabel": "Selected grid"
     }
   },
   "account": {

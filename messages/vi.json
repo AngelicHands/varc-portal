@@ -156,7 +156,8 @@
       "homeLocationPromptWorking": "Đang lấy vị trí…",
       "homeLocationUnsupported": "Trình duyệt này không hỗ trợ định vị.",
       "homeLocationFailed": "Không lấy được vị trí. Kiểm tra quyền trình duyệt và thử lại.",
-      "focusHomeGrid": "Đưa bản đồ về Grid Location"
+      "focusHomeGrid": "Đưa bản đồ về Grid Location",
+      "pickedGridLabel": "Ô lưới đã chọn"
     }
   },
   "account": {

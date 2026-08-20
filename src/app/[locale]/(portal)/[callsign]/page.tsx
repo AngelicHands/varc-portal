@@ -233,7 +233,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
           />
         ) : null}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <h1 className="font-display text-5xl tracking-wide text-foreground md:text-6xl">
                 {ham.callsign}
@@ -259,15 +259,42 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
                 </span>
               ) : null}
             </div>
-            {canEdit || canAdminManage ? (
-              <p className="shrink-0 text-right text-sm text-muted">
-                {accountT("securityProfileAccess")}:{" "}
-                <span className="font-medium text-foreground">
-                  {ham.isProfilePublic
-                    ? accountT("securityStatusPublic")
-                    : accountT("securityStatusPrivate")}
-                </span>
-              </p>
+            {canEdit || canAdminManage || mapAccess ? (
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                {canEdit || canAdminManage ? (
+                  <p className="text-right text-sm text-muted">
+                    {accountT("securityProfileAccess")}:{" "}
+                    <span className="font-medium text-foreground">
+                      {ham.isProfilePublic
+                        ? accountT("securityStatusPublic")
+                        : accountT("securityStatusPrivate")}
+                    </span>
+                  </p>
+                ) : null}
+                {mapAccess ? (
+                  <Link
+                    href={{
+                      pathname: "/[callsign]",
+                      params: { callsign: ham.callsign },
+                      query: { view: "map" },
+                    }}
+                    className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-foreground transition hover:border-accent/40 hover:text-accent"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4 w-4"
+                      aria-hidden
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <path d="M3 6.5 12 2l9 4.5v11L12 22l-9-4.5v-11Z" />
+                      <path d="M12 22V11M3 6.5 12 11l9-4.5" />
+                    </svg>
+                    {t("viewMap")}
+                  </Link>
+                ) : null}
+              </div>
             ) : null}
           </div>
           {canViewProfile && !verified ? (
@@ -293,32 +320,6 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
             className="text-accent hover:underline"
           >
             {t("licenseHistory")}
-          </Link>
-        </p>
-      ) : null}
-
-      {mapAccess ? (
-        <p className="mt-4 text-sm">
-          <Link
-            href={{
-              pathname: "/[callsign]",
-              params: { callsign: ham.callsign },
-              query: { view: "map" },
-            }}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 font-medium text-foreground transition hover:border-accent/40 hover:text-accent"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="h-4 w-4"
-              aria-hidden
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            >
-              <path d="M3 6.5 12 2l9 4.5v11L12 22l-9-4.5v-11Z" />
-              <path d="M12 22V11M3 6.5 12 11l9-4.5" />
-            </svg>
-            {t("viewMap")}
           </Link>
         </p>
       ) : null}

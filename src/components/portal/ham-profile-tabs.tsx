@@ -95,11 +95,17 @@ export function HamProfileTabs({
         aria-labelledby={`ham-tab-${active}`}
         className="pt-8"
       >
-        {active === "profile" ? profile : null}
-        {active === "logbook" ? logbook : null}
-        {active === "documents" ? documents : null}
-        {active === "qsl" ? qsl : null}
-        {active === "security" ? security : null}
+        {active === "profile"
+          ? profile
+          : active === "logbook"
+            ? logbook
+            : active === "documents"
+              ? documents
+              : active === "qsl"
+                ? qsl
+                : active === "security"
+                  ? security
+                  : null}
       </div>
     </div>
   );

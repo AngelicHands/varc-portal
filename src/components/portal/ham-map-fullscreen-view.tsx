@@ -23,7 +23,13 @@ import type { HomeGridMarker, QsoGridMarker } from "@/lib/qso-map";
 import { HamMapFloatingPanel } from "@/components/portal/ham-map-floating-panel";
 import { HamMapHomeLocationPrompt } from "@/components/portal/ham-map-home-location-prompt";
 import type { MaidenheadBounds } from "@/lib/maidenhead";
-import { formatMaidenheadDisplay } from "@/lib/maidenhead";
+import {
+  formatMaidenheadDisplay,
+  latLngToMaidenhead,
+  maidenheadBounds,
+  normalizeGrid,
+  pointInMaidenheadBounds,
+} from "@/lib/maidenhead";
 
 const GRID_SOURCE_ID = "ham-grid-squares";
 const GRID_FILL_LAYER_ID = "ham-grid-squares-fill";
@@ -31,9 +37,16 @@ const GRID_LINE_LAYER_ID = "ham-grid-squares-line";
 const GRID_LABEL_LAYER_ID = "ham-grid-squares-label";
 
 type GridFeatureProps = {
-  kind: "home" | "qso";
+  kind: "home" | "qso" | "pick";
   grid: string;
   label: string;
+};
+
+type PickedGrid = {
+  grid: string;
+  bounds: MaidenheadBounds;
+  lat: number;
+  lng: number;
 };
 
 type GridFeatureCollection = {
@@ -101,6 +114,8 @@ function buildGridFeatureCollection(
   qsoMarkers: QsoGridMarker[],
   showQsoMarkers: boolean,
   homeLabel: string,
+  picked: PickedGrid | null,
+  pickedLabel: string,
 ): GridFeatureCollection {
   const features: GridFeatureCollection["features"] = [];
 
@@ -114,6 +129,19 @@ function buildGridFeatureCollection(
         label: `${homeLabel}: ${gridLabel}`,
       },
       homeMarker.bounds,
+    );
+  }
+
+  if (picked) {
+    const gridLabel = formatMaidenheadDisplay(picked.grid);
+    pushGridFeatures(
+      features,
+      {
+        kind: "pick",
+        grid: gridLabel,
+        label: `${pickedLabel}: ${gridLabel}`,
+      },
+      picked.bounds,
     );
   }
 
@@ -144,12 +172,18 @@ function syncGridSquareLayers(
     theme === "dark" ? "rgba(16, 185, 129, 0.28)" : "rgba(5, 150, 105, 0.22)";
   const homeLine =
     theme === "dark" ? "rgba(110, 231, 183, 0.95)" : "rgba(4, 120, 87, 0.9)";
+  const pickFill =
+    theme === "dark" ? "rgba(251, 191, 36, 0.28)" : "rgba(217, 119, 6, 0.2)";
+  const pickLine =
+    theme === "dark" ? "rgba(252, 211, 77, 0.95)" : "rgba(180, 83, 9, 0.9)";
   const qsoFill =
     theme === "dark" ? "rgba(56, 189, 248, 0.14)" : "rgba(2, 132, 199, 0.12)";
   const qsoLine =
     theme === "dark" ? "rgba(125, 211, 252, 0.75)" : "rgba(3, 105, 161, 0.7)";
   const homeText =
     theme === "dark" ? "#a7f3d0" : "#065f46";
+  const pickText =
+    theme === "dark" ? "#fde68a" : "#92400e";
   const qsoText =
     theme === "dark" ? "#bae6fd" : "#0c4a6e";
   const labelHalo =
@@ -177,6 +211,8 @@ function syncGridSquareLayers(
           ["get", "kind"],
           "home",
           homeFill,
+          "pick",
+          pickFill,
           qsoFill,
         ],
         "fill-opacity": 1,
@@ -188,6 +224,8 @@ function syncGridSquareLayers(
       ["get", "kind"],
       "home",
       homeFill,
+      "pick",
+      pickFill,
       qsoFill,
     ]);
   }
@@ -204,12 +242,16 @@ function syncGridSquareLayers(
           ["get", "kind"],
           "home",
           homeLine,
+          "pick",
+          pickLine,
           qsoLine,
         ],
         "line-width": [
           "match",
           ["get", "kind"],
           "home",
+          2.5,
+          "pick",
           2.5,
           1.5,
         ],
@@ -221,7 +263,18 @@ function syncGridSquareLayers(
       ["get", "kind"],
       "home",
       homeLine,
+      "pick",
+      pickLine,
       qsoLine,
+    ]);
+    map.setPaintProperty(GRID_LINE_LAYER_ID, "line-width", [
+      "match",
+      ["get", "kind"],
+      "home",
+      2.5,
+      "pick",
+      2.5,
+      1.5,
     ]);
   }
 
@@ -239,6 +292,8 @@ function syncGridSquareLayers(
           ["get", "kind"],
           "home",
           13,
+          "pick",
+          13,
           11,
         ],
         "text-anchor": "top-left",
@@ -253,6 +308,8 @@ function syncGridSquareLayers(
           ["get", "kind"],
           "home",
           homeText,
+          "pick",
+          pickText,
           qsoText,
         ],
         "text-halo-color": labelHalo,
@@ -265,9 +322,20 @@ function syncGridSquareLayers(
       ["get", "kind"],
       "home",
       homeText,
+      "pick",
+      pickText,
       qsoText,
     ]);
     map.setPaintProperty(GRID_LABEL_LAYER_ID, "text-halo-color", labelHalo);
+    map.setLayoutProperty(GRID_LABEL_LAYER_ID, "text-size", [
+      "match",
+      ["get", "kind"],
+      "home",
+      13,
+      "pick",
+      13,
+      11,
+    ]);
   }
 }
 
@@ -315,8 +383,19 @@ export function HamMapFullscreenView({
   const themeReady = mapTheme !== null;
   const [overrideHomeMarker, setOverrideHomeMarker] =
     useState<HomeGridMarker | null>(null);
+  const [pickedGrid, setPickedGrid] = useState<PickedGrid | null>(null);
   const activeHomeMarker = homeMarker ?? overrideHomeMarker;
   const activeHomeGrid = activeHomeMarker?.grid ?? homeGrid;
+  const activeHomeRef = useRef(activeHomeMarker);
+  const pickedGridRef = useRef(pickedGrid);
+
+  useEffect(() => {
+    activeHomeRef.current = activeHomeMarker;
+  }, [activeHomeMarker]);
+
+  useEffect(() => {
+    pickedGridRef.current = pickedGrid;
+  }, [pickedGrid]);
 
   useEffect(() => {
     document.body.classList.add("ham-map-view");
@@ -405,6 +484,8 @@ export function HamMapFullscreenView({
           qsoMarkers,
           showQsoMarkers,
           t("homeMarkerLabel"),
+          pickedGridRef.current,
+          t("pickedGridLabel"),
         ),
         mapTheme,
       );
@@ -466,6 +547,70 @@ export function HamMapFullscreenView({
       map.off("style.load", applyMarkers);
     };
   }, [activeHomeMarker, qsoMarkers, showQsoMarkers, mapTheme, mapTilerKey, t]);
+
+  // Keep pick rectangle on the grid layer without re-fitting the camera.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapTilerKey || !map.isStyleLoaded()) return;
+
+    syncGridSquareLayers(
+      map,
+      buildGridFeatureCollection(
+        activeHomeMarker,
+        qsoMarkers,
+        showQsoMarkers,
+        t("homeMarkerLabel"),
+        pickedGrid,
+        t("pickedGridLabel"),
+      ),
+      mapTheme,
+    );
+  }, [
+    pickedGrid,
+    activeHomeMarker,
+    qsoMarkers,
+    showQsoMarkers,
+    mapTheme,
+    mapTilerKey,
+    t,
+  ]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapTilerKey || !themeReady) return;
+
+    const onMapClick = (event: { lngLat: { lat: number; lng: number } }) => {
+      const { lat, lng } = event.lngLat;
+      const home = activeHomeRef.current;
+
+      if (home && pointInMaidenheadBounds(lat, lng, home.bounds)) {
+        setPickedGrid(null);
+        return;
+      }
+
+      const precision =
+        home && home.grid.length >= 4 && home.grid.length % 2 === 0
+          ? home.grid.length
+          : 6;
+      const grid = latLngToMaidenhead(lat, lng, precision);
+      if (!grid) return;
+
+      if (home && normalizeGrid(home.grid) === normalizeGrid(grid)) {
+        setPickedGrid(null);
+        return;
+      }
+
+      const bounds = maidenheadBounds(grid);
+      if (!bounds) return;
+
+      setPickedGrid({ grid, bounds, lat, lng });
+    };
+
+    map.on("click", onMapClick);
+    return () => {
+      map.off("click", onMapClick);
+    };
+  }, [mapTilerKey, themeReady]);
 
   function onMapThemeChange(theme: HamMapTheme) {
     writeStoredHamMapTheme(theme);
