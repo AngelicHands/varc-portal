@@ -4,8 +4,12 @@ import {
   maidenheadBounds,
   maidenheadToLatLng,
   normalizeGrid,
+  truncateMaidenhead,
   type MaidenheadBounds,
 } from "@/lib/maidenhead";
+
+/** Map rectangles / pins always use Maidenhead fields (e.g. OL20), not subsquares. */
+const QSO_MAP_GRID_PRECISION = 4;
 
 export type QsoGridMarkerEntry = {
   id: string;
@@ -47,8 +51,12 @@ export function aggregateQsoGridMarkers(qsos: QsoListItemDto[]): QsoGridMarker[]
   >();
 
   for (const qso of qsos) {
-    const grid = normalizeGrid(qso.grid);
-    if (!grid || !isValidMaidenheadGrid(grid)) continue;
+    const raw = normalizeGrid(qso.grid);
+    if (!raw || !isValidMaidenheadGrid(raw)) continue;
+    // Normalize to 4-char fields so rectangles are a consistent size even when
+    // some logs store only OL20 and others store OL20vx.
+    const grid = truncateMaidenhead(raw, QSO_MAP_GRID_PRECISION);
+    if (!grid) continue;
 
     const entry = byGrid.get(grid) ?? {
       qsoCount: 0,
