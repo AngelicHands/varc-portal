@@ -132,13 +132,13 @@ docker compose up --build web
 
 ## Kubernetes / Argo CD
 
-Manifests for Argo CD live in `deploy/k8s/` (web Deployment, backup-worker Deployment, Service, Ingress, ConfigMap, Valkey). App secrets are **not** synced by Argo — create them once in the cluster.
+Manifests for Argo CD live in `deploy/k8s/` (web Deployment, backup-worker Deployment, email-worker Deployment, Service, Ingress, ConfigMap, Valkey). App secrets are **not** synced by Argo — create them once in the cluster.
 
 Valkey (`deploy/k8s/valkey.yaml`) is a single in-cluster cache (`VALKEY_URL=redis://valkey:6379` in the ConfigMap). It requires `VALKEY_PASSWORD` in `varc-portal-secrets` (`--requirepass`, probes use `REDISCLI_AUTH`). It is not on the Ingress; data is ephemeral (LRU, no AOF).
 
 Public CMS reads (branding, menus, pages, articles, categories, templates) use cache-aside with tag invalidation on every admin save. If `VALKEY_URL` is unset or Valkey is down, the app falls back to Mongo. Locally you can run Valkey with a password and set `VALKEY_URL` + `VALKEY_PASSWORD` (see `.env.example`).
 
-The backup worker runs as a separate deployment (`deploy/k8s/backup-worker.yaml`) with `BACKUP_WORKER_ENABLED=1`. Uploaded restore ZIPs rely on a larger ingress body limit (`512m` by default), while remote-link restore avoids that upload limit.
+The backup worker runs as a separate deployment (`deploy/k8s/backup-worker.yaml`). The email queue worker runs as `deploy/k8s/email-worker.yaml` (same GHCR worker image, different command). Do not rely on the web pod’s `instrumentation.ts` for mail — standalone production builds do not start it. Uploaded restore ZIPs rely on a larger ingress body limit (`512m` by default), while remote-link restore avoids that upload limit.
 
 ### One-time bootstrap
 
@@ -162,8 +162,8 @@ Bump version, commit, then push a `v*` tag. The [Release](.github/workflows/rele
 - Lints and builds the app
 - Publishes a GitHub Release (notes + standalone tarball)
 - Pushes container images to GHCR:
-  - `ghcr.io/<owner>/varc-portal:vX.Y.Z`
-  - `ghcr.io/<owner>/varc-portal:X.Y.Z`
+  - `ghcr.io/<owner>/varc-portal:vX.Y.Z` (web)
+  - `ghcr.io/<owner>/varc-portal-backup-worker:vX.Y.Z` (backup + email workers; same image)
 
 ```bash
 VERSION=1.0.26
@@ -181,8 +181,11 @@ Deploy is **not** triggered by tags. After a release exists:
 
 1. GitHub → **Actions** → **Deploy** → **Run workflow**
 2. Enter the version (e.g. `1.0.26` or `v1.0.26`)
-3. The workflow verifies the GitHub Release + GHCR image, updates `deploy/k8s/deployment.yaml` image tag, and pushes a `chore: deploy v…` commit
-4. Argo CD syncs the new image from Git
+3. The workflow verifies the GitHub Release + GHCR images, pins these manifests to `vX.Y.Z`, and pushes a `chore: deploy v…` commit:
+   - `deploy/k8s/deployment.yaml` → web image
+   - `deploy/k8s/backup-worker.yaml` → worker image
+   - `deploy/k8s/email-worker.yaml` → worker image (same tag; different command)
+4. Argo CD syncs the new images from Git
 
 ## Content model
 

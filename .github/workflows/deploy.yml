@@ -84,30 +84,40 @@ jobs:
             local file="$1"
             local image="$2"
             if [[ ! -f "${file}" ]]; then
-              echo "Skipping ${file} (not found)"
-              return
-            fi
-            if ! grep -q 'image: ' "${file}"; then
-              echo "::error::No image field in ${file}"
+              echo "::error::Missing deploy manifest: ${file}"
               exit 1
             fi
-            sed -i.bak -E "s|image:[[:space:]]*.*$|image: ${image}|" "${file}"
+            # Only rewrite the container image line (not imagePullPolicy / imagePullSecrets).
+            if ! grep -qE '^[[:space:]]+image:[[:space:]]+' "${file}"; then
+              echo "::error::No container image: field in ${file}"
+              exit 1
+            fi
+            sed -i.bak -E "s|^([[:space:]]+image:[[:space:]]+).*$|\1${image}|" "${file}"
             rm -f "${file}.bak"
+            if ! grep -qF "image: ${image}" "${file}"; then
+              echo "::error::Failed to pin image in ${file}"
+              exit 1
+            fi
             echo "Updated ${file} to ${image}"
-            grep -n 'image:' "${file}"
+            grep -nE '^[[:space:]]+image:' "${file}"
           }
 
-          FILE="deploy/k8s/deployment.yaml"
-          update_file "${FILE}" "${{ steps.image.outputs.web }}:${{ steps.version.outputs.tag }}"
+          TAG="${{ steps.version.outputs.tag }}"
+          WEB_IMAGE="${{ steps.image.outputs.web }}:${TAG}"
+          WORKER_IMAGE="${{ steps.image.outputs.worker }}:${TAG}"
 
-          FILE="deploy/k8s/backup-worker.yaml"
-          update_file "${FILE}" "${{ steps.image.outputs.worker }}:${{ steps.version.outputs.tag }}"
+          update_file "deploy/k8s/deployment.yaml" "${WEB_IMAGE}"
+          update_file "deploy/k8s/backup-worker.yaml" "${WORKER_IMAGE}"
+          update_file "deploy/k8s/email-worker.yaml" "${WORKER_IMAGE}"
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/k8s/deployment.yaml deploy/k8s/backup-worker.yaml
+          git add \
+            deploy/k8s/deployment.yaml \
+            deploy/k8s/backup-worker.yaml \
+            deploy/k8s/email-worker.yaml
           if git diff --staged --quiet; then
             echo "Images already set to ${{ steps.version.outputs.tag }}; nothing to commit."
             exit 0
