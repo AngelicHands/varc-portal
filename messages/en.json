@@ -162,6 +162,8 @@
       "toggleGridRectangles": "Show grid squares",
       "toggleLocationMarkers": "Show location markers",
       "toggleTraces": "Show QSO traces",
+      "qsoTimeFilterLabel": "QSO",
+      "qsoTimeFilterAll": "All",
       "enterBrowserFullscreen": "Enter fullscreen",
       "exitBrowserFullscreen": "Exit fullscreen"
     }

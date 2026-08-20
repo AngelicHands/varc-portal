@@ -182,3 +182,52 @@ export function buildQsoTraceFeatureCollection(
     })),
   };
 }
+
+export const HAM_MAP_QSO_TIME_RANGES = [
+  "15m",
+  "30m",
+  "1h",
+  "4h",
+  "6h",
+  "12h",
+  "24h",
+  "7d",
+  "1M",
+  "6M",
+  "1Y",
+  "all",
+] as const;
+
+export type HamMapQsoTimeRange = (typeof HAM_MAP_QSO_TIME_RANGES)[number];
+
+const TIME_RANGE_MS: Record<Exclude<HamMapQsoTimeRange, "all">, number> = {
+  "15m": 15 * 60 * 1000,
+  "30m": 30 * 60 * 1000,
+  "1h": 60 * 60 * 1000,
+  "4h": 4 * 60 * 60 * 1000,
+  "6h": 6 * 60 * 60 * 1000,
+  "12h": 12 * 60 * 60 * 1000,
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "1M": 30 * 24 * 60 * 60 * 1000,
+  "6M": 182 * 24 * 60 * 60 * 1000,
+  "1Y": 365 * 24 * 60 * 60 * 1000,
+};
+
+export function isHamMapQsoTimeRange(value: string): value is HamMapQsoTimeRange {
+  return (HAM_MAP_QSO_TIME_RANGES as readonly string[]).includes(value);
+}
+
+/** Keep QSOs whose `qsoAt` is within the selected lookback window (inclusive). */
+export function filterQsosByTimeRange(
+  qsos: QsoListItemDto[],
+  range: HamMapQsoTimeRange,
+  nowMs = Date.now(),
+): QsoListItemDto[] {
+  if (range === "all") return qsos;
+  const cutoff = nowMs - TIME_RANGE_MS[range];
+  return qsos.filter((qso) => {
+    const at = Date.parse(qso.qsoAt);
+    return Number.isFinite(at) && at >= cutoff;
+  });
+}

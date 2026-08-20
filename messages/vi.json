@@ -162,6 +162,8 @@
       "toggleGridRectangles": "Hiện ô lưới",
       "toggleLocationMarkers": "Hiện điểm vị trí",
       "toggleTraces": "Hiện đường QSO",
+      "qsoTimeFilterLabel": "QSO",
+      "qsoTimeFilterAll": "All",
       "enterBrowserFullscreen": "Toàn màn hình",
       "exitBrowserFullscreen": "Thoát toàn màn hình"
     }

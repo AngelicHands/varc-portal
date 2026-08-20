@@ -20,7 +20,7 @@ import {
   canViewQsoMapMarkers,
 } from "@/lib/ham-map-access";
 import { readMapTilerApiKey } from "@/lib/map/maptiler-style";
-import { aggregateQsoGridMarkers, buildHomeGridMarker } from "@/lib/qso-map";
+import { buildHomeGridMarker } from "@/lib/qso-map";
 import { getPublicBaseUrl } from "@/lib/public-url";
 import { listUserQsos } from "@/lib/qso";
 import { listUserDocuments } from "@/lib/user-documents";
@@ -151,7 +151,6 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
     const showQsoMarkers = canViewQsoMapMarkers(canViewLogbook);
     const showHomeMarker = canViewHomeMapMarker(canViewProfile, ham.homeGrid);
     const qsosForMap = showQsoMarkers ? await listUserQsos(ham.id) : [];
-    const qsoMarkers = showQsoMarkers ? aggregateQsoGridMarkers(qsosForMap) : [];
     const homeMarker = showHomeMarker
       ? buildHomeGridMarker(ham.homeGrid, ham.callsign, ham.homeLat, ham.homeLng)
       : null;
@@ -170,7 +169,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
           verified={verified}
           homeGrid={canViewProfile ? ham.homeGrid : ""}
           homeMarker={homeMarker}
-          qsoMarkers={qsoMarkers}
+          qsos={qsosForMap}
           showQsoMarkers={showQsoMarkers}
           branding={branding}
           canSetHomeLocation={canEdit && !ham.homeGrid.trim()}

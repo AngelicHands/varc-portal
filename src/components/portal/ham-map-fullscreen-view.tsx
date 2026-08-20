@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   GeoJSONSource,
   LngLatBounds,
@@ -19,13 +19,18 @@ import {
   writeStoredHamMapTheme,
   type HamMapTheme,
 } from "@/lib/map/maptiler-style";
+import type { QsoListItemDto } from "@/lib/account-types";
 import type { HomeGridMarker, QsoGridMarker } from "@/lib/qso-map";
 import {
+  aggregateQsoGridMarkers,
   buildQsoTraceFeatureCollection,
+  filterQsosByTimeRange,
+  type HamMapQsoTimeRange,
   type QsoTraceFeatureCollection,
 } from "@/lib/qso-map";
 import { HamMapFloatingPanel } from "@/components/portal/ham-map-floating-panel";
 import { HamMapControlsPanel } from "@/components/portal/ham-map-controls-panel";
+import { HamMapQsoTimeFilter } from "@/components/portal/ham-map-qso-time-filter";
 import { HamMapHomeLocationPrompt } from "@/components/portal/ham-map-home-location-prompt";
 import type { MaidenheadBounds } from "@/lib/maidenhead";
 import {
@@ -412,7 +417,7 @@ type Props = {
   verified: boolean;
   homeGrid: string;
   homeMarker: HomeGridMarker | null;
-  qsoMarkers: QsoGridMarker[];
+  qsos: QsoListItemDto[];
   showQsoMarkers: boolean;
   branding: { siteName: string; logoUrl?: string };
   canSetHomeLocation?: boolean;
@@ -434,7 +439,7 @@ export function HamMapFullscreenView({
   verified,
   homeGrid,
   homeMarker,
-  qsoMarkers,
+  qsos,
   showQsoMarkers,
   branding,
   canSetHomeLocation = false,
@@ -445,6 +450,7 @@ export function HamMapFullscreenView({
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const appliedThemeRef = useRef<HamMapTheme | null>(null);
+  const hasFittedCameraRef = useRef(false);
   const [mapTheme, setMapTheme] = useState<HamMapTheme | null>(null);
   const themeReady = mapTheme !== null;
   const [overrideHomeMarker, setOverrideHomeMarker] =
@@ -453,10 +459,18 @@ export function HamMapFullscreenView({
   const [showGridRectangles, setShowGridRectangles] = useState(true);
   const [showLocationMarkers, setShowLocationMarkers] = useState(true);
   const [showTraces, setShowTraces] = useState(true);
+  const [qsoTimeRange, setQsoTimeRange] = useState<HamMapQsoTimeRange>("all");
   const [isBrowserFullscreen, setIsBrowserFullscreen] = useState(false);
   const [fullscreenSupported, setFullscreenSupported] = useState(false);
   const activeHomeMarker = homeMarker ?? overrideHomeMarker;
   const activeHomeGrid = activeHomeMarker?.grid ?? homeGrid;
+  const qsoMarkers: QsoGridMarker[] = useMemo(
+    () =>
+      showQsoMarkers
+        ? aggregateQsoGridMarkers(filterQsosByTimeRange(qsos, qsoTimeRange))
+        : [],
+    [showQsoMarkers, qsos, qsoTimeRange],
+  );
   const activeHomeRef = useRef(activeHomeMarker);
   const pickedGridRef = useRef(pickedGrid);
   const showGridRectanglesRef = useRef(showGridRectangles);
@@ -545,6 +559,7 @@ export function HamMapFullscreenView({
       map.remove();
       mapRef.current = null;
       appliedThemeRef.current = null;
+      hasFittedCameraRef.current = false;
     };
     // Create once after the client theme is known; later theme changes use setStyle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -665,15 +680,23 @@ export function HamMapFullscreenView({
 
       if (fitCamera && hasBounds) {
         map.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: 0 });
+        hasFittedCameraRef.current = true;
       }
     };
 
-    const applyMarkersAndFit = () => applyMarkers(true);
+    const onStyleLoad = () => {
+      // Basemap style reload resets layers — re-fit once for the new style.
+      hasFittedCameraRef.current = false;
+      applyMarkers(true);
+    };
 
-    if (map.isStyleLoaded()) applyMarkersAndFit();
-    map.on("style.load", applyMarkersAndFit);
+    if (map.isStyleLoaded()) {
+      // Keep zoom when only QSO time-filter / marker data changes.
+      applyMarkers(!hasFittedCameraRef.current);
+    }
+    map.on("style.load", onStyleLoad);
     return () => {
-      map.off("style.load", applyMarkersAndFit);
+      map.off("style.load", onStyleLoad);
     };
   }, [activeHomeMarker, qsoMarkers, showQsoMarkers, mapTheme, mapTilerKey, t]);
 
@@ -909,29 +932,38 @@ export function HamMapFullscreenView({
         onFocusHomeGrid={activeHomeMarker ? focusHomeGrid : undefined}
       />
 
-      <HamMapControlsPanel
-        mapTheme={panelTheme}
-        showGridRectangles={showGridRectangles}
-        onToggleGridRectangles={() =>
-          setShowGridRectangles((current) => !current)
-        }
-        showLocationMarkers={showLocationMarkers}
-        onToggleLocationMarkers={() =>
-          setShowLocationMarkers((current) => !current)
-        }
-        showTraces={showTraces}
-        onToggleTraces={() => setShowTraces((current) => !current)}
-        tracesAvailable={
-          showQsoMarkers &&
-          Boolean(activeHomeMarker) &&
-          qsoMarkers.length > 0
-        }
-        isBrowserFullscreen={isBrowserFullscreen}
-        onToggleBrowserFullscreen={() => {
-          void toggleBrowserFullscreen();
-        }}
-        fullscreenSupported={fullscreenSupported}
-      />
+      <div className="pointer-events-none absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
+        <HamMapControlsPanel
+          mapTheme={panelTheme}
+          showGridRectangles={showGridRectangles}
+          onToggleGridRectangles={() =>
+            setShowGridRectangles((current) => !current)
+          }
+          showLocationMarkers={showLocationMarkers}
+          onToggleLocationMarkers={() =>
+            setShowLocationMarkers((current) => !current)
+          }
+          showTraces={showTraces}
+          onToggleTraces={() => setShowTraces((current) => !current)}
+          tracesAvailable={
+            showQsoMarkers &&
+            Boolean(activeHomeMarker) &&
+            qsoMarkers.length > 0
+          }
+          isBrowserFullscreen={isBrowserFullscreen}
+          onToggleBrowserFullscreen={() => {
+            void toggleBrowserFullscreen();
+          }}
+          fullscreenSupported={fullscreenSupported}
+        />
+        {showQsoMarkers ? (
+          <HamMapQsoTimeFilter
+            mapTheme={panelTheme}
+            value={qsoTimeRange}
+            onChange={setQsoTimeRange}
+          />
+        ) : null}
+      </div>
 
       <HamMapHomeLocationPrompt
         enabled={canSetHomeLocation && !activeHomeMarker}

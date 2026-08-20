@@ -170,7 +170,7 @@ export function HamMapControlsPanel({
 
   return (
     <aside
-      className={`pointer-events-auto absolute right-3 top-3 z-20 flex overflow-hidden rounded-xl border backdrop-blur-md ${panelClass}`}
+      className={`pointer-events-auto flex overflow-hidden rounded-xl border backdrop-blur-md ${panelClass}`}
       aria-label={t("mapControlsLabel")}
     >
       <ControlButton
