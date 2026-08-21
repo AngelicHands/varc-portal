@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { HamMapCallsignDialog } from "@/components/portal/ham-map-callsign-dialog";
 import type { QsoListItemDto } from "@/lib/account-types";
 import type { HamMapTheme } from "@/lib/map/maptiler-style";
 import { formatMaidenheadDisplay } from "@/lib/maidenhead";
@@ -12,7 +14,12 @@ type Props = {
   mapTheme: HamMapTheme;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Time-filtered QSOs — what the list actually renders. */
   qsos: QsoListItemDto[];
+  /** Unfiltered total, so an empty list can tell "none logged" from "none in range". */
+  totalQsos: number;
+  /** Owner has no callsign yet, so they cannot log a QSO at all. */
+  needsCallsign?: boolean;
   selectedQsoId: string | null;
   onSelectQso: (qsoId: string | null) => void;
 };
@@ -22,10 +29,13 @@ export function HamMapQsoListPanel({
   open,
   onOpenChange,
   qsos,
+  totalQsos,
+  needsCallsign = false,
   selectedQsoId,
   onSelectQso,
 }: Props) {
   const t = useTranslations("ham.map");
+  const [callsignDialogOpen, setCallsignDialogOpen] = useState(false);
   const light = mapTheme === "light";
 
   const panelClass = light
@@ -39,8 +49,20 @@ export function HamMapQsoListPanel({
   const strong = light ? "text-zinc-900" : "text-white";
   const rowIdle = light ? "hover:bg-zinc-100" : "hover:bg-white/5";
   const rowActive = light ? "bg-zinc-200" : "bg-white/10";
+  const linkClass = light
+    ? "text-zinc-900 hover:text-zinc-600"
+    : "text-white hover:text-white/70";
 
   const sorted = [...qsos].sort((a, b) => b.qsoAt.localeCompare(a.qsoAt));
+
+  // Three different reasons for an empty list — say which one it is.
+  const missingCallsign = needsCallsign && totalQsos === 0;
+  const emptyMessage =
+    totalQsos > 0
+      ? t("qsoListEmpty")
+      : missingCallsign
+        ? t("qsoListNeedsCallsign")
+        : t("qsoListNone");
 
   return (
     <div
@@ -63,7 +85,20 @@ export function HamMapQsoListPanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {sorted.length === 0 ? (
-            <p className={`px-4 py-6 text-sm ${muted}`}>{t("qsoListEmpty")}</p>
+            <div className="flex h-full flex-col items-center justify-center px-6 py-8">
+              <p className={`text-center text-sm text-balance ${muted}`}>
+                {emptyMessage}
+              </p>
+              {missingCallsign ? (
+                <button
+                  type="button"
+                  onClick={() => setCallsignDialogOpen(true)}
+                  className={`mt-3 text-sm font-medium underline underline-offset-4 transition ${linkClass}`}
+                >
+                  {t("callsignPromptLink")}
+                </button>
+              ) : null}
+            </div>
           ) : (
             <ul>
               {sorted.map((qso) => {
@@ -132,6 +167,14 @@ export function HamMapQsoListPanel({
           {t("qsoListHandle")}
         </span>
       </button>
+
+      {callsignDialogOpen ? (
+        <HamMapCallsignDialog
+          open
+          mapTheme={mapTheme}
+          onClose={() => setCallsignDialogOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

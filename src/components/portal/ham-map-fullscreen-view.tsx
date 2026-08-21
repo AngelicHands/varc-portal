@@ -679,6 +679,8 @@ type Props = {
   showQsoMarkers: boolean;
   branding: { siteName: string; logoUrl?: string };
   canSetHomeLocation?: boolean;
+  /** Owner has no callsign yet — shown in place of the empty QSO list. */
+  needsCallsign?: boolean;
 };
 
 let mapLibreWorkerConfigured = false;
@@ -701,6 +703,7 @@ export function HamMapFullscreenView({
   showQsoMarkers,
   branding,
   canSetHomeLocation = false,
+  needsCallsign = false,
 }: Props) {
   const t = useTranslations("ham.map");
   const shellRef = useRef<HTMLDivElement>(null);
@@ -1415,6 +1418,8 @@ export function HamMapFullscreenView({
             if (!open) setSelectedQsoId(null);
           }}
           qsos={filteredQsos}
+          totalQsos={qsos.length}
+          needsCallsign={needsCallsign}
           selectedQsoId={activeSelectedQsoId}
           onSelectQso={setSelectedQsoId}
         />

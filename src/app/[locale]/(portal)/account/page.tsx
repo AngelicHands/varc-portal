@@ -102,6 +102,7 @@ export default async function AccountPage({ params, searchParams }: Props) {
           showQsoMarkers
           branding={branding}
           canSetHomeLocation={!profile.homeGrid.trim()}
+          needsCallsign
         />
       </>
     );
