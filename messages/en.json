@@ -166,6 +166,7 @@
       "pickedGridLabel": "Selected grid",
       "mapControlsLabel": "Map controls",
       "toggleGridRectangles": "Show grid squares",
+      "toggleCallsigns": "Show callsign labels",
       "toggleLocationMarkers": "Show location markers",
       "toggleTraces": "Show QSO traces",
       "qsoTimeFilterLabel": "QSO",

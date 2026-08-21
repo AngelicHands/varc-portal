@@ -10,6 +10,8 @@ type Props = {
   onToggleGridRectangles: () => void;
   showLocationMarkers: boolean;
   onToggleLocationMarkers: () => void;
+  showCallsigns: boolean;
+  onToggleCallsigns: () => void;
   showTraces: boolean;
   onToggleTraces: () => void;
   tracesAvailable?: boolean;
@@ -50,6 +52,24 @@ function MarkerIcon({ className }: { className?: string }) {
     >
       <path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11Z" />
       <circle cx="12" cy="10" r="2.25" />
+    </svg>
+  );
+}
+
+function CallsignIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 12.5V4.5A1.5 1.5 0 0 1 4.5 3h8l8.5 8.5-9.5 9.5L3 12.5Z" />
+      <circle cx="7.75" cy="7.75" r="1.25" />
     </svg>
   );
 }
@@ -147,6 +167,8 @@ export function HamMapControlsPanel({
   onToggleGridRectangles,
   showLocationMarkers,
   onToggleLocationMarkers,
+  showCallsigns,
+  onToggleCallsigns,
   showTraces,
   onToggleTraces,
   tracesAvailable = true,
@@ -192,6 +214,16 @@ export function HamMapControlsPanel({
         label={t("toggleLocationMarkers")}
       >
         <MarkerIcon className="h-4 w-4" />
+      </ControlButton>
+      <ControlButton
+        active={showCallsigns}
+        idleClass={idle}
+        activeClass={active}
+        borderClass={border}
+        onClick={onToggleCallsigns}
+        label={t("toggleCallsigns")}
+      >
+        <CallsignIcon className="h-4 w-4" />
       </ControlButton>
       <ControlButton
         active={showTraces}

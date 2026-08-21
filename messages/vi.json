@@ -166,6 +166,7 @@
       "pickedGridLabel": "Ô lưới đã chọn",
       "mapControlsLabel": "Điều khiển bản đồ",
       "toggleGridRectangles": "Hiện ô lưới",
+      "toggleCallsigns": "Hiện nhãn callsign",
       "toggleLocationMarkers": "Hiện điểm vị trí",
       "toggleTraces": "Hiện đường QSO",
       "qsoTimeFilterLabel": "QSO",

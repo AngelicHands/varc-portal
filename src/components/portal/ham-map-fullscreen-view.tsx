@@ -9,6 +9,7 @@ import {
   NavigationControl,
   Popup,
   setWorkerUrl,
+  type ExpressionSpecification,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useTranslations } from "next-intl";
@@ -381,17 +382,70 @@ function syncGridSquareLayers(
   }
 }
 
+const GRID_POLYGON_FILTER: ExpressionSpecification = [
+  "==",
+  ["geometry-type"],
+  "Polygon",
+];
+const GRID_POINT_FILTER: ExpressionSpecification = [
+  "==",
+  ["geometry-type"],
+  "Point",
+];
+
+/**
+ * Hiding the grid keeps the click-to-pick rectangle drawn: it is feedback for
+ * the user's own click, not part of the grid overlay they just switched off.
+ */
 function setGridRectangleVisibility(map: MapLibreMap, visible: boolean) {
-  const value = visible ? "visible" : "none";
-  for (const layerId of [
-    GRID_FILL_LAYER_ID,
-    GRID_LINE_LAYER_ID,
-    GRID_LABEL_LAYER_ID,
-  ]) {
-    if (map.getLayer(layerId)) {
-      map.setLayoutProperty(layerId, "visibility", value);
-    }
+  const layers: [string, ExpressionSpecification][] = [
+    [GRID_FILL_LAYER_ID, GRID_POLYGON_FILTER],
+    [GRID_LINE_LAYER_ID, GRID_POLYGON_FILTER],
+    [GRID_LABEL_LAYER_ID, GRID_POINT_FILTER],
+  ];
+  for (const [layerId, baseFilter] of layers) {
+    if (!map.getLayer(layerId)) continue;
+    map.setLayoutProperty(layerId, "visibility", "visible");
+    map.setFilter(
+      layerId,
+      visible
+        ? baseFilter
+        : ["all", baseFilter, ["==", ["get", "kind"], "pick"]],
+    );
   }
+}
+
+/** One callsign per marker, with a count when the grid holds several. */
+function qsoMarkerCallsignLabel(marker: QsoGridMarker): string {
+  const [first, ...rest] = marker.workedCallsigns;
+  if (!first) return "";
+  return rest.length > 0 ? `${first} +${rest.length}` : first;
+}
+
+/**
+ * Marker dot with an optional callsign caption underneath. The caption is
+ * absolutely positioned so it never shifts the dot off its coordinate.
+ */
+function buildMarkerElement(
+  dotClassName: string,
+  label: string,
+  theme: HamMapTheme | null,
+): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = `relative ${dotClassName}`;
+  if (!label) return el;
+
+  const caption = document.createElement("span");
+  caption.className = `pointer-events-none absolute top-full left-1/2 mt-1 -translate-x-1/2 font-display text-[11px] leading-none font-semibold tracking-wide whitespace-nowrap ${
+    theme === "dark" ? "text-white" : "text-zinc-900"
+  }`;
+  caption.style.textShadow =
+    theme === "dark"
+      ? "0 0 3px rgba(0,0,0,0.95), 0 0 7px rgba(0,0,0,0.75)"
+      : "0 0 3px rgba(255,255,255,0.95), 0 0 7px rgba(255,255,255,0.85)";
+  caption.textContent = label;
+  el.append(caption);
+  return el;
 }
 
 function formatTraceDistanceKm(km: number): string {
@@ -720,6 +774,7 @@ export function HamMapFullscreenView({
   const [pickedGrid, setPickedGrid] = useState<PickedGrid | null>(null);
   const [showGridRectangles, setShowGridRectangles] = useState(true);
   const [showLocationMarkers, setShowLocationMarkers] = useState(true);
+  const [showCallsigns, setShowCallsigns] = useState(true);
   const [showTraces, setShowTraces] = useState(true);
   const [qsoTimeRange, setQsoTimeRange] = useState<HamMapQsoTimeRange>("24h");
   const [qsoListOpen, setQsoListOpen] = useState(false);
@@ -795,6 +850,7 @@ export function HamMapFullscreenView({
   const activeHomeRef = useRef(activeHomeMarker);
   const pickedGridRef = useRef(pickedGrid);
   const showGridRectanglesRef = useRef(showGridRectangles);
+  const showCallsignsRef = useRef(showCallsigns);
   const showLocationMarkersRef = useRef(showLocationMarkers);
   const showTracesRef = useRef(showTraces);
   const lastFittedQsoIdRef = useRef<string | null>(null);
@@ -820,6 +876,10 @@ export function HamMapFullscreenView({
   useEffect(() => {
     showGridRectanglesRef.current = showGridRectangles;
   }, [showGridRectangles]);
+
+  useEffect(() => {
+    showCallsignsRef.current = showCallsigns;
+  }, [showCallsigns]);
 
   useEffect(() => {
     showLocationMarkersRef.current = showLocationMarkers;
@@ -968,9 +1028,11 @@ export function HamMapFullscreenView({
       );
 
       if (showLocationMarkersRef.current && mapHomeMarker) {
-        const el = document.createElement("div");
-        el.className =
-          "flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-lg";
+        const el = buildMarkerElement(
+          "flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 shadow-lg",
+          showCallsignsRef.current ? mapHomeMarker.callsign : "",
+          mapTheme,
+        );
         const marker = new Marker({ element: el })
           .setLngLat([mapHomeMarker.lng, mapHomeMarker.lat])
           .setPopup(
@@ -1009,11 +1071,13 @@ export function HamMapFullscreenView({
         let focusedQsoMarker: Marker | null = null;
         for (const item of mapQsoMarkers) {
           if (showQsoPins) {
-            const el = document.createElement("div");
-            el.className =
+            const el = buildMarkerElement(
               mapTheme === "dark"
                 ? "h-3.5 w-3.5 rounded-full border border-white/80 bg-sky-400 shadow"
-                : "h-3.5 w-3.5 rounded-full border border-white bg-sky-600 shadow";
+                : "h-3.5 w-3.5 rounded-full border border-white bg-sky-600 shadow",
+              showCallsignsRef.current ? qsoMarkerCallsignLabel(item) : "",
+              mapTheme,
+            );
             const extra = Math.max(0, item.qsos.length - 8);
             const selectedId = activeSelectedQsoIdRef.current;
             const popup = createQsoMarkerPopup(
@@ -1099,7 +1163,7 @@ export function HamMapFullscreenView({
     return () => {
       map.off("style.load", onStyleLoad);
     };
-  }, [activeHomeMarker, focusGrid, mapHomeMarker, mapQsoMarkers, showQsoMarkers, showLocationMarkers, mapTheme, mapTilerKey, t]);
+  }, [activeHomeMarker, focusGrid, mapHomeMarker, mapQsoMarkers, showQsoMarkers, showLocationMarkers, showCallsigns, mapTheme, mapTilerKey, t]);
 
   // Keep pick rectangle on the grid layer without re-fitting the camera.
   useEffect(() => {
@@ -1380,6 +1444,10 @@ export function HamMapFullscreenView({
                   showLocationMarkers={showLocationMarkers}
                   onToggleLocationMarkers={() =>
                     setShowLocationMarkers((current) => !current)
+                  }
+                  showCallsigns={showCallsigns}
+                  onToggleCallsigns={() =>
+                    setShowCallsigns((current) => !current)
                   }
                   showTraces={showTraces}
                   onToggleTraces={() => setShowTraces((current) => !current)}
