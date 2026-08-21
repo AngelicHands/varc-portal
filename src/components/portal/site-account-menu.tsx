@@ -199,6 +199,32 @@ export function SiteAccountMenu({
             </NextLink>
           </DropdownMenu.Item>
 
+          <DropdownMenu.Item asChild>
+            <NextLink
+              href={
+                user.callsign
+                  ? `/${user.callsign}?view=map`
+                  : `/${locale}/account?view=map`
+              }
+              className="flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[highlighted]:bg-foreground/5"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4 shrink-0 text-muted"
+                aria-hidden
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6.5 12 2l9 4.5v11L12 22l-9-4.5v-11Z" />
+                <path d="M12 22V11M3 6.5 12 11l9-4.5" />
+              </svg>
+              {t("qsoMap")}
+            </NextLink>
+          </DropdownMenu.Item>
+
           <DropdownMenu.Separator className="my-1 h-px bg-border" />
 
           <DropdownMenu.Item
