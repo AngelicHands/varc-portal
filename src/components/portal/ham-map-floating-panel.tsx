@@ -106,7 +106,10 @@ export function HamMapFloatingPanel({
   const verifiedClass = light ? "text-emerald-600" : "text-emerald-300";
 
   const initials = initialsFrom(operatorName, callsign);
-  const profileHref = `/${callsign}`;
+  // An owner without a callsign has no /{callsign} page — theirs is /account.
+  const trimmedCallsign = callsign.trim();
+  const profileHref = trimmedCallsign ? `/${trimmedCallsign}` : "/account";
+  const profileLabel = trimmedCallsign || operatorName.trim();
   const profileHover = light ? "hover:opacity-80" : "hover:opacity-90";
 
   return (
@@ -165,7 +168,7 @@ export function HamMapFloatingPanel({
               href={profileHref}
               className={`truncate font-display text-lg leading-tight tracking-wide transition ${strong} ${profileHover}`}
             >
-              {callsign}
+              {profileLabel}
             </NextLink>
             {verified ? (
               <span
@@ -185,7 +188,7 @@ export function HamMapFloatingPanel({
               </span>
             ) : null}
           </div>
-          {operatorName ? (
+          {operatorName && operatorName.trim() !== profileLabel ? (
             <NextLink
               href={profileHref}
               className={`mt-0.5 block truncate text-sm leading-snug transition ${soft} ${profileHover}`}

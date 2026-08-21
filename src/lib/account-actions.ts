@@ -13,7 +13,7 @@ import { buildCallsignVerificationRequestEmail } from "@/lib/mail/callsign-verif
 import { failAction } from "@/lib/safe-error";
 import { getAccountProfile } from "@/lib/account";
 import { listUserDocuments } from "@/lib/user-documents";
-import { profileFormSchema, homeLocationUpdateSchema } from "@/lib/validations/qso";
+import { profilePatchSchema, homeLocationUpdateSchema } from "@/lib/validations/qso";
 import { User } from "@/models/User";
 
 async function requireAccountSession() {
@@ -38,13 +38,15 @@ export async function updateProfileAction(raw: unknown) {
       return { ok: false as const, error: "Unauthorized" };
     }
 
-    const parsed = profileFormSchema.safeParse(raw);
+    const parsed = profilePatchSchema.safeParse(raw);
     if (!parsed.success) {
       return {
         ok: false as const,
         error: parsed.error.issues[0]?.message ?? "Invalid profile data",
       };
     }
+
+    const patch = parsed.data;
 
     await connectDb();
     await ensureUserCallsignIndex();
@@ -54,52 +56,65 @@ export async function updateProfileAction(raw: unknown) {
     }
 
     const previousCallsign = (user.callsign?.trim() ?? "").toUpperCase();
-    const nextCallsign = parsed.data.callsign;
-    const callsignChanged = nextCallsign !== previousCallsign;
+    let nextCallsign = previousCallsign;
 
-    if (nextCallsign) {
-      const taken = await findUserByAssignedCallsign(nextCallsign, user._id);
-      if (taken) {
-        return {
-          ok: false as const,
-          error: "Callsign is already assigned to another user",
-        };
+    // Only the keys present in the patch are written; untouched fields are left alone.
+    const set: Record<string, unknown> = {};
+    const unset: Record<string, 1> = {};
+
+    if (patch.name !== undefined) {
+      set.name = patch.name;
+    }
+    if (patch.gender !== undefined) {
+      set.gender = patch.gender;
+    }
+    if (patch.birthday !== undefined) {
+      if (patch.birthday) {
+        set.birthday = new Date(`${patch.birthday}T12:00:00.000Z`);
+      } else {
+        unset.birthday = 1;
       }
     }
-
-    const birthdayIso = parsed.data.birthday;
-    const homeGrid = parsed.data.homeGrid;
-    const hasLocation =
-      Boolean(homeGrid) &&
-      typeof parsed.data.homeLat === "number" &&
-      typeof parsed.data.homeLng === "number";
-    const update: Record<string, unknown> = {
-      name: parsed.data.name,
-      callsign: nextCallsign,
-      gender: parsed.data.gender,
-      homeGrid,
-      homeLat: hasLocation ? parsed.data.homeLat : null,
-      homeLng: hasLocation ? parsed.data.homeLng : null,
-      callsignVerified:
+    if (patch.homeGrid !== undefined) {
+      // Grid and GPS point move together — a grid without both coords clears the marker.
+      const hasLocation =
+        Boolean(patch.homeGrid) &&
+        typeof patch.homeLat === "number" &&
+        typeof patch.homeLng === "number";
+      set.homeGrid = patch.homeGrid;
+      set.homeLat = hasLocation ? patch.homeLat : null;
+      set.homeLng = hasLocation ? patch.homeLng : null;
+    }
+    if (patch.callsign !== undefined) {
+      nextCallsign = patch.callsign;
+      if (nextCallsign) {
+        const taken = await findUserByAssignedCallsign(nextCallsign, user._id);
+        if (taken) {
+          return {
+            ok: false as const,
+            error: "Callsign is already assigned to another user",
+          };
+        }
+      }
+      // Verification only survives when the callsign itself is unchanged.
+      // Clearing the callsign always drops it back to unverified.
+      const keepsVerification =
         Boolean(nextCallsign) &&
-        !callsignChanged &&
-        Boolean(user.callsignVerified),
-      callsignVerificationStatus:
-        Boolean(nextCallsign) && !callsignChanged && Boolean(user.callsignVerified)
-          ? "verified"
-          : "unverified",
-    };
-    if (birthdayIso) {
-      update.birthday = new Date(`${birthdayIso}T12:00:00.000Z`);
+        nextCallsign === previousCallsign &&
+        Boolean(user.callsignVerified);
+      set.callsign = nextCallsign;
+      set.callsignVerified = keepsVerification;
+      set.callsignVerificationStatus = keepsVerification ? "verified" : "unverified";
     }
 
-    await User.updateOne(
-      { _id: user._id },
-      birthdayIso
-        ? { $set: update }
-        : { $set: update, $unset: { birthday: 1 } },
-      { strict: false },
-    );
+    const update: Record<string, unknown> = {};
+    if (Object.keys(set).length > 0) update.$set = set;
+    if (Object.keys(unset).length > 0) update.$unset = unset;
+    if (Object.keys(update).length === 0) {
+      return { ok: false as const, error: "No profile changes" };
+    }
+
+    await User.updateOne({ _id: user._id }, update, { strict: false });
 
     revalidatePath("/account");
     revalidatePath("/logbook");

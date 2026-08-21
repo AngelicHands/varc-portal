@@ -21,17 +21,23 @@ export function isValidCallsign(value: string): boolean {
 
 const reservedCallsignMessage = "This callsign is reserved by the site";
 
+/**
+ * Optional / clearable callsign. Blank clears it, but input that is non-blank
+ * and only *normalizes* to blank (e.g. "!!") is rejected — validate before the
+ * transform so typos can never silently wipe an existing callsign.
+ */
 export const adminCallsignSchema = z
   .string()
   .trim()
   .max(15)
-  .transform((value) => normalizeProfileCallsign(value))
+  .refine(
+    (value) => value === "" || !isReservedHamPath(normalizeProfileCallsign(value)),
+    { message: reservedCallsignMessage },
+  )
   .refine((value) => value === "" || isValidCallsign(value), {
     message: "Enter a valid callsign (e.g. XV1ABC)",
   })
-  .refine((value) => value === "" || !isReservedHamPath(value), {
-    message: reservedCallsignMessage,
-  });
+  .transform((value) => normalizeProfileCallsign(value));
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DATE_DMY = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
@@ -90,20 +96,10 @@ export function parseBirthdayInput(value: string): string | null {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+// Every profile field is clearable: an empty string means "remove this value".
 export const profileFormSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  callsign: z
-    .string()
-    .trim()
-    .min(1, "Callsign is required")
-    .max(15)
-    .transform(normalizeProfileCallsign)
-    .refine(isValidCallsign, {
-      message: "Enter a valid callsign (e.g. XV1ABC)",
-    })
-    .refine((value) => !isReservedHamPath(value), {
-      message: reservedCallsignMessage,
-    }),
+  name: z.string().trim().max(120),
+  callsign: adminCallsignSchema,
   birthday: z
     .string()
     .trim()
@@ -143,6 +139,12 @@ export const profileFormSchema = z.object({
       { message: "Invalid longitude" },
     ),
 });
+
+/**
+ * Partial profile update: each info card sends only the field it edits, so
+ * untouched fields must stay absent instead of being re-submitted.
+ */
+export const profilePatchSchema = profileFormSchema.partial();
 
 /** Partial update: station grid + GPS from map / profile location helpers. */
 export const homeLocationUpdateSchema = z.object({

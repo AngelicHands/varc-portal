@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { PortalDialog } from "@/components/portal/portal-dialog";
 import { UserDocumentsPanel } from "@/components/portal/user-documents-panel";
 import {
@@ -39,6 +39,17 @@ type Props = {
 };
 
 type EditField = "name" | "callsign" | "birthday" | "gender" | "homeGrid";
+
+/** Only the field(s) edited in a card — everything else is left untouched server-side. */
+type ProfilePatch = {
+  name?: string;
+  callsign?: string;
+  birthday?: string;
+  gender?: ProfileGender;
+  homeGrid?: string;
+  homeLat?: number | null;
+  homeLng?: number | null;
+};
 
 const cardClass =
   "flex h-full flex-col rounded-lg border border-border bg-surface p-4 md:p-5";
@@ -127,6 +138,7 @@ function hasDocumentKind(documents: UserDocumentDto[], kind: "certificate" | "li
 
 export function AccountProfileForm({ initial, initialDocuments }: Props) {
   const t = useTranslations("account");
+  const locale = useLocale();
   const router = useRouter();
   const [name, setName] = useState(initial.name ?? "");
   const [callsign, setCallsign] = useState(initial.callsign ?? "");
@@ -236,56 +248,60 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
     setError(null);
   }
 
-  function saveProfile(next: {
-    name: string;
-    callsign: string;
-    birthday: string;
-    gender: ProfileGender;
-    homeGrid: string;
-    homeLat: number | null;
-    homeLng: number | null;
-  }) {
+  function saveProfile(patch: ProfilePatch) {
     setMessage(null);
     setError(null);
-    const birthdayIso = parseBirthdayInput(next.birthday);
-    if (birthdayIso === null) {
-      setError(t("birthdayInvalid"));
-      return;
+
+    let birthdayIso: string | undefined;
+    if (patch.birthday !== undefined) {
+      const parsed = parseBirthdayInput(patch.birthday);
+      if (parsed === null) {
+        setError(t("birthdayInvalid"));
+        return;
+      }
+      birthdayIso = parsed;
     }
+
     startTransition(async () => {
-      const result = await updateProfileAction({
-        name: next.name,
-        callsign: next.callsign,
-        birthday: birthdayIso,
-        gender: next.gender,
-        homeGrid: next.homeGrid,
-        homeLat: next.homeLat,
-        homeLng: next.homeLng,
-      });
-      if (result.ok) {
-        const nextCallsign = next.callsign.trim().toUpperCase();
-        const previous = savedCallsign;
-        const callsignDidChange = nextCallsign !== previous;
-        setName(next.name);
+      const result = await updateProfileAction(
+        birthdayIso === undefined ? patch : { ...patch, birthday: birthdayIso },
+      );
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      if (patch.name !== undefined) setName(patch.name);
+      if (birthdayIso !== undefined) setBirthday(birthdayIso);
+      if (patch.gender !== undefined) setGender(patch.gender);
+      if (patch.homeGrid !== undefined) {
+        setHomeGrid(patch.homeGrid.trim().toUpperCase());
+        setHomeLat(patch.homeLat ?? null);
+        setHomeLng(patch.homeLng ?? null);
+      }
+
+      const previous = savedCallsign;
+      let nextCallsign = previous;
+      if (patch.callsign !== undefined) {
+        nextCallsign = patch.callsign.trim().toUpperCase();
         setCallsign(nextCallsign);
-        setBirthday(next.birthday);
-        setGender(next.gender);
-        setHomeGrid(next.homeGrid.trim().toUpperCase());
-        setHomeLat(next.homeLat);
-        setHomeLng(next.homeLng);
-        if (callsignDidChange) {
+        setSavedCallsign(nextCallsign);
+        if (nextCallsign !== previous) {
           setVerificationStatus("unverified");
         }
-        setMessage(t("saved"));
-        setSavedCallsign(nextCallsign);
-        setEditField(null);
-        if (nextCallsign && nextCallsign !== previous) {
-          router.replace(`${hamPublicPath(nextCallsign)}?tab=profile`);
-        }
-        router.refresh();
-      } else {
-        setError(result.error);
       }
+
+      setMessage(t("saved"));
+      setEditField(null);
+      if (nextCallsign !== previous) {
+        // The owner view lives at /{callsign}; with no callsign it moves back to /account.
+        router.replace(
+          nextCallsign
+            ? `${hamPublicPath(nextCallsign)}?tab=profile`
+            : `/${locale}/account?tab=profile`,
+        );
+      }
+      router.refresh();
     });
   }
 
@@ -317,27 +333,28 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
   function onSaveEdit(event: React.FormEvent) {
     event.preventDefault();
     if (!editField) return;
-    const nextGrid = editField === "homeGrid" ? draftHomeGrid : homeGrid;
-    const nextLat =
-      editField === "homeGrid"
-        ? nextGrid.trim()
-          ? draftHomeLat
-          : null
-        : homeLat;
-    const nextLng =
-      editField === "homeGrid"
-        ? nextGrid.trim()
-          ? draftHomeLng
-          : null
-        : homeLng;
+    if (editField === "name") {
+      saveProfile({ name: draftName });
+      return;
+    }
+    if (editField === "callsign") {
+      saveProfile({ callsign: draftCallsign });
+      return;
+    }
+    if (editField === "birthday") {
+      saveProfile({ birthday: draftBirthday });
+      return;
+    }
+    if (editField === "gender") {
+      saveProfile({ gender: draftGender });
+      return;
+    }
+    // Grid and its GPS point are one unit: clearing the grid clears the marker.
+    const hasGrid = draftHomeGrid.trim().length > 0;
     saveProfile({
-      name: editField === "name" ? draftName : name,
-      callsign: editField === "callsign" ? draftCallsign : callsign,
-      birthday: editField === "birthday" ? draftBirthday : birthday,
-      gender: editField === "gender" ? draftGender : gender,
-      homeGrid: nextGrid,
-      homeLat: nextLat,
-      homeLng: nextLng,
+      homeGrid: draftHomeGrid,
+      homeLat: hasGrid ? draftHomeLat : null,
+      homeLng: hasGrid ? draftHomeLng : null,
     });
   }
 
@@ -480,8 +497,8 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
               <input
                 value={draftName}
                 onChange={(e) => setDraftName(e.target.value)}
-                required
                 autoFocus
+                maxLength={120}
                 className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2"
               />
             </label>
@@ -495,8 +512,8 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
               <input
                 value={draftCallsign}
                 onChange={(e) => setDraftCallsign(e.target.value.toUpperCase())}
-                required
                 autoFocus
+                maxLength={15}
                 placeholder="XV1ABC"
                 className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2 uppercase"
               />
