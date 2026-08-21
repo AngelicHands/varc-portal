@@ -20,12 +20,15 @@ const TABS: TabDef[] = [
   { id: "security", ownerOnly: true },
 ];
 
-function tabHref(callsign: string, id: HamTabId, firstVisible: HamTabId): string {
-  if (id === firstVisible) return `/${callsign}`;
-  return `/${callsign}?tab=${id}`;
+function tabHref(basePath: string, id: HamTabId, firstVisible: HamTabId): string {
+  if (id === firstVisible) return basePath;
+  const join = basePath.includes("?") ? "&" : "?";
+  return `${basePath}${join}tab=${id}`;
 }
 
 export function HamProfileTabs({
+  /** Public profile path (`/XV1ABC`) or account path (`/vi/account`) when callsign is unset. */
+  basePath,
   callsign,
   active,
   isOwner,
@@ -37,7 +40,8 @@ export function HamProfileTabs({
   qsl,
   security,
 }: {
-  callsign: string;
+  basePath?: string;
+  callsign?: string;
   active: HamTabId;
   isOwner: boolean;
   canViewProfile?: boolean;
@@ -50,6 +54,8 @@ export function HamProfileTabs({
 }) {
   const t = useTranslations("ham");
   const router = useRouter();
+  const resolvedBasePath =
+    basePath?.trim() || (callsign?.trim() ? `/${callsign.trim()}` : "/account");
   const [displayTab, setDisplayTab] = useState(active);
   const [syncedActive, setSyncedActive] = useState(active);
   const [mountedTabs, setMountedTabs] = useState<HamTabId[]>(() => [active]);
@@ -79,7 +85,7 @@ export function HamProfileTabs({
 
   function goToTab(tabId: HamTabId) {
     if (tabId === displayTab) return;
-    const href = tabHref(callsign, tabId, firstVisible);
+    const href = tabHref(resolvedBasePath, tabId, firstVisible);
     setDisplayTab(tabId);
     setMountedTabs((prev) =>
       prev.includes(tabId) ? prev : [...prev, tabId],
@@ -113,7 +119,7 @@ export function HamProfileTabs({
               aria-selected={selected}
               id={`ham-tab-${tab.id}`}
               aria-controls={`ham-panel-${tab.id}`}
-              href={tabHref(callsign, tab.id, firstVisible)}
+              href={tabHref(resolvedBasePath, tab.id, firstVisible)}
               onClick={(event) => {
                 event.preventDefault();
                 goToTab(tab.id);

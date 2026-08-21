@@ -191,6 +191,7 @@ export function HamOwnerDocumentsTabPanel() {
         <UserDocumentsPanel
           initialDocuments={data.documents}
           uploadEndpoint="/api/account/documents"
+          variant="panels"
           labels={{
             certificate: accountT("certificate"),
             license: accountT("license"),

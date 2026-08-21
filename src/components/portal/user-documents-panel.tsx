@@ -32,6 +32,8 @@ type Props = {
   canDelete?: boolean;
   labels?: Partial<DocumentLabels>;
   tone?: "portal" | "admin";
+  /** `panels` = dashed dropzones (documents tab). `list` = compact sections. */
+  variant?: "list" | "panels";
   onDocumentsChange?: (documents: UserDocumentDto[]) => void;
 };
 
@@ -117,6 +119,7 @@ export function UserDocumentsPanel({
   canDelete = true,
   labels: labelsProp,
   tone = "portal",
+  variant = "list",
   onDocumentsChange,
 }: Props) {
   const t = { ...DEFAULT_LABELS, ...labelsProp };
@@ -223,7 +226,94 @@ export function UserDocumentsPanel({
     });
   }
 
-  function renderSection(kind: UserDocumentKind, title: string) {
+  function UploadButton({
+    kind,
+    className,
+  }: {
+    kind: UserDocumentKind;
+    className: string;
+  }) {
+    return (
+      <label className={className}>
+        <input
+          type="file"
+          accept=".pdf,image/jpeg,image/png,image/webp"
+          className="sr-only"
+          disabled={pendingKind === kind}
+          onChange={(event) => {
+            const file = event.target.files?.[0] ?? null;
+            void upload(kind, file);
+            event.target.value = "";
+          }}
+        />
+        {pendingKind === kind ? t.uploading : t.upload}
+      </label>
+    );
+  }
+
+  function DocumentRows({ kind }: { kind: UserDocumentKind }) {
+    const items = grouped[kind];
+    const showPending = pendingPreview?.kind === kind;
+    if (items.length === 0 && !showPending) return null;
+
+    return (
+      <ul className="mt-3 w-full space-y-2">
+        {showPending && pendingPreview ? (
+          <li key="pending-upload" className={`${rowClass} opacity-80`}>
+            <DocumentThumbnail
+              contentType={pendingPreview.contentType}
+              src={pendingPreview.url}
+              alt={pendingPreview.originalName}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium text-foreground">
+                {pendingPreview.originalName}
+              </p>
+              <p
+                className={`text-xs ${tone === "admin" ? "text-gray-500" : "text-muted"}`}
+              >
+                {t.uploading}
+              </p>
+            </div>
+          </li>
+        ) : null}
+        {items.map((doc) => (
+          <li key={doc.id} className={rowClass}>
+            <DocumentThumbnail
+              contentType={doc.contentType}
+              src={previewUrl(doc.downloadUrl)}
+              alt={doc.originalName}
+              href={doc.downloadUrl}
+            />
+            <div className="min-w-0 flex-1 text-left">
+              <a
+                href={doc.downloadUrl}
+                className="truncate font-medium text-accent hover:underline"
+              >
+                {doc.originalName}
+              </a>
+              <p className="text-xs text-muted">
+                {formatBytes(doc.size)} ·{" "}
+                {new Date(doc.createdAt).toLocaleString()}
+              </p>
+            </div>
+            {canDelete ? (
+              <button
+                type="button"
+                disabled={pendingDelete}
+                onClick={() => onDelete(doc.id)}
+                className="shrink-0 text-xs text-red-600 hover:underline disabled:opacity-50"
+              >
+                {t.delete}
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  function renderListSection(kind: UserDocumentKind, title: string) {
     const items = grouped[kind];
     const showPending = pendingPreview?.kind === kind;
 
@@ -231,91 +321,74 @@ export function UserDocumentsPanel({
       <section className={cardClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className={titleClass}>{title}</h3>
-          <label className={uploadBtnClass}>
-            <input
-              type="file"
-              accept=".pdf,image/jpeg,image/png,image/webp"
-              className="sr-only"
-              disabled={pendingKind === kind}
-              onChange={(event) => {
-                const file = event.target.files?.[0] ?? null;
-                void upload(kind, file);
-                event.target.value = "";
-              }}
-            />
-            {pendingKind === kind ? t.uploading : t.upload}
-          </label>
+          <UploadButton kind={kind} className={uploadBtnClass} />
         </div>
         {items.length === 0 && !showPending ? (
           <p className={`mt-3 ${mutedClass}`}>{t.noDocuments}</p>
         ) : (
-          <ul className="mt-3 space-y-2">
-            {showPending && pendingPreview ? (
-              <li key="pending-upload" className={`${rowClass} opacity-80`}>
-                <DocumentThumbnail
-                  contentType={pendingPreview.contentType}
-                  src={pendingPreview.url}
-                  alt={pendingPreview.originalName}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-foreground">
-                    {pendingPreview.originalName}
-                  </p>
-                  <p
-                    className={`text-xs ${tone === "admin" ? "text-gray-500" : "text-muted"}`}
-                  >
-                    {t.uploading}
-                  </p>
-                </div>
-              </li>
-            ) : null}
-            {items.map((doc) => (
-              <li key={doc.id} className={rowClass}>
-                <DocumentThumbnail
-                  contentType={doc.contentType}
-                  src={previewUrl(doc.downloadUrl)}
-                  alt={doc.originalName}
-                  href={doc.downloadUrl}
-                />
-                <div className="min-w-0 flex-1">
-                  <a
-                    href={doc.downloadUrl}
-                    className="truncate font-medium text-accent hover:underline"
-                  >
-                    {doc.originalName}
-                  </a>
-                  <p className="text-xs text-muted">
-                    {formatBytes(doc.size)} ·{" "}
-                    {new Date(doc.createdAt).toLocaleString()}
-                  </p>
-                </div>
-                {canDelete ? (
-                  <button
-                    type="button"
-                    disabled={pendingDelete}
-                    onClick={() => onDelete(doc.id)}
-                    className="shrink-0 text-xs text-red-600 hover:underline disabled:opacity-50"
-                  >
-                    {t.delete}
-                  </button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          <DocumentRows kind={kind} />
         )}
       </section>
     );
   }
 
+  function renderPanelSection(kind: UserDocumentKind, title: string) {
+    const items = grouped[kind];
+    const showPending = pendingPreview?.kind === kind;
+    const isEmpty = items.length === 0 && !showPending;
+
+    return (
+      <section className="flex min-h-64 flex-col rounded-xl border border-dashed border-border bg-card/30 p-5 md:min-h-72">
+        <h3 className="text-center text-sm font-medium tracking-wide text-foreground uppercase">
+          {title}
+        </h3>
+
+        {isEmpty ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-2 py-8">
+            <p className="text-center text-sm text-muted">{t.noDocuments}</p>
+            <UploadButton
+              kind={kind}
+              className="inline-flex cursor-pointer items-center justify-center rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            />
+          </div>
+        ) : (
+          <div className="mt-4 flex flex-1 flex-col">
+            <DocumentRows kind={kind} />
+            <div className="mt-auto flex justify-center pt-6">
+              <UploadButton
+                kind={kind}
+                className="inline-flex cursor-pointer items-center justify-center rounded-md border border-border bg-background px-5 py-2.5 text-sm font-medium hover:bg-foreground/5 disabled:opacity-60"
+              />
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  const isPanels = variant === "panels";
+
   return (
-    <div className={tone === "admin" ? "grid gap-4 md:grid-cols-2" : "grid gap-4"}>
+    <div
+      className={
+        isPanels
+          ? "grid gap-4 md:grid-cols-2"
+          : tone === "admin"
+            ? "grid gap-4 md:grid-cols-2"
+            : "grid gap-4"
+      }
+    >
       {error ? (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 md:col-span-2">
           {error}
         </p>
       ) : null}
-      {renderSection("certificate", t.certificate)}
-      {renderSection("license", t.license)}
+      {isPanels
+        ? renderPanelSection("certificate", t.certificate)
+        : renderListSection("certificate", t.certificate)}
+      {isPanels
+        ? renderPanelSection("license", t.license)
+        : renderListSection("license", t.license)}
     </div>
   );
 }

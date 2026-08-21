@@ -368,6 +368,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
       {canEdit ? (
         <HamOwnerTabDataProvider>
           <HamProfileTabs
+            basePath={`/${ham.callsign}`}
             callsign={ham.callsign}
             active={activeTab}
             isOwner={canEdit}
@@ -382,6 +383,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
         </HamOwnerTabDataProvider>
       ) : (
         <HamProfileTabs
+          basePath={`/${ham.callsign}`}
           callsign={ham.callsign}
           active={activeTab}
           isOwner={canEdit}

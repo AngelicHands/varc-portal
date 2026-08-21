@@ -264,6 +264,7 @@
     "saved": "Đã lưu hồ sơ.",
     "openLogbook": "Mở nhật ký QSO",
     "notFound": "Không tìm thấy tài khoản.",
+    "setupLede": "Thêm hô hiệu và grid location để công bố hồ sơ. Bạn vẫn có thể quản lý tài khoản tại đây.",
     "callsignRequired": "Hãy nhập hô hiệu bên dưới trước khi dùng nhật ký QSO.",
     "certificate": "Giấy chứng nhận",
     "license": "Giấy phép",

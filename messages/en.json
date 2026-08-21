@@ -264,6 +264,7 @@
     "saved": "Profile saved.",
     "openLogbook": "Open logbook",
     "notFound": "Account not found.",
+    "setupLede": "Add your callsign and grid location to publish your operator profile. You can still manage account settings here.",
     "callsignRequired": "Set your callsign below before you can use the logbook.",
     "certificate": "Certificate",
     "license": "License",

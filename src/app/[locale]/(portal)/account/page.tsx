@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
-import { AccountProfileForm } from "@/components/portal/account-profile-form";
+import {
+  HamOwnerDocumentsTabPanel,
+  HamOwnerProfileTabPanel,
+  HamOwnerQslTabPanel,
+  HamOwnerSecurityTabPanel,
+  HamOwnerTabDataProvider,
+} from "@/components/portal/ham-owner-tab-panels";
+import { HamProfileTabs } from "@/components/portal/ham-profile-tabs";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { getAccountProfile } from "@/lib/account";
-import { hamPublicPath } from "@/lib/ham-reserved";
+import { hamPublicPath, parseHamTab, type HamTabId } from "@/lib/ham-reserved";
 import { requirePortalSession } from "@/lib/portal-access";
-import { listUserDocuments } from "@/lib/user-documents";
 import type { AppLocale } from "@/i18n/routing";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +20,7 @@ export const fetchCache = "force-no-store";
 
 type Props = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ setup?: string }>;
+  searchParams: Promise<{ setup?: string; tab?: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -29,13 +35,13 @@ export default async function AccountPage({ params, searchParams }: Props) {
   const locale = localeParam as AppLocale;
   setRequestLocale(locale);
 
-  const { setup } = await searchParams;
+  const { tab: tabParam } = await searchParams;
   const session = await requirePortalSession(locale);
-  const t = await getTranslations("account");
-  const [profile, documents] = await Promise.all([
-    getAccountProfile(session.user.id, session.user.email),
-    listUserDocuments(session.user.id),
+  const [t, hamT] = await Promise.all([
+    getTranslations("account"),
+    getTranslations("ham"),
   ]);
+  const profile = await getAccountProfile(session.user.id, session.user.email);
 
   if (!profile) {
     return (
@@ -47,39 +53,62 @@ export default async function AccountPage({ params, searchParams }: Props) {
 
   const callsign = profile.callsign.trim();
   if (callsign) {
-    redirect(`${hamPublicPath(callsign)}?tab=profile`);
+    const qs = new URLSearchParams();
+    if (
+      tabParam === "profile" ||
+      tabParam === "documents" ||
+      tabParam === "logbook" ||
+      tabParam === "qsl" ||
+      tabParam === "security"
+    ) {
+      qs.set("tab", tabParam);
+    }
+    const query = qs.toString();
+    redirect(`${hamPublicPath(callsign)}${query ? `?${query}` : "?tab=profile"}`);
   }
+
+  const visibleTabs: HamTabId[] = [
+    "profile",
+    "logbook",
+    "documents",
+    "qsl",
+    "security",
+  ];
+  const activeTab = parseHamTab(tabParam, visibleTabs);
+  const basePath = `/${locale}/account`;
+  const displayName = profile.name.trim() || profile.email || t("title");
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6">
       <SetLocaleAlternates vi="/account" en="/account" />
-      <h1 className="font-display text-4xl text-foreground">{t("title")}</h1>
-      <p className="mt-3 max-w-2xl text-muted">{t("lede")}</p>
 
-      {setup === "callsign" ? (
-        <p className="mt-6 rounded-md border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-foreground">
-          {t("callsignRequired")}
-        </p>
-      ) : null}
+      <p className="text-[10px] font-medium tracking-[0.22em] text-accent uppercase">
+        {hamT("eyebrow")}
+      </p>
 
-      <section className="mt-10">
-        <h2 className="mb-4 text-lg font-medium text-foreground">{t("profile")}</h2>
-        <AccountProfileForm
-          initial={{
-            name: profile.name,
-            email: profile.email,
-            callsign: profile.callsign,
-            callsignVerified: profile.callsignVerified,
-            callsignVerificationStatus: profile.callsignVerificationStatus,
-            birthday: profile.birthday,
-            gender: profile.gender,
-            homeGrid: profile.homeGrid,
-            homeLat: profile.homeLat,
-            homeLng: profile.homeLng,
-          }}
-          initialDocuments={documents}
+      <div className="mt-6">
+        <h1 className="font-display text-5xl tracking-wide text-foreground md:text-6xl">
+          {displayName}
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm text-muted">{t("setupLede")}</p>
+      </div>
+
+      <HamOwnerTabDataProvider>
+        <HamProfileTabs
+          basePath={basePath}
+          active={activeTab}
+          isOwner
+          canViewProfile
+          canViewLogbook
+          profile={<HamOwnerProfileTabPanel />}
+          logbook={
+            <div className="rounded-lg border border-dashed border-border px-6 py-16" />
+          }
+          documents={<HamOwnerDocumentsTabPanel />}
+          qsl={<HamOwnerQslTabPanel />}
+          security={<HamOwnerSecurityTabPanel />}
         />
-      </section>
+      </HamOwnerTabDataProvider>
     </div>
   );
 }
