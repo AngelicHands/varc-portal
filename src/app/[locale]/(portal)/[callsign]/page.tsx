@@ -197,6 +197,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
           showQsoMarkers={showQsoMarkers}
           branding={branding}
           canSetHomeLocation={canEdit && !ham.homeGrid.trim()}
+          canAddQso={canEdit}
         />
       </>
     );

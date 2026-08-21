@@ -735,6 +735,8 @@ type Props = {
   canSetHomeLocation?: boolean;
   /** Owner has no callsign yet — shown in place of the empty QSO list. */
   needsCallsign?: boolean;
+  /** Viewer owns this logbook, so the QSO list offers a "log QSO" shortcut. */
+  canAddQso?: boolean;
 };
 
 let mapLibreWorkerConfigured = false;
@@ -758,6 +760,7 @@ export function HamMapFullscreenView({
   branding,
   canSetHomeLocation = false,
   needsCallsign = false,
+  canAddQso = false,
 }: Props) {
   const t = useTranslations("ham.map");
   const shellRef = useRef<HTMLDivElement>(null);
@@ -1488,6 +1491,7 @@ export function HamMapFullscreenView({
           qsos={filteredQsos}
           totalQsos={qsos.length}
           needsCallsign={needsCallsign}
+          canAddQso={canAddQso}
           selectedQsoId={activeSelectedQsoId}
           onSelectQso={setSelectedQsoId}
         />

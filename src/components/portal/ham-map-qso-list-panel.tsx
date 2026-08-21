@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { HamMapCallsignDialog } from "@/components/portal/ham-map-callsign-dialog";
+import { HamMapQsoDialog } from "@/components/portal/ham-map-qso-dialog";
 import type { QsoListItemDto } from "@/lib/account-types";
 import type { HamMapTheme } from "@/lib/map/maptiler-style";
 import { formatMaidenheadDisplay } from "@/lib/maidenhead";
@@ -20,6 +21,8 @@ type Props = {
   totalQsos: number;
   /** Owner has no callsign yet, so they cannot log a QSO at all. */
   needsCallsign?: boolean;
+  /** Viewer owns this logbook, so they can log a QSO straight from the map. */
+  canAddQso?: boolean;
   selectedQsoId: string | null;
   onSelectQso: (qsoId: string | null) => void;
 };
@@ -31,11 +34,13 @@ export function HamMapQsoListPanel({
   qsos,
   totalQsos,
   needsCallsign = false,
+  canAddQso = false,
   selectedQsoId,
   onSelectQso,
 }: Props) {
   const t = useTranslations("ham.map");
   const [callsignDialogOpen, setCallsignDialogOpen] = useState(false);
+  const [qsoDialogOpen, setQsoDialogOpen] = useState(false);
   const light = mapTheme === "light";
 
   const panelClass = light
@@ -52,6 +57,9 @@ export function HamMapQsoListPanel({
   const linkClass = light
     ? "text-zinc-900 hover:text-zinc-600"
     : "text-white hover:text-white/70";
+  const addButtonClass = light
+    ? "border-zinc-300 text-zinc-800 hover:bg-zinc-100"
+    : "border-white/20 text-white hover:bg-white/10";
 
   const sorted = [...qsos].sort((a, b) => b.qsoAt.localeCompare(a.qsoAt));
 
@@ -76,11 +84,26 @@ export function HamMapQsoListPanel({
         className={`pointer-events-auto flex h-full w-full flex-col border-r backdrop-blur-md ${panelClass}`}
         aria-label={t("qsoListTitle")}
       >
-        <div className={`border-b px-4 py-3 ${rowBorder}`}>
-          <p className={`text-sm font-medium ${strong}`}>{t("qsoListTitle")}</p>
-          <p className={`mt-0.5 text-xs ${muted}`}>
-            {t("qsoListCount", { count: sorted.length })}
-          </p>
+        <div
+          className={`flex items-start justify-between gap-2 border-b px-4 py-3 ${rowBorder}`}
+        >
+          <div className="min-w-0">
+            <p className={`text-sm font-medium ${strong}`}>
+              {t("qsoListTitle")}
+            </p>
+            <p className={`mt-0.5 text-xs ${muted}`}>
+              {t("qsoListCount", { count: sorted.length })}
+            </p>
+          </div>
+          {canAddQso && totalQsos > 0 ? (
+            <button
+              type="button"
+              onClick={() => setQsoDialogOpen(true)}
+              className={`shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition ${addButtonClass}`}
+            >
+              {t("qsoListAdd")}
+            </button>
+          ) : null}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -96,6 +119,15 @@ export function HamMapQsoListPanel({
                   className={`mt-3 text-sm font-medium underline underline-offset-4 transition ${linkClass}`}
                 >
                   {t("callsignPromptLink")}
+                </button>
+              ) : canAddQso && totalQsos === 0 ? (
+                // With QSOs logged the header button already covers this.
+                <button
+                  type="button"
+                  onClick={() => setQsoDialogOpen(true)}
+                  className={`mt-3 text-sm font-medium underline underline-offset-4 transition ${linkClass}`}
+                >
+                  {t("qsoListAddLink")}
                 </button>
               ) : null}
             </div>
@@ -173,6 +205,14 @@ export function HamMapQsoListPanel({
           open
           mapTheme={mapTheme}
           onClose={() => setCallsignDialogOpen(false)}
+        />
+      ) : null}
+
+      {qsoDialogOpen ? (
+        <HamMapQsoDialog
+          open
+          mapTheme={mapTheme}
+          onClose={() => setQsoDialogOpen(false)}
         />
       ) : null}
     </div>
