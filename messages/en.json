@@ -180,7 +180,6 @@
       "qsoListNone": "No QSO made",
       "qsoListNeedsCallsign": "You should create your callsign before creating new QSO",
       "qsoListAdd": "+ Add QSO",
-      "qsoListAddLink": "Add your first QSO",
       "qsoFormRequired": "Fill in all required fields",
       "callsignPromptLink": "Add your callsign",
       "callsignPromptTitle": "Add your callsign",

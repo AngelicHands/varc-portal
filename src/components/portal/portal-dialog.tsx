@@ -3,6 +3,17 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+/** Fullscreen API only paints descendants of the fullscreen node; body portals sit behind it. */
+function dialogPortalRoot(): HTMLElement {
+  const doc = document as Document & {
+    webkitFullscreenElement?: Element | null;
+  };
+  const fullscreen =
+    document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+  if (fullscreen instanceof HTMLElement) return fullscreen;
+  return document.body;
+}
+
 type Props = {
   open: boolean;
   title: string;
@@ -12,7 +23,7 @@ type Props = {
   closeDisabled?: boolean;
   /** Extra classes on the fullscreen backdrop (e.g. backdrop tint). */
   overlayClassName?: string;
-  /** Stacking order; default 50. Use a higher value over the map (z-100). */
+  /** Stacking order within the portal root; default 50. Map dialogs use 110+. */
   zIndex?: number;
   /** Override dialog panel surface (defaults to site surface). */
   panelClassName?: string;
@@ -35,10 +46,21 @@ export function PortalDialog({
 }: Props) {
   const titleId = useId();
   const [mounted, setMounted] = useState(false);
+  const [container, setContainer] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => setMounted(true));
-    return () => window.cancelAnimationFrame(frame);
+    const syncRoot = () => setContainer(dialogPortalRoot());
+    const frame = window.requestAnimationFrame(() => {
+      setMounted(true);
+      syncRoot();
+    });
+    document.addEventListener("fullscreenchange", syncRoot);
+    document.addEventListener("webkitfullscreenchange", syncRoot);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("fullscreenchange", syncRoot);
+      document.removeEventListener("webkitfullscreenchange", syncRoot);
+    };
   }, []);
 
   useEffect(() => {
@@ -55,7 +77,7 @@ export function PortalDialog({
     };
   }, [open, mounted, closeDisabled, onClose]);
 
-  if (!mounted || !open) return null;
+  if (!mounted || !open || !container) return null;
 
   return createPortal(
     <div
@@ -90,6 +112,6 @@ export function PortalDialog({
         <div className="mt-4">{children}</div>
       </div>
     </div>,
-    document.body,
+    container,
   );
 }

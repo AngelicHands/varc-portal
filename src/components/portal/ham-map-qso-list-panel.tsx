@@ -95,7 +95,7 @@ export function HamMapQsoListPanel({
               {t("qsoListCount", { count: sorted.length })}
             </p>
           </div>
-          {canAddQso && totalQsos > 0 ? (
+          {canAddQso && sorted.length > 0 ? (
             <button
               type="button"
               onClick={() => setQsoDialogOpen(true)}
@@ -120,14 +120,13 @@ export function HamMapQsoListPanel({
                 >
                   {t("callsignPromptLink")}
                 </button>
-              ) : canAddQso && totalQsos === 0 ? (
-                // With QSOs logged the header button already covers this.
+              ) : canAddQso ? (
                 <button
                   type="button"
                   onClick={() => setQsoDialogOpen(true)}
-                  className={`mt-3 text-sm font-medium underline underline-offset-4 transition ${linkClass}`}
+                  className={`mt-4 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap transition ${addButtonClass}`}
                 >
-                  {t("qsoListAddLink")}
+                  {t("qsoListAdd")}
                 </button>
               ) : null}
             </div>
