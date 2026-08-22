@@ -42,10 +42,14 @@ export function canViewHamDocuments(
 }
 
 export function canViewHamLogbook(
-  ham: Pick<HamPrivacyFlags, "isQsoPublic">,
+  ham: Pick<HamPrivacyFlags, "isProfilePublic" | "isQsoPublic">,
   access: ViewerAccess,
 ): boolean {
-  return access.canEdit || access.canAdminManage || ham.isQsoPublic;
+  return (
+    access.canEdit ||
+    access.canAdminManage ||
+    (ham.isProfilePublic && ham.isQsoPublic)
+  );
 }
 
 /** Profile tab for visitors: shared basic and/or location fields; admins always see it. */

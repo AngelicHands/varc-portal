@@ -827,6 +827,7 @@ type Props = {
     homeMarker: HomeGridMarker | null;
     qsos: QsoListItemDto[];
     isOwner: boolean;
+    showQsoMarkers: boolean;
   };
   initialLookupError?: "invalid" | "notFound" | "private";
 };
@@ -940,12 +941,13 @@ export function HamMapFullscreenView({
     homeMarker: HomeGridMarker | null;
     qsos: QsoListItemDto[];
     isOwner: boolean;
+    showQsoMarkers: boolean;
   } | null>(initialViewed ?? null);
 
   const callsign = viewed?.callsign ?? callsignProp;
   const homeMarker = viewed ? viewed.homeMarker : homeMarkerProp;
   const qsos = viewed?.qsos ?? qsosProp;
-  const showQsoMarkers = viewed ? true : showQsoMarkersProp;
+  const showQsoMarkers = viewed?.showQsoMarkers ?? showQsoMarkersProp;
   const canAddQso = viewed ? viewed.isOwner : canAddQsoProp;
   const canPromptHomeLocation = viewed ? viewed.isOwner : canSetHomeLocation;
   const [savedProfileGrid, setSavedProfileGrid] = useState("");
@@ -1807,6 +1809,7 @@ export function HamMapFullscreenView({
           homeMarker: result.homeMarker,
           qsos: result.qsos,
           isOwner: result.isOwner,
+          showQsoMarkers: result.showQsoMarkers,
         });
       });
     },

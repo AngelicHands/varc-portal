@@ -16,6 +16,44 @@ export type PublicHamLocationStation = {
 
 const QTH_LOCATIONS_TAG = "qth:public-locations";
 
+export async function listAllHamLocations(): Promise<PublicHamLocationStation[]> {
+  await connectDb();
+  const users = await User.find({
+    callsign: { $gt: "" },
+    homeGrid: { $gt: "" },
+  })
+    .select("callsign name callsignVerified homeGrid homeLat homeLng")
+    .sort({ callsign: 1 })
+    .lean<
+      Array<{
+        callsign: string;
+        name: string;
+        callsignVerified?: boolean;
+        homeGrid: string;
+        homeLat?: number | null;
+        homeLng?: number | null;
+      }>
+    >();
+
+  const stations: PublicHamLocationStation[] = [];
+  for (const user of users) {
+    const homeMarker = buildHomeGridMarker(
+      user.homeGrid,
+      user.callsign,
+      user.homeLat ?? null,
+      user.homeLng ?? null,
+    );
+    if (!homeMarker) continue;
+    stations.push({
+      callsign: user.callsign.trim().toUpperCase(),
+      name: user.name.trim() || user.callsign.trim().toUpperCase(),
+      verified: Boolean(user.callsignVerified),
+      homeMarker,
+    });
+  }
+  return stations;
+}
+
 export async function listPublicHamLocations(): Promise<
   PublicHamLocationStation[]
 > {

@@ -70,6 +70,7 @@ export default async function QsoMapPage({ params, searchParams }: Props) {
           homeMarker: lookupResult.homeMarker,
           qsos: lookupResult.qsos,
           isOwner: lookupResult.isOwner,
+          showQsoMarkers: lookupResult.showQsoMarkers,
         }
       : undefined;
   const initialLookupError =
@@ -85,7 +86,9 @@ export default async function QsoMapPage({ params, searchParams }: Props) {
       homeGrid={profile?.homeGrid ?? ""}
       homeMarker={homeMarker}
       qsos={qsos}
-      showQsoMarkers={Boolean(profile)}
+      showQsoMarkers={
+        initialViewed?.showQsoMarkers ?? Boolean(profile)
+      }
       branding={branding}
       canSetHomeLocation={Boolean(profile && !profile.homeGrid.trim())}
       needsCallsign={Boolean(profile && !profile.callsign.trim())}

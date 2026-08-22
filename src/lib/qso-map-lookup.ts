@@ -9,6 +9,7 @@ import {
 } from "@/lib/ham-privacy";
 import { listUserQsos } from "@/lib/qso";
 import { buildHomeGridMarker, type HomeGridMarker } from "@/lib/qso-map";
+import { canManageUsers } from "@/lib/roles";
 import { isValidCallsign, normalizeProfileCallsign } from "@/lib/validations/qso";
 
 export type PublicQsoMapLookup =
@@ -22,6 +23,7 @@ export type PublicQsoMapLookup =
       homeMarker: HomeGridMarker | null;
       qsos: QsoListItemDto[];
       isOwner: boolean;
+      showQsoMarkers: boolean;
     }
   | { ok: false; error: "invalid" | "notFound" | "private" };
 
@@ -46,8 +48,11 @@ export async function lookupPublicQsoMap(
   const isOwner =
     Boolean(viewer && ham.id === viewer.id) ||
     Boolean(viewerCallsign && viewerCallsign === ham.callsign);
+  const canAdminManage = Boolean(
+    session?.user && !isOwner && canManageUsers(session.user),
+  );
 
-  const viewerAccess = { canEdit: isOwner, canAdminManage: false };
+  const viewerAccess = { canEdit: isOwner, canAdminManage };
   const canViewLogbook = canViewHamLogbook(ham, viewerAccess);
   const canViewBasicProfile = canViewHamBasicProfile(ham, viewerAccess);
   const canViewLocation = canViewHamLocation(ham, viewerAccess);
@@ -74,5 +79,6 @@ export async function lookupPublicQsoMap(
       : null,
     qsos,
     isOwner,
+    showQsoMarkers: canViewLogbook,
   };
 }

@@ -9,6 +9,7 @@ import { enqueueQsoConfirmationRequest } from "@/lib/qso-confirmation";
 import { getQsoEmailLimit } from "@/lib/qso-email-limit";
 import { requireUserCallsign, listUserQsosPage, toQsoListItemDto } from "@/lib/qso";
 import { revalidateLogbook } from "@/lib/qso-revalidate";
+import { canViewHamLogbook } from "@/lib/ham-privacy";
 import { canManageUsers, isAdminRole } from "@/lib/roles";
 import { failAction } from "@/lib/safe-error";
 import { qsoInputSchema } from "@/lib/validations/qso";
@@ -286,7 +287,7 @@ export async function loadQsoLogbookPageAction(input: {
     const session = await auth();
     await connectDb();
     const owner = await User.findById(userId)
-      .select("isQsoPublic")
+      .select("isQsoPublic isProfilePublic")
       .lean();
     if (!owner) {
       return { ok: false as const, error: "Not found" };
@@ -294,7 +295,15 @@ export async function loadQsoLogbookPageAction(input: {
 
     const isOwner = session?.user?.id === userId;
     const isManager = Boolean(session?.user && canManageUsers(session.user));
-    if (!isOwner && !isManager && !owner.isQsoPublic) {
+    if (
+      !canViewHamLogbook(
+        {
+          isProfilePublic: owner.isProfilePublic !== false,
+          isQsoPublic: Boolean(owner.isQsoPublic),
+        },
+        { canEdit: isOwner, canAdminManage: isManager },
+      )
+    ) {
       return { ok: false as const, error: "Forbidden" };
     }
 

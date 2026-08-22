@@ -221,6 +221,13 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
           branding={branding}
           canSetHomeLocation={canEdit && !ham.homeGrid.trim()}
           canAddQso={canEdit}
+          initialViewed={{
+            callsign: ham.callsign,
+            homeMarker,
+            qsos: qsosForMap,
+            isOwner: canEdit,
+            showQsoMarkers,
+          }}
           viewer={
             viewerProfile
               ? {
