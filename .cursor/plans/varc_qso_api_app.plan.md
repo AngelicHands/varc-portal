@@ -501,6 +501,58 @@ Extend [`.github/workflows/release.yml`](.github/workflows/release.yml):
 
 ---
 
+## v1.1+ improvement backlog (suggested)
+
+Prioritized additions beyond the Valkey performance plan ([`valkey_api_performance.plan.md`](valkey_api_performance.plan.md)).
+
+### Fix now (correctness / parity)
+
+| Item | Why |
+|------|-----|
+| **Maidenhead grid validation on POST/PATCH** | List filters validate grid; [`ValidateInput`](apps/api/internal/qso/validate.go) only checks length — portal [`qsoInputSchema`](src/lib/validations/qso.ts) uses `isValidMaidenheadGrid` |
+| **Worked callsign in cache invalidation** | API writes only bust logger callsign ham tag; include `workedCallsign` (and old+new on PATCH) — see Valkey plan |
+| **Consistent error envelope** | Mix of `{ "error" }` (401/403/500) vs `{ "ok": false, "error" }` (400) — unify and include `requestId` from `X-Request-Id` |
+
+### High value for ham-radio clients
+
+| Item | Why |
+|------|-----|
+| **`updatedSince` list filter** | Incremental sync for mobile/loggers — `?updatedSince=2026-08-22T10:00:00Z` on `GET /v1/qsos` |
+| **`createdAt` / `updatedAt` in ListItem** | Clients need timestamps for dedup and sync cursors |
+| **Idempotency-Key on POST** | `Idempotency-Key` header stores hash → same response on retry; prevents duplicate QSOs from flaky networks |
+| **Read-only tokens in portal UI** | Model supports scopes; allow create with `qso:read` only for export/sync tools |
+| **Rate-limit response headers** | `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining` on 429 |
+
+### API ergonomics
+
+| Item | Why |
+|------|-----|
+| **True partial PATCH** | Today PATCH requires full body (all fields via `ValidateInput`); accept omitted fields and merge with existing doc |
+| **OpenAPI 3 spec** | `apps/api/openapi.yaml` — client SDKs, contract tests, portal/Go drift detection |
+| **Structured error codes** | e.g. `{ "error": "validation_failed", "code": "invalid_grid", "message": "..." }` |
+| **Bulk create** | `POST /v1/qsos/batch` (max N items) for ADIF/sync imports |
+| **ADIF export** | `GET /v1/qsos/export?format=adif&fromDate=…` — common logger expectation |
+
+### Operations / production
+
+| Item | Why |
+|------|-----|
+| **Health depth** | `/health` checks Mongo only; optional Valkey ping + `{ "ok": true, "version": "…" }` for probes (no secrets) |
+| **Structured request logging** | Log `requestId`, `userId`, `tokenPrefix`, method, path, latency — never Bearer |
+| **Prometheus metrics** | Request count, latency histogram, cache hit rate, rate-limit hits |
+| **CORS preflight completeness** | If `API_CORS_ORIGINS` set, return `Access-Control-Allow-Methods` + `Allow-Headers` on OPTIONS |
+
+### Later / optional
+
+| Item | Why |
+|------|-----|
+| **ETag + If-Match** | Optimistic concurrency on PATCH/DELETE |
+| **Client reference field** | Optional `clientRef` on QSO for external dedup without idempotency store |
+| **Webhook on QSO create** | Push to user-configured URL (out of scope v1) |
+| **Contract test suite** | Shared golden fixtures between portal Zod and Go validate |
+
+---
+
 ## Key reference files (portal)
 
 | Concern | File |

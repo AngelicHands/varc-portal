@@ -41,6 +41,32 @@ func RequestID(next http.Handler) http.Handler {
 	})
 }
 
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// AccessLog writes one line per request (method, path, status, duration).
+func AccessLog(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+		log.Printf(
+			"%s %s %d %s",
+			r.Method,
+			r.URL.RequestURI(),
+			sw.status,
+			time.Since(start).Round(time.Millisecond),
+		)
+	})
+}
+
 func SecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -131,7 +157,7 @@ func AuthenticatedRateLimit(cfg config.Config, valkey *cache.Valkey) func(http.H
 	}
 }
 
-func BearerAuth(cfg config.Config, store *appmongo.Store) func(http.Handler) http.Handler {
+func BearerAuth(cfg config.Config, store *appmongo.Store, valkey *cache.Valkey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/health" {
@@ -143,7 +169,14 @@ func BearerAuth(cfg config.Config, store *appmongo.Store) func(http.Handler) htt
 				respond.Error(w, http.StatusUnauthorized, "Unauthorized")
 				return
 			}
-			principal, err := auth.AuthenticateBearer(r.Context(), store, header, cfg.TokenPepper)
+			principal, err := auth.AuthenticateBearer(
+				r.Context(),
+				store,
+				valkey,
+				header,
+				cfg.TokenPepper,
+				cfg.AuthCacheTTL,
+			)
 			if err != nil {
 				respond.Error(w, http.StatusUnauthorized, "Unauthorized")
 				return

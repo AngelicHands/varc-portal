@@ -8,6 +8,7 @@ import {
   MAX_API_TOKENS_PER_USER,
 } from "@/lib/api-token";
 import { connectDb } from "@/lib/db";
+import { invalidateApiAuthCache } from "@/lib/cache/api-auth-cache";
 import { failAction } from "@/lib/safe-error";
 import { ApiToken } from "@/models/ApiToken";
 
@@ -153,6 +154,11 @@ export async function revokeApiTokenAction(id: string) {
     if (!updated) {
       return { ok: false as const, error: "Not found" };
     }
+
+    await invalidateApiAuthCache({
+      tokenId: String(updated._id),
+      tokenPrefix: updated.tokenPrefix,
+    });
 
     return { ok: true as const };
   } catch (error) {

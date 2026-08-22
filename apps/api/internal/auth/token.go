@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/varc-vietnam/varc-portal/apps/api/internal/cache"
 	appmongo "github.com/varc-vietnam/varc-portal/apps/api/internal/mongo"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const TokenPrefixLength = 12
@@ -47,8 +49,10 @@ func constantTimeEqual(a, b string) bool {
 func AuthenticateBearer(
 	ctx context.Context,
 	store *appmongo.Store,
+	valkey *cache.Valkey,
 	rawHeader string,
 	pepper string,
+	authCacheTTL time.Duration,
 ) (Principal, error) {
 	if pepper == "" {
 		return Principal{}, ErrUnauthorized
@@ -58,12 +62,23 @@ func AuthenticateBearer(
 		return Principal{}, ErrUnauthorized
 	}
 	prefix := token[:TokenPrefixLength]
+	expected := HashToken(token, pepper)
+
+	if valkey != nil && valkey.Available() {
+		if entry, err := cache.GetAuthCacheByPrefix(ctx, valkey, prefix); err == nil && entry != nil {
+			if principal, ok := principalFromCacheEntry(entry, expected); ok {
+				if oid, err := primitive.ObjectIDFromHex(entry.TokenID); err == nil {
+					go store.TouchTokenLastUsed(context.Background(), oid)
+				}
+				return principal, nil
+			}
+		}
+	}
 
 	doc, err := store.FindActiveTokenByPrefix(ctx, prefix)
 	if err != nil || doc == nil {
 		return Principal{}, ErrUnauthorized
 	}
-	expected := HashToken(token, pepper)
 	if !constantTimeEqual(expected, doc.TokenHash) {
 		return Principal{}, ErrUnauthorized
 	}
@@ -79,6 +94,10 @@ func AuthenticateBearer(
 		scopes[scope] = struct{}{}
 	}
 
+	if valkey != nil && valkey.Available() && authCacheTTL > 0 {
+		cache.SetAuthCache(ctx, valkey, cacheEntryFromDoc(doc, prefix), authCacheTTL)
+	}
+
 	go store.TouchTokenLastUsed(context.Background(), doc.ID)
 
 	return Principal{
@@ -86,4 +105,47 @@ func AuthenticateBearer(
 		TokenID: doc.ID.Hex(),
 		Scopes:  scopes,
 	}, nil
+}
+
+func principalFromCacheEntry(entry *cache.AuthCacheEntry, expectedHash string) (Principal, bool) {
+	if entry == nil || entry.RevokedAt != nil {
+		return Principal{}, false
+	}
+	if !constantTimeEqual(expectedHash, entry.TokenHash) {
+		return Principal{}, false
+	}
+	if entry.ExpiresAt != nil {
+		parsed, err := time.Parse(time.RFC3339, *entry.ExpiresAt)
+		if err == nil && parsed.Before(time.Now().UTC()) {
+			return Principal{}, false
+		}
+	}
+	scopes := make(map[string]struct{}, len(entry.Scopes))
+	for _, scope := range entry.Scopes {
+		scopes[scope] = struct{}{}
+	}
+	return Principal{
+		UserID:  entry.UserID,
+		TokenID: entry.TokenID,
+		Scopes:  scopes,
+	}, true
+}
+
+func cacheEntryFromDoc(doc *appmongo.ApiToken, prefix string) cache.AuthCacheEntry {
+	entry := cache.AuthCacheEntry{
+		TokenID:     doc.ID.Hex(),
+		TokenPrefix: prefix,
+		UserID:      doc.UserID.Hex(),
+		TokenHash:   doc.TokenHash,
+		Scopes:      doc.Scopes,
+	}
+	if doc.ExpiresAt != nil {
+		formatted := doc.ExpiresAt.UTC().Format(time.RFC3339)
+		entry.ExpiresAt = &formatted
+	}
+	if doc.RevokedAt != nil && !doc.RevokedAt.IsZero() {
+		formatted := doc.RevokedAt.UTC().Format(time.RFC3339)
+		entry.RevokedAt = &formatted
+	}
+	return entry
 }

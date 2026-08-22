@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/varc-vietnam/varc-portal/apps/api/internal/cache"
 	appmongo "github.com/varc-vietnam/varc-portal/apps/api/internal/mongo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -20,11 +21,12 @@ var ErrNotFound = errors.New("not found")
 var ErrNoCallsign = errors.New("no callsign")
 
 type Service struct {
-	store *appmongo.Store
+	store  *appmongo.Store
+	valkey *cache.Valkey
 }
 
-func NewService(store *appmongo.Store) *Service {
-	return &Service{store: store}
+func NewService(store *appmongo.Store, valkey *cache.Valkey) *Service {
+	return &Service{store: store, valkey: valkey}
 }
 
 func (s *Service) RequireUserCallsign(ctx context.Context, userID string) (string, error) {
@@ -79,18 +81,23 @@ func (s *Service) Create(ctx context.Context, userID string, input Input) (ListI
 }
 
 func (s *Service) Get(ctx context.Context, userID, id string) (ListItem, error) {
-	doc, err := s.findOwned(ctx, userID, id)
-	if err != nil {
-		return ListItem{}, err
-	}
-	return ToListItem(*doc), nil
+	key := cache.QsoItemCacheKey(userID, id)
+	tag := cache.UserTag(userID)
+	return cache.Aside(ctx, s.valkey, key, []string{tag}, cache.QsoItemCacheTTL, func() (ListItem, error) {
+		doc, err := s.findOwned(ctx, userID, id)
+		if err != nil {
+			return ListItem{}, err
+		}
+		return ToListItem(*doc), nil
+	})
 }
 
-func (s *Service) Update(ctx context.Context, userID, id string, input Input) (ListItem, error) {
+func (s *Service) Update(ctx context.Context, userID, id string, input Input) (ListItem, string, error) {
 	doc, err := s.findOwned(ctx, userID, id)
 	if err != nil {
-		return ListItem{}, err
+		return ListItem{}, "", err
 	}
+	previousWorked := doc.WorkedCallsign
 	qsoAt, _ := time.Parse(time.RFC3339, input.QsoAt)
 	update := bson.M{
 		"$set": bson.M{
@@ -111,21 +118,31 @@ func (s *Service) Update(ctx context.Context, userID, id string, input Input) (L
 	var updated appmongo.QsoLog
 	err = s.store.Qsos().FindOneAndUpdate(ctx, bson.M{"_id": doc.ID}, update, opts).Decode(&updated)
 	if err != nil {
-		return ListItem{}, err
+		return ListItem{}, "", err
 	}
-	return ToListItem(updated), nil
+	return ToListItem(updated), previousWorked, nil
 }
 
-func (s *Service) Delete(ctx context.Context, userID, id string) error {
+func (s *Service) Delete(ctx context.Context, userID, id string) (string, error) {
 	doc, err := s.findOwned(ctx, userID, id)
 	if err != nil {
-		return err
+		return "", err
 	}
+	worked := doc.WorkedCallsign
 	_, err = s.store.Qsos().DeleteOne(ctx, bson.M{"_id": doc.ID})
-	return err
+	return worked, err
 }
 
 func (s *Service) List(ctx context.Context, userID string, params ListParams) (PageResult, error) {
+	filterHash := ListCacheFilterHash(params)
+	key := cache.QsoListCacheKey(userID, params.Page, params.PageSize, filterHash, params.SortKey, params.SortDir)
+	tag := cache.UserTag(userID)
+	return cache.Aside(ctx, s.valkey, key, []string{tag}, cache.QsoListCacheTTL, func() (PageResult, error) {
+		return s.listFromMongo(ctx, userID, params)
+	})
+}
+
+func (s *Service) listFromMongo(ctx context.Context, userID string, params ListParams) (PageResult, error) {
 	userOID, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return PageResult{}, ErrNotFound

@@ -34,6 +34,7 @@ BACKUP_WORKER_PID=$!
 pnpm worker:email &
 EMAIL_WORKER_PID=$!
 
+echo "[dev:all] starting Go API (logs prefixed [varc-api])"
 ./scripts/dev-api.sh &
 API_PID=$!
 

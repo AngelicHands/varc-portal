@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -20,6 +19,9 @@ import (
 )
 
 func main() {
+	log.SetPrefix("[varc-api] ")
+	log.SetFlags(log.LstdFlags)
+
 	cfg := config.Load()
 	if cfg.MongoURI == "" {
 		log.Fatal("MONGODB_URI is required")
@@ -49,20 +51,30 @@ func main() {
 		valkeyClient = &cache.Valkey{}
 	} else {
 		log.Printf("valkey: connected")
+		if cfg.AuthCacheFlushOnStart {
+			if err := cache.FlushAuthCache(ctx, valkeyClient); err != nil {
+				log.Printf("valkey: auth cache flush failed: %v", err)
+			} else {
+				log.Printf("valkey: auth cache flushed on startup")
+			}
+		}
 	}
 	defer valkeyClient.Close()
 
 	store := appmongo.NewStore(mongoClient.DB())
-	qsoService := qso.NewService(store)
+	qsoService := qso.NewService(store, valkeyClient)
 	qsoHandler := handler.QsoHandler{Service: qsoService, Valkey: valkeyClient}
 
 	router := chi.NewRouter()
 	router.Use(middleware.Recover)
 	router.Use(middleware.RequestID)
+	if cfg.DevAccessLog {
+		router.Use(middleware.AccessLog)
+	}
 	router.Use(middleware.SecurityHeaders)
 	router.Use(middleware.CORS(cfg))
 	router.Use(middleware.RateLimit(cfg, valkeyClient))
-	router.Use(middleware.BearerAuth(cfg, store))
+	router.Use(middleware.BearerAuth(cfg, store, valkeyClient))
 	router.Use(middleware.AuthenticatedRateLimit(cfg, valkeyClient))
 
 	router.Get("/health", handler.NewHealthHandler(mongoClient).ServeHTTP)
@@ -84,7 +96,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("varc-api listening on :%s", cfg.Port)
+		log.Printf("listening on :%s", cfg.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %v", err)
 		}
@@ -99,5 +111,5 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
-	fmt.Println("varc-api stopped")
+	log.Printf("stopped")
 }

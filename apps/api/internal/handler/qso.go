@@ -63,7 +63,7 @@ func (h QsoHandler) Create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
-	h.invalidate(r, principal.UserID)
+	h.invalidate(r, principal.UserID, item.WorkedCallsign)
 	WriteJSON(w, http.StatusCreated, map[string]any{"ok": true, "qso": item})
 }
 
@@ -97,7 +97,7 @@ func (h QsoHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	item, err := h.Service.Update(r.Context(), principal.UserID, id, input)
+	item, previousWorked, err := h.Service.Update(r.Context(), principal.UserID, id, input)
 	if errors.Is(err, qso.ErrNotFound) {
 		WriteError(w, http.StatusNotFound, "Not found")
 		return
@@ -111,7 +111,7 @@ func (h QsoHandler) Update(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
-	h.invalidate(r, principal.UserID)
+	h.invalidate(r, principal.UserID, previousWorked, item.WorkedCallsign)
 	WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "qso": item})
 }
 
@@ -122,7 +122,7 @@ func (h QsoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
-	err := h.Service.Delete(r.Context(), principal.UserID, id)
+	workedCallsign, err := h.Service.Delete(r.Context(), principal.UserID, id)
 	if errors.Is(err, qso.ErrNotFound) {
 		WriteError(w, http.StatusNotFound, "Not found")
 		return
@@ -131,17 +131,27 @@ func (h QsoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
-	h.invalidate(r, principal.UserID)
+	h.invalidate(r, principal.UserID, workedCallsign)
 	WriteJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (h QsoHandler) invalidate(r *http.Request, userID string) {
-	callsign, err := h.Service.RequireUserCallsign(r.Context(), userID)
-	if err != nil {
-		cache.InvalidateQsoAndHamCache(r.Context(), h.Valkey, userID, nil)
-		return
+func (h QsoHandler) invalidate(r *http.Request, userID string, workedCallsigns ...string) {
+	loggerCallsign, err := h.Service.RequireUserCallsign(r.Context(), userID)
+	callsignSet := map[string]struct{}{}
+	if err == nil && loggerCallsign != "" {
+		callsignSet[strings.ToUpper(strings.TrimSpace(loggerCallsign))] = struct{}{}
 	}
-	cache.InvalidateQsoAndHamCache(r.Context(), h.Valkey, userID, []string{callsign})
+	for _, worked := range workedCallsigns {
+		normalized := strings.ToUpper(strings.TrimSpace(worked))
+		if normalized != "" {
+			callsignSet[normalized] = struct{}{}
+		}
+	}
+	callsigns := make([]string, 0, len(callsignSet))
+	for callsign := range callsignSet {
+		callsigns = append(callsigns, callsign)
+	}
+	cache.InvalidateQsoAndHamCache(r.Context(), h.Valkey, userID, callsigns)
 }
 
 func decodeQsoInput(w http.ResponseWriter, r *http.Request) (qso.Input, error) {

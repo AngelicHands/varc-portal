@@ -139,6 +139,44 @@ Notes:
 - API-created QSOs use `source: "api"`.
 - **No confirmation emails** are sent for API create/update (portal logbook only).
 
+## Caching (Valkey)
+
+The API and portal share the same Valkey instance when `VALKEY_URL` is set. This keeps logbook data consistent across both apps.
+
+### QSO read cache
+
+| Key pattern | TTL | Invalidated by |
+|-------------|-----|----------------|
+| `api:qso:list:user:{userId}:…` | 300s | Any QSO write (portal or API) |
+| `api:qso:item:user:{userId}:id:{qsoId}:…` | 300s | Any QSO write for that user |
+
+List and item cache keys register under the shared tag `qso:tag:user:{userId}`. Portal list/count keys (`qso:list:user:…`, `qso:count:user:…`) use the same tag, so **API writes immediately bust portal caches** and vice versa.
+
+Ham public profile caches use `qso:tag:ham:{callsign}`. API create/update/delete busts both the logger callsign and the worked callsign.
+
+### Auth token cache
+
+After a successful Bearer verify, the API caches metadata (never the plaintext token):
+
+| Key pattern | TTL | Invalidated by |
+|-------------|-----|----------------|
+| `api:auth:token:{tokenId}` | 90s (default) | Portal revoke, API restart flush |
+| `api:auth:prefix:{tokenPrefix}` | 90s (default) | Portal revoke, API restart flush |
+
+HMAC verification still runs on every request. Revoking a token in **Account → Security** deletes both cache keys immediately.
+
+On API startup, all `api:auth:*` keys are flushed by default (`API_AUTH_CACHE_FLUSH_ON_START=true`).
+
+### Environment
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `VALKEY_URL` | — | Required in production for cache + rate limits |
+| `API_AUTH_CACHE_TTL` | `90s` | Auth metadata cache lifetime |
+| `API_AUTH_CACHE_FLUSH_ON_START` | `true` | Flush auth cache when Go API starts |
+
+If Valkey is unavailable, the API falls back to MongoDB (fail-open for reads and auth).
+
 ## Environment
 
 Shared with the portal (see root `.env.example`):

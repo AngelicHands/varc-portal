@@ -34,6 +34,35 @@ func TestValidateInputReservedCallsign(t *testing.T) {
 	}
 }
 
+func TestValidateInputInvalidGrid(t *testing.T) {
+	_, err := ValidateInput(Input{
+		WorkedCallsign: "XV1ABC",
+		QsoAt:          "2026-08-22T10:00:00.000Z",
+		Band:           "20m",
+		FreqMhz:        14.074,
+		Mode:           "FT8",
+		Grid:           "ZZ99",
+	})
+	if err == nil {
+		t.Fatalf("expected invalid grid error")
+	}
+}
+
+func TestListCacheFilterHashStable(t *testing.T) {
+	params := ListParams{
+		Page:     1,
+		PageSize: 100,
+		SortKey:  "qsoAt",
+		SortDir:  "desc",
+		Filters:  ListFilters{Band: "20m"},
+	}
+	a := ListCacheFilterHash(params)
+	b := ListCacheFilterHash(params)
+	if a != b || a == "" {
+		t.Fatalf("expected stable non-empty hash, got %q and %q", a, b)
+	}
+}
+
 func TestParseListParamsDefaults(t *testing.T) {
 	params, err := ParseListQuery(map[string][]string{})
 	if err != nil {

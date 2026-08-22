@@ -152,8 +152,9 @@ func ValidateInput(raw Input) (Input, error) {
 	if out.Grid == "" {
 		return Input{}, validationError("Grid location is required")
 	}
-	if len(out.Grid) > 12 {
-		return Input{}, validationError("Grid location is too long")
+	out.Grid = normalizeGridFilter(out.Grid)
+	if !isValidMaidenheadGrid(out.Grid) {
+		return Input{}, validationError("Enter a valid grid locator")
 	}
 	if len(out.Notes) > 2000 {
 		return Input{}, validationError("Notes are too long")

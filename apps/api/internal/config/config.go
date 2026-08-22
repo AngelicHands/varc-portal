@@ -11,16 +11,19 @@ import (
 )
 
 type Config struct {
-	MongoURI        string
-	ValkeyURL       string
-	ValkeyPassword  string
-	Port            string
-	TokenPepper     string
-	PublicURL       string
-	RateLimit       int
-	RateLimitWindow time.Duration
-	RateLimitWrite  int
-	CORSOrigins     []string
+	MongoURI              string
+	ValkeyURL             string
+	ValkeyPassword        string
+	Port                  string
+	TokenPepper           string
+	PublicURL             string
+	RateLimit             int
+	RateLimitWindow       time.Duration
+	RateLimitWrite        int
+	CORSOrigins           []string
+	AuthCacheFlushOnStart bool
+	AuthCacheTTL          time.Duration
+	DevAccessLog          bool
 }
 
 func Load() Config {
@@ -55,18 +58,31 @@ func Load() Config {
 		}
 	}
 
+	authCacheTTL := parseDuration(os.Getenv("API_AUTH_CACHE_TTL"), 90*time.Second)
+
 	return Config{
-		MongoURI:        strings.TrimSpace(os.Getenv("MONGODB_URI")),
-		ValkeyURL:       strings.TrimSpace(os.Getenv("VALKEY_URL")),
-		ValkeyPassword:  strings.TrimSpace(os.Getenv("VALKEY_PASSWORD")),
-		Port:            port,
-		TokenPepper:     pepper,
-		PublicURL:       publicURL,
-		RateLimit:       rateLimit,
-		RateLimitWindow: rateWindow,
-		RateLimitWrite:  rateLimitWrite,
-		CORSOrigins:     corsOrigins,
+		MongoURI:              strings.TrimSpace(os.Getenv("MONGODB_URI")),
+		ValkeyURL:             strings.TrimSpace(os.Getenv("VALKEY_URL")),
+		ValkeyPassword:        strings.TrimSpace(os.Getenv("VALKEY_PASSWORD")),
+		Port:                  port,
+		TokenPepper:           pepper,
+		PublicURL:             publicURL,
+		RateLimit:             rateLimit,
+		RateLimitWindow:       rateWindow,
+		RateLimitWrite:        rateLimitWrite,
+		CORSOrigins:           corsOrigins,
+		AuthCacheFlushOnStart: parseBoolDefaultTrue(os.Getenv("API_AUTH_CACHE_FLUSH_ON_START")),
+		AuthCacheTTL:          authCacheTTL,
+		DevAccessLog:          parseBoolDefaultTrue(os.Getenv("API_DEV_ACCESS_LOG")),
 	}
+}
+
+func parseBoolDefaultTrue(raw string) bool {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "false" || raw == "0" || raw == "no" {
+		return false
+	}
+	return true
 }
 
 func parsePositiveInt(raw string, fallback int) int {
