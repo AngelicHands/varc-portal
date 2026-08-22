@@ -47,6 +47,11 @@ const nextConfig: NextConfig = {
         source: "/media/:path*",
         destination: "/api/media/:path*",
       },
+      // Bare /qso → /vi/qso (UI locale comes from the NEXT_LOCALE cookie).
+      {
+        source: "/qso",
+        destination: "/vi/qso",
+      },
       // Bare /XV1ABC → /vi/XV1ABC. Must be next.config (not middleware):
       // Next.js 16 standalone turns middleware rewrites into a self-308 loop.
       {

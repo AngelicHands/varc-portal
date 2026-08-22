@@ -150,7 +150,7 @@ function ControlButton({
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled ? true : undefined}
       className={`inline-flex h-10 w-10 items-center justify-center border-l transition first:border-l-0 disabled:cursor-not-allowed disabled:opacity-35 ${borderClass} ${active ? activeClass : idleClass}`}
       aria-label={label}
       aria-pressed={active}
@@ -171,10 +171,10 @@ export function HamMapControlsPanel({
   onToggleCallsigns,
   showTraces,
   onToggleTraces,
-  tracesAvailable = true,
+  tracesAvailable = false,
   isBrowserFullscreen,
   onToggleBrowserFullscreen,
-  fullscreenSupported = true,
+  fullscreenSupported = false,
 }: Props) {
   const t = useTranslations("ham.map");
   const light = mapTheme === "light";

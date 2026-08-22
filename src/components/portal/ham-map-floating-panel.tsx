@@ -1,38 +1,39 @@
 "use client";
 
+import { useState } from "react";
 import NextLink from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { hamPublicPath } from "@/lib/ham-reserved";
+import { formatMaidenheadDisplay, latLngToMaidenhead } from "@/lib/maidenhead";
+import { persistHamMapLocation } from "@/lib/map/ham-map-location";
 import type { HamMapTheme } from "@/lib/map/maptiler-style";
-import { formatMaidenheadDisplay } from "@/lib/maidenhead";
+
+export type HamMapViewer = {
+  name: string;
+  callsign: string;
+  homeGrid: string;
+  image?: string | null;
+};
 
 type Props = {
-  callsign: string;
-  operatorName: string;
-  operatorImage?: string | null;
-  verified: boolean;
-  homeGrid: string;
+  viewer: HamMapViewer | null;
   branding: { siteName: string; logoUrl?: string };
   mapTheme: HamMapTheme;
   themeReady?: boolean;
   onMapThemeChange: (theme: HamMapTheme) => void;
   showLogbookPrivateNotice: boolean;
   mapAvailable?: boolean;
-  onFocusHomeGrid?: () => void;
-  /** Extra left offset when the QSO list drawer is open. */
   offsetLeft?: number;
+  lookupValue: string;
+  onLookupValueChange: (value: string) => void;
+  onLookupSubmit: () => void;
+  lookupPending: boolean;
+  lookupError: string | null;
+  onLoginClick?: () => void;
+  onFocusGrid?: (grid: string) => void;
+  guestGrid?: string;
+  onGuestGrid?: (grid: string, lat?: number, lng?: number) => void;
 };
-
-function initialsFrom(name: string, callsign: string): string {
-  const fromName = name
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-  if (fromName) return fromName;
-  return callsign.trim().slice(0, 2).toUpperCase() || "?";
-}
 
 function SunIcon({ className }: { className?: string }) {
   return (
@@ -69,31 +70,108 @@ function MoonIcon({ className }: { className?: string }) {
   );
 }
 
+function ThemeToggle({
+  light,
+  mapAvailable,
+  mapTheme,
+  themeReady,
+  themeActive,
+  themeIdle,
+  themeLabel,
+  themeLight,
+  themeDark,
+  onMapThemeChange,
+}: {
+  light: boolean;
+  mapAvailable: boolean;
+  mapTheme: HamMapTheme;
+  themeReady: boolean;
+  themeActive: string;
+  themeIdle: string;
+  themeLabel: string;
+  themeLight: string;
+  themeDark: string;
+  onMapThemeChange: (theme: HamMapTheme) => void;
+}) {
+  return (
+    <div
+      className={`inline-flex shrink-0 overflow-hidden rounded-md border ${light ? "border-zinc-300" : "border-white/15"}`}
+      role="group"
+      aria-label={themeLabel}
+    >
+      <button
+        type="button"
+        disabled={!mapAvailable}
+        onClick={() => onMapThemeChange("light")}
+        className={`inline-flex h-7 w-7 items-center justify-center disabled:opacity-40 ${themeReady && mapTheme === "light" ? themeActive : themeIdle}`}
+        aria-label={themeLight}
+        aria-pressed={themeReady && mapTheme === "light"}
+      >
+        <SunIcon className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        disabled={!mapAvailable}
+        onClick={() => onMapThemeChange("dark")}
+        className={`inline-flex h-7 w-7 items-center justify-center disabled:opacity-40 ${themeReady && mapTheme === "dark" ? themeActive : themeIdle}`}
+        aria-label={themeDark}
+        aria-pressed={themeReady && mapTheme === "dark"}
+      >
+        <MoonIcon className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function GuestAvatarIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="8" r="3.25" />
+      <path d="M5.5 19c1.4-3.2 3.5-4.75 6.5-4.75S17.1 15.8 18.5 19" />
+    </svg>
+  );
+}
+
 export function HamMapFloatingPanel({
-  callsign,
-  operatorName,
-  operatorImage,
-  verified,
-  homeGrid,
+  viewer,
   branding,
   mapTheme,
   themeReady = true,
   onMapThemeChange,
   showLogbookPrivateNotice,
   mapAvailable = true,
-  onFocusHomeGrid,
   offsetLeft = 0,
+  lookupValue,
+  onLookupValueChange,
+  onLookupSubmit,
+  lookupPending,
+  lookupError,
+  onLoginClick,
+  onFocusGrid,
+  guestGrid = "",
+  onGuestGrid,
 }: Props) {
   const t = useTranslations("ham.map");
+  const locale = useLocale();
   const light = mapTheme === "light";
+  const loggedIn = Boolean(viewer);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const panelClass = light
     ? "border-zinc-300/80 bg-white/90 text-zinc-900 shadow-xl shadow-zinc-900/10"
     : "border-white/10 bg-black/75 text-white shadow-2xl shadow-black/40";
   const muted = light ? "text-zinc-500" : "text-white/60";
-  const soft = light ? "text-zinc-700" : "text-white/80";
   const strong = light ? "text-zinc-900" : "text-white";
-  const avatarRing = light ? "ring-zinc-200 bg-zinc-100" : "ring-white/15 bg-white/10";
   const themeIdle = light
     ? "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
     : "text-white/55 hover:bg-white/10 hover:text-white";
@@ -103,19 +181,68 @@ export function HamMapFloatingPanel({
   const notice = light
     ? "border-amber-300/70 bg-amber-50 text-amber-950"
     : "border-amber-400/30 bg-amber-500/10 text-amber-100";
-  const verifiedClass = light ? "text-emerald-600" : "text-emerald-300";
+  const fieldClass = light
+    ? "border-zinc-300 bg-white text-zinc-900 placeholder:text-zinc-400"
+    : "border-white/15 bg-white/5 text-white placeholder:text-white/35";
+  const buttonClass = light
+    ? "border-zinc-300 text-zinc-800 hover:bg-zinc-100"
+    : "border-white/20 text-white hover:bg-white/10";
 
-  const initials = initialsFrom(operatorName, callsign);
-  // An owner without a callsign has no /{callsign} page — theirs is /account.
-  const trimmedCallsign = callsign.trim();
-  const profileHref = trimmedCallsign ? `/${trimmedCallsign}` : "/account";
-  const profileLabel = trimmedCallsign || operatorName.trim();
-  const profileHover = light ? "hover:opacity-80" : "hover:opacity-90";
+  const displayName = viewer?.name.trim() || (loggedIn ? "—" : t("guestName"));
+  const displayCallsign = viewer?.callsign.trim() || "—";
+  const displayGrid = loggedIn
+    ? guestGrid || viewer?.homeGrid.trim()
+    : guestGrid;
+  const profileHref = loggedIn
+    ? viewer?.callsign.trim()
+      ? hamPublicPath(viewer.callsign)
+      : `/${locale}/account`
+    : null;
+  const busy = locating;
+
+  function requestLocation() {
+    setLocationError(null);
+    if (!navigator.geolocation) {
+      setLocationError(t("homeLocationUnsupported"));
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const grid = latLngToMaidenhead(
+          position.coords.latitude,
+          position.coords.longitude,
+          6,
+        );
+        if (!grid) {
+          setLocating(false);
+          setLocationError(t("homeLocationFailed"));
+          return;
+        }
+        persistHamMapLocation(
+          grid,
+          position.coords.latitude,
+          position.coords.longitude,
+        );
+        onGuestGrid?.(
+          grid,
+          position.coords.latitude,
+          position.coords.longitude,
+        );
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        setLocationError(t("homeLocationFailed"));
+      },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
+    );
+  }
 
   return (
     <aside
       id="ham-map-tour-welcome"
-      className="pointer-events-auto absolute top-3 z-20 flex max-w-[min(100%-1.5rem,22rem)] flex-col gap-2 transition-[left] duration-300 ease-out"
+      className="pointer-events-auto absolute top-3 z-20 flex w-[min(100%-1.5rem,22rem)] flex-col gap-2 transition-[left] duration-300 ease-out"
       style={{ left: 12 + offsetLeft }}
     >
       <div
@@ -123,7 +250,7 @@ export function HamMapFloatingPanel({
       >
         <NextLink
           href="/"
-          className="shrink-0 self-center"
+          className="shrink-0"
           aria-label={branding.siteName}
           title={branding.siteName}
         >
@@ -132,123 +259,210 @@ export function HamMapFloatingPanel({
             <img
               src={branding.logoUrl}
               alt=""
-              className="h-9 w-9 rounded-md object-contain"
+              className="h-10 w-10 rounded-md object-contain"
             />
           ) : (
             <span
-              className={`flex h-9 w-9 items-center justify-center rounded-md text-xs font-semibold ${light ? "bg-zinc-100" : "bg-white/10"}`}
+              className={`flex h-10 w-10 items-center justify-center rounded-md text-xs font-semibold ${light ? "bg-zinc-100" : "bg-white/10"}`}
             >
               {branding.siteName.slice(0, 1).toUpperCase()}
             </span>
           )}
         </NextLink>
 
-        <NextLink
-          href={profileHref}
-          className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 transition ${avatarRing} ${profileHover}`}
-          aria-label={t("backToProfile")}
-        >
-          {operatorImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={operatorImage}
-              alt=""
-              className="h-full w-full object-cover"
-            />
+        <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          {profileHref ? (
+            <NextLink
+              href={profileHref}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full ${light ? "bg-zinc-100" : "bg-white/10"}`}
+              aria-hidden
+            >
+              {viewer?.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={viewer.image} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className={`text-xs font-semibold ${muted}`}>
+                  {(displayName !== "—" ? displayName : displayCallsign)
+                    .slice(0, 1)
+                    .toUpperCase()}
+                </span>
+              )}
+            </NextLink>
           ) : (
-            <span className={`text-xs font-semibold tracking-wide ${strong}`}>
-              {initials}
+            <span
+              className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full ${light ? "bg-zinc-100" : "bg-white/10"}`}
+              aria-hidden
+            >
+              <GuestAvatarIcon className={`h-5 w-5 ${muted}`} />
             </span>
           )}
-        </NextLink>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <NextLink
-              href={profileHref}
-              className={`truncate font-display text-lg leading-tight tracking-wide transition ${strong} ${profileHover}`}
-            >
-              {profileLabel}
-            </NextLink>
-            {verified ? (
-              <span
-                className={`inline-flex shrink-0 ${verifiedClass}`}
-                title={t("verifiedCallsign")}
-              >
-                <svg
-                  viewBox="0 0 16 16"
-                  className="h-3.5 w-3.5"
-                  aria-hidden
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <path d="M3.5 8.5 6.5 11.5 12.5 5.5" />
-                </svg>
-              </span>
+          <div className="min-w-0 flex-1">
+            {loggedIn ? (
+              <>
+                <div className="flex items-center gap-2">
+                  {profileHref ? (
+                    <NextLink
+                      href={profileHref}
+                      className={`min-w-0 flex-1 truncate text-sm font-medium hover:underline ${strong}`}
+                    >
+                      {displayName}
+                    </NextLink>
+                  ) : (
+                    <p className={`min-w-0 flex-1 truncate text-sm font-medium ${strong}`}>
+                      {displayName}
+                    </p>
+                  )}
+                  <ThemeToggle
+                    light={light}
+                    mapAvailable={mapAvailable}
+                    mapTheme={mapTheme}
+                    themeReady={themeReady}
+                    themeActive={themeActive}
+                    themeIdle={themeIdle}
+                    themeLabel={t("themeLabel")}
+                    themeLight={t("themeLight")}
+                    themeDark={t("themeDark")}
+                    onMapThemeChange={onMapThemeChange}
+                  />
+                </div>
+                <div className="mt-0.5 flex items-baseline gap-2">
+                  {profileHref ? (
+                    <NextLink
+                      href={profileHref}
+                      className={`min-w-0 flex-1 truncate font-display text-base tracking-wide hover:underline ${strong}`}
+                    >
+                      {displayCallsign}
+                    </NextLink>
+                  ) : (
+                    <p
+                      className={`min-w-0 flex-1 truncate font-display text-base tracking-wide ${strong}`}
+                    >
+                      {displayCallsign}
+                    </p>
+                  )}
+                  {displayGrid ? (
+                    <button
+                      type="button"
+                      onClick={() => onFocusGrid?.(displayGrid)}
+                      title={t("focusHomeGrid")}
+                      className={`shrink-0 text-right text-xs font-medium hover:underline ${strong}`}
+                    >
+                      {formatMaidenheadDisplay(displayGrid)}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={requestLocation}
+                      className={`shrink-0 text-right text-[11px] font-medium underline-offset-2 hover:underline disabled:opacity-50 ${muted}`}
+                    >
+                      {busy ? t("homeLocationPromptWorking") : t("requestLocation")}
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={onLoginClick}
+                    className={`min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm font-medium transition ${buttonClass}`}
+                  >
+                    {t("lookupSignIn")}
+                  </button>
+                  <ThemeToggle
+                    light={light}
+                    mapAvailable={mapAvailable}
+                    mapTheme={mapTheme}
+                    themeReady={themeReady}
+                    themeActive={themeActive}
+                    themeIdle={themeIdle}
+                    themeLabel={t("themeLabel")}
+                    themeLight={t("themeLight")}
+                    themeDark={t("themeDark")}
+                    onMapThemeChange={onMapThemeChange}
+                  />
+                </div>
+                <div className="mt-0.5 flex items-center justify-end">
+                  {displayGrid ? (
+                    <button
+                      type="button"
+                      onClick={() => onFocusGrid?.(displayGrid)}
+                      title={t("focusHomeGrid")}
+                      className={`text-right text-xs font-medium hover:underline ${strong}`}
+                    >
+                      {formatMaidenheadDisplay(displayGrid)}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={requestLocation}
+                      className={`text-right text-[11px] font-medium underline-offset-2 hover:underline disabled:opacity-50 ${muted}`}
+                    >
+                      {busy ? t("homeLocationPromptWorking") : t("requestLocation")}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+            {locationError ? (
+              <p className={`mt-1 text-[11px] ${light ? "text-red-700" : "text-red-200"}`}>
+                {locationError}
+              </p>
             ) : null}
           </div>
-          {operatorName && operatorName.trim() !== profileLabel ? (
-            <NextLink
-              href={profileHref}
-              className={`mt-0.5 block truncate text-sm leading-snug transition ${soft} ${profileHover}`}
+        </div>
+
+          <form
+            className="mt-2.5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onLookupSubmit();
+            }}
+          >
+            <label
+              htmlFor="ham-map-lookup-callsign"
+              className={`text-[10px] font-medium tracking-wide uppercase ${muted}`}
             >
-              {operatorName}
-            </NextLink>
-          ) : null}
-          <div className="mt-1.5 flex items-center gap-2">
-            <p className={`min-w-0 flex-1 truncate text-xs ${muted}`}>
-              {homeGrid && onFocusHomeGrid ? (
-                <button
-                  type="button"
-                  onClick={onFocusHomeGrid}
-                  className={`font-medium underline-offset-2 transition hover:underline ${strong}`}
-                  title={t("focusHomeGrid")}
-                >
-                  {formatMaidenheadDisplay(homeGrid)}
-                </button>
-              ) : homeGrid ? (
-                <span className={`font-medium ${strong}`}>
-                  {formatMaidenheadDisplay(homeGrid)}
-                </span>
-              ) : (
-                <span>—</span>
-              )}
-            </p>
-            <div
-              className={`inline-flex shrink-0 overflow-hidden rounded-md border ${light ? "border-zinc-300" : "border-white/15"}`}
-              role="group"
-              aria-label={t("themeLabel")}
-            >
+              {t("lookupLabel")}
+            </label>
+            <div className="mt-1 flex items-stretch gap-1.5">
+              <input
+                id="ham-map-lookup-callsign"
+                value={lookupValue}
+                maxLength={15}
+                disabled={lookupPending}
+                placeholder={t("lookupPlaceholder")}
+                autoCapitalize="characters"
+                spellCheck={false}
+                onChange={(event) =>
+                  onLookupValueChange(event.target.value.toUpperCase())
+                }
+                className={`min-w-0 flex-1 rounded-md border px-2.5 py-1.5 font-display text-sm tracking-wide uppercase outline-none disabled:opacity-50 ${fieldClass}`}
+              />
               <button
-                type="button"
-                disabled={!mapAvailable}
-                onClick={() => onMapThemeChange("light")}
-                className={`inline-flex h-7 w-7 items-center justify-center disabled:opacity-40 ${themeReady && mapTheme === "light" ? themeActive : themeIdle}`}
-                aria-label={t("themeLight")}
-                aria-pressed={themeReady && mapTheme === "light"}
+                type="submit"
+                disabled={lookupPending}
+                className={`shrink-0 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${buttonClass}`}
               >
-                <SunIcon className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                disabled={!mapAvailable}
-                onClick={() => onMapThemeChange("dark")}
-                className={`inline-flex h-7 w-7 items-center justify-center disabled:opacity-40 ${themeReady && mapTheme === "dark" ? themeActive : themeIdle}`}
-                aria-label={t("themeDark")}
-                aria-pressed={themeReady && mapTheme === "dark"}
-              >
-                <MoonIcon className="h-3.5 w-3.5" />
+                {lookupPending ? t("lookupWorking") : t("lookupSubmit")}
               </button>
             </div>
-          </div>
+            {lookupError ? (
+              <p className={`mt-1 text-[11px] ${light ? "text-red-700" : "text-red-200"}`}>
+                {lookupError}
+              </p>
+            ) : null}
+          </form>
         </div>
       </div>
 
       {showLogbookPrivateNotice ? (
-        <p
-          className={`rounded-lg border px-3 py-2 text-xs backdrop-blur-md ${notice}`}
-        >
+        <p className={`rounded-lg border px-3 py-2 text-xs backdrop-blur-md ${notice}`}>
           {t("logbookPrivateNotice")}
         </p>
       ) : null}

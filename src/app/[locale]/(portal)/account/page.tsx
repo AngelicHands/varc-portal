@@ -13,6 +13,8 @@ import { HamProfileTabs } from "@/components/portal/ham-profile-tabs";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { getAccountProfile } from "@/lib/account";
 import { getPublicSiteBranding } from "@/lib/cms";
+import { isGoogleAuthConfigured } from "@/lib/google-auth";
+import { profileAvatarUrl } from "@/lib/gravatar";
 import { hamPublicPath, parseHamTab, type HamTabId } from "@/lib/ham-reserved";
 import { readMapTilerApiKey } from "@/lib/map/maptiler-style";
 import { requirePortalSession } from "@/lib/portal-access";
@@ -103,6 +105,15 @@ export default async function AccountPage({ params, searchParams }: Props) {
           branding={branding}
           canSetHomeLocation={!profile.homeGrid.trim()}
           needsCallsign
+          canAddQso={false}
+          viewer={{
+            name: profile.name,
+            callsign: profile.callsign,
+            homeGrid: profile.homeGrid,
+            image: profileAvatarUrl(session.user.image, profile.email),
+          }}
+          hasGoogleLogin={isGoogleAuthConfigured()}
+          loginCallbackUrl={`/${locale}/account?view=map`}
         />
       </>
     );

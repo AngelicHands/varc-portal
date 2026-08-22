@@ -5,40 +5,103 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { PortalDialog } from "@/components/portal/portal-dialog";
 import { updateHomeLocationAction } from "@/lib/account-actions";
-import { latLngToMaidenhead } from "@/lib/maidenhead";
+import { formatMaidenheadDisplay, latLngToMaidenhead } from "@/lib/maidenhead";
 import type { HamMapTheme } from "@/lib/map/maptiler-style";
+import { persistHamMapLocation } from "@/lib/map/ham-map-location";
 import { buildHomeGridMarker, type HomeGridMarker } from "@/lib/qso-map";
+
+export type HamMapLocationPromptIntent = "guest" | "locate" | "update";
 
 type Props = {
   enabled: boolean;
+  intent: HamMapLocationPromptIntent;
   callsign: string;
   mapTheme: HamMapTheme;
+  updateGrid?: string;
+  updateLat?: number;
+  updateLng?: number;
   onLocationSaved: (marker: HomeGridMarker) => void;
+  onLocated?: (grid: string, lat: number, lng: number) => void;
+  onSkipUpdate?: () => void;
 };
 
 export function HamMapHomeLocationPrompt({
   enabled,
+  intent,
   callsign,
   mapTheme,
+  updateGrid = "",
+  updateLat,
+  updateLng,
   onLocationSaved,
+  onLocated,
+  onSkipUpdate,
 }: Props) {
   const t = useTranslations("ham.map");
   const router = useRouter();
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const [pending, startTransition] = useTransition();
   const light = mapTheme === "light";
+  const promptKey = `${intent}:${updateGrid}`;
 
-  const open = enabled && !dismissed;
+  const open = enabled && dismissedKey !== promptKey;
 
   function dismiss() {
-    setDismissed(true);
+    if (intent === "update") onSkipUpdate?.();
+    setDismissedKey(promptKey);
     setError(null);
+  }
+
+  function persistAndShow(grid: string, lat: number, lng: number) {
+    persistHamMapLocation(grid, lat, lng);
+    onLocated?.(grid, lat, lng);
+  }
+
+  function saveToProfile(grid: string, lat: number, lng: number) {
+    startTransition(async () => {
+      const result = await updateHomeLocationAction({
+        homeGrid: grid,
+        homeLat: lat,
+        homeLng: lng,
+      });
+      setLocating(false);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+
+      persistHamMapLocation(result.homeGrid, result.homeLat, result.homeLng);
+      onLocated?.(result.homeGrid, result.homeLat, result.homeLng);
+      const marker = buildHomeGridMarker(
+        result.homeGrid,
+        callsign,
+        result.homeLat,
+        result.homeLng,
+      );
+      if (marker) onLocationSaved(marker);
+      setDismissedKey(promptKey);
+      router.refresh();
+    });
   }
 
   function onAllow() {
     setError(null);
+
+    if (intent === "update") {
+      if (
+        !updateGrid ||
+        typeof updateLat !== "number" ||
+        typeof updateLng !== "number"
+      ) {
+        setError(t("homeLocationFailed"));
+        return;
+      }
+      saveToProfile(updateGrid, updateLat, updateLng);
+      return;
+    }
+
     if (!navigator.geolocation) {
       setError(t("homeLocationUnsupported"));
       return;
@@ -56,28 +119,9 @@ export function HamMapHomeLocationPrompt({
           return;
         }
 
-        startTransition(async () => {
-          const result = await updateHomeLocationAction({
-            homeGrid: grid,
-            homeLat: lat,
-            homeLng: lng,
-          });
-          setLocating(false);
-          if (!result.ok) {
-            setError(result.error);
-            return;
-          }
-
-          const marker = buildHomeGridMarker(
-            result.homeGrid,
-            callsign,
-            result.homeLat,
-            result.homeLng,
-          );
-          if (marker) onLocationSaved(marker);
-          setDismissed(true);
-          router.refresh();
-        });
+        persistAndShow(grid, lat, lng);
+        setLocating(false);
+        setDismissedKey(promptKey);
       },
       () => {
         setLocating(false);
@@ -88,6 +132,29 @@ export function HamMapHomeLocationPrompt({
   }
 
   const busy = locating || pending;
+  const title =
+    intent === "update"
+      ? t("homeLocationPromptTitleUpdate")
+      : intent === "guest"
+        ? t("homeLocationPromptTitle")
+        : t("homeLocationPromptTitleLocate");
+  const body =
+    intent === "update"
+      ? t("homeLocationPromptBodyUpdate", {
+          grid: formatMaidenheadDisplay(updateGrid),
+        })
+      : intent === "guest"
+        ? t("homeLocationPromptBodyGuest")
+        : t("homeLocationPromptBodyLocate");
+  const allowLabel = busy
+    ? intent === "update"
+      ? t("homeLocationPromptSaving")
+      : t("homeLocationPromptWorking")
+    : intent === "update"
+      ? t("homeLocationPromptAllowUpdate")
+      : intent === "guest"
+        ? t("homeLocationPromptAllowGuest")
+        : t("homeLocationPromptAllowLocate");
 
   const panelClass = light
     ? "border-zinc-300/80 bg-white/95 text-zinc-900 shadow-xl shadow-zinc-900/15"
@@ -111,7 +178,7 @@ export function HamMapHomeLocationPrompt({
   return (
     <PortalDialog
       open={open}
-      title={t("homeLocationPromptTitle")}
+      title={title}
       onClose={dismiss}
       closeDisabled={busy}
       overlayClassName={overlayClass}
@@ -120,7 +187,7 @@ export function HamMapHomeLocationPrompt({
       titleClassName={titleClass}
       closeClassName={closeClass}
     >
-      <p className={`text-sm ${bodyClass}`}>{t("homeLocationPromptBody")}</p>
+      <p className={`text-sm ${bodyClass}`}>{body}</p>
       {error ? (
         <p className={`mt-3 rounded-md border px-3 py-2 text-sm ${errorClass}`}>
           {error}
@@ -141,7 +208,7 @@ export function HamMapHomeLocationPrompt({
           onClick={onAllow}
           className={`rounded-md px-4 py-2 text-sm font-medium transition disabled:opacity-50 ${allowClass}`}
         >
-          {busy ? t("homeLocationPromptWorking") : t("homeLocationPromptAllow")}
+          {allowLabel}
         </button>
       </div>
     </PortalDialog>

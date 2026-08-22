@@ -199,6 +199,9 @@ Article, category, and page slugs are generated automatically from the title/nam
 |------|-------------|
 | `/` | Latest news (VI) |
 | `/en` | Latest news (EN) |
+| `/qso` | QSO map (logged-in station, or look up a public logbook) |
+| `/{callsign}?view=map` | Public ham QSO map |
+| `/account?view=map` | Owner QSO map when the account has no callsign yet |
 | `/tin-tuc/[slug]` | Article (VI) |
 | `/en/news/[slug]` | Article (EN) |
 | `/trang/[slug]` | CMS page (VI) |

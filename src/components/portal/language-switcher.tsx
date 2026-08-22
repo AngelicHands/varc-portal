@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, usePathname as useBrowserPathname } from "next/navigation";
 import { useLocale } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
@@ -134,6 +134,11 @@ function switchHamProfileLocale(target: AppLocale, callsign: string) {
   window.location.assign(`${hamPublicPath(callsign)}${search}`);
 }
 
+function switchBareQsoLocale(target: AppLocale) {
+  document.cookie = `NEXT_LOCALE=${target};path=/;max-age=31536000;samesite=lax`;
+  window.location.assign(`/qso${window.location.search}`);
+}
+
 export function LanguageSwitcher({
   align = "end",
 }: {
@@ -141,6 +146,7 @@ export function LanguageSwitcher({
 }) {
   const locale = useLocale();
   const pathname = usePathname();
+  const browserPathname = useBrowserPathname();
   const params = useParams();
   const alternates = useLocaleAlternates();
   const paramRecord = params as Record<string, string | string[] | undefined>;
@@ -148,6 +154,7 @@ export function LanguageSwitcher({
     pathname === "/[callsign]" && typeof paramRecord.callsign === "string"
       ? paramRecord.callsign
       : null;
+  const isBareQso = browserPathname === "/qso";
 
   const hrefVi = hrefForLocale("vi", pathname, paramRecord, alternates);
   const hrefEn = hrefForLocale("en", pathname, paramRecord, alternates);
@@ -177,6 +184,33 @@ export function LanguageSwitcher({
           <button
             type="button"
             onClick={() => switchHamProfileLocale("en", hamCallsign)}
+            aria-label="English"
+            aria-current={locale === "en" ? "true" : undefined}
+            title="English"
+            className={`inline-flex text-foreground transition ${
+              locale === "en" ? "opacity-100" : "opacity-40 hover:opacity-80"
+            }`}
+          >
+            <FlagGB className="h-3.5 w-5" />
+          </button>
+        </>
+      ) : isBareQso ? (
+        <>
+          <button
+            type="button"
+            onClick={() => switchBareQsoLocale("vi")}
+            aria-label="Tiếng Việt"
+            aria-current={locale === "vi" ? "true" : undefined}
+            title="Tiếng Việt"
+            className={`inline-flex text-foreground transition ${
+              locale === "vi" ? "opacity-100" : "opacity-40 hover:opacity-80"
+            }`}
+          >
+            <FlagVN className="h-3.5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => switchBareQsoLocale("en")}
             aria-label="English"
             aria-current={locale === "en" ? "true" : undefined}
             title="English"

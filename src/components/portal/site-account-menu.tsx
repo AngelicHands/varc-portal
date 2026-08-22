@@ -201,11 +201,7 @@ export function SiteAccountMenu({
 
           <DropdownMenu.Item asChild>
             <NextLink
-              href={
-                user.callsign
-                  ? `/${user.callsign}?view=map`
-                  : `/${locale}/account?view=map`
-              }
+              href="/qso"
               className="flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[highlighted]:bg-foreground/5"
             >
               <svg

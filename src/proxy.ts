@@ -4,6 +4,7 @@ import createMiddleware from "next-intl/middleware";
 import { isAdminRole, canManageSite, canManagePages, canManageUsers, canManageRoles, pickRoleCapabilities, type Role } from "@/lib/roles";
 import { routing, type AppLocale } from "@/i18n/routing";
 import { isReservedHamPath, parseBareCallsignPath } from "@/lib/ham-reserved";
+import { PORTAL_LOCALE_HEADER } from "@/lib/portal-locale";
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -145,6 +146,10 @@ export default async function proxy(req: NextRequest) {
   }
 
   const publicReq = asPublicRequest(req);
+
+  const bareQso = handleBareQso(publicReq);
+  if (bareQso) return bareQso;
+
   const prefixedCallsign = redirectPrefixedCallsign(publicReq);
   if (prefixedCallsign) return prefixedCallsign;
 
@@ -152,6 +157,24 @@ export default async function proxy(req: NextRequest) {
   if (bareCallsign) return bareCallsign;
 
   return intlMiddleware(publicReq);
+}
+
+/** Public URL is /qso. Prefixed /vi/qso and /en/qso redirect here. */
+function handleBareQso(req: NextRequest): NextResponse | null {
+  const { pathname } = req.nextUrl;
+  if (pathname === "/vi/qso" || pathname === "/en/qso") {
+    const canonical = req.nextUrl.clone();
+    canonical.pathname = "/qso";
+    return NextResponse.redirect(canonical, 308);
+  }
+  if (pathname !== "/qso") return null;
+
+  const locale = localeFromCookie(req);
+  const headers = new Headers(req.headers);
+  headers.set(PORTAL_LOCALE_HEADER, locale);
+  const response = NextResponse.next({ request: { headers } });
+  setLocaleCookie(response, locale);
+  return response;
 }
 
 /** /vi/XV1ABC → /XV1ABC (default locale only). /en/XV1ABC stays prefixed. */

@@ -19,6 +19,8 @@ import { getAccountProfile } from "@/lib/account";
 import { findPublicHamByCallsign, hamPublicPath, hamPublicUrl } from "@/lib/ham-profile";
 import { parseHamPathParam, parseHamTab, type HamTabId } from "@/lib/ham-reserved";
 import { getPublicSiteBranding } from "@/lib/cms";
+import { isGoogleAuthConfigured } from "@/lib/google-auth";
+import { profileAvatarUrl } from "@/lib/gravatar";
 import {
   canAccessHamMapPage,
   canViewHomeMapMarker,
@@ -132,6 +134,9 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
     auth(),
     getTranslations("account"),
   ]);
+  const viewerProfile = session?.user
+    ? await getAccountProfile(session.user.id, session.user.email)
+    : null;
   const canEdit = session?.user?.id === ham.id;
   const canAdminManage = Boolean(
     session?.user?.id && !canEdit && canManageUsers(session.user),
@@ -198,6 +203,18 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
           branding={branding}
           canSetHomeLocation={canEdit && !ham.homeGrid.trim()}
           canAddQso={canEdit}
+          viewer={
+            viewerProfile
+              ? {
+                  name: viewerProfile.name,
+                  callsign: viewerProfile.callsign,
+                  homeGrid: viewerProfile.homeGrid,
+                  image: profileAvatarUrl(session?.user.image, viewerProfile.email),
+                }
+              : null
+          }
+          hasGoogleLogin={isGoogleAuthConfigured()}
+          loginCallbackUrl={`${hamPublicPath(ham.callsign)}?view=map`}
         />
       </>
     );
@@ -210,10 +227,6 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
         ...(canViewLogbook ? (["logbook"] as HamTabId[]) : []),
       ];
 
-  const viewerProfile =
-    session?.user?.id && !canEdit
-      ? await getAccountProfile(session.user.id, session.user.email)
-      : null;
   const canLogWithOperator = canViewLogbook && Boolean(viewerProfile?.callsign?.trim());
   const activeTab = parseHamTab(tabParam, visibleTabs);
   const birthdayLabel = canViewProfile ? formatBirthdayDmy(ham.birthday) || null : null;

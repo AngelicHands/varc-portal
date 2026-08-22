@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getMessages, setRequestLocale } from "next-intl/server";
 import { auth } from "@/auth";
-import { routing, type AppLocale } from "@/i18n/routing";
+import { routing } from "@/i18n/routing";
+import { portalLocaleFromHeaders } from "@/lib/portal-locale-server";
 import { getPublicSiteBranding, listPublicMenuLinks } from "@/lib/cms";
 import { getAccountProfile } from "@/lib/account";
 import { isAdminRole } from "@/lib/roles";
@@ -23,10 +24,11 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { locale } = await params;
-  if (!hasLocale(routing.locales, locale)) return {};
+  const { locale: localeParam } = await params;
+  if (!hasLocale(routing.locales, localeParam)) return {};
+  const locale = await portalLocaleFromHeaders(localeParam);
 
-  const branding = await getPublicSiteBranding(locale as AppLocale);
+  const branding = await getPublicSiteBranding(locale);
   const siteName = branding.siteName;
   const siteTitle = branding.siteTitle;
   const description = branding.metaDescription || branding.tagline;
@@ -55,14 +57,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function LocaleLayout({ children, params }: Props) {
-  const { locale } = await params;
-  if (!hasLocale(routing.locales, locale)) {
+  const { locale: localeParam } = await params;
+  if (!hasLocale(routing.locales, localeParam)) {
     notFound();
   }
 
+  const locale = await portalLocaleFromHeaders(localeParam);
   setRequestLocale(locale);
   const messages = await getMessages();
-  const appLocale = locale as AppLocale;
+  const appLocale = locale;
   const [navItems, footerItems, session, branding] = await Promise.all([
     listPublicMenuLinks("navigation", appLocale),
     listPublicMenuLinks("footer", appLocale),
