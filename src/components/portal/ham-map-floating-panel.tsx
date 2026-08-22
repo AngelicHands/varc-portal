@@ -24,11 +24,12 @@ type Props = {
   showLogbookPrivateNotice: boolean;
   mapAvailable?: boolean;
   offsetLeft?: number;
-  lookupValue: string;
-  onLookupValueChange: (value: string) => void;
-  onLookupSubmit: () => void;
-  lookupPending: boolean;
-  lookupError: string | null;
+  showCallsignLookup?: boolean;
+  lookupValue?: string;
+  onLookupValueChange?: (value: string) => void;
+  onLookupSubmit?: () => void;
+  lookupPending?: boolean;
+  lookupError?: string | null;
   onLoginClick?: () => void;
   onFocusGrid?: (grid: string) => void;
   guestGrid?: string;
@@ -152,11 +153,12 @@ export function HamMapFloatingPanel({
   showLogbookPrivateNotice,
   mapAvailable = true,
   offsetLeft = 0,
-  lookupValue,
+  showCallsignLookup = true,
+  lookupValue = "",
   onLookupValueChange,
   onLookupSubmit,
-  lookupPending,
-  lookupError,
+  lookupPending = false,
+  lookupError = null,
   onLoginClick,
   onFocusGrid,
   guestGrid = "",
@@ -425,47 +427,49 @@ export function HamMapFloatingPanel({
           </div>
         </div>
 
-          <form
-            className="mt-2.5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              onLookupSubmit();
-            }}
-          >
-            <label
-              htmlFor="ham-map-lookup-callsign"
-              className={`text-[10px] font-medium tracking-wide uppercase ${muted}`}
+          {showCallsignLookup ? (
+            <form
+              className="mt-2.5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onLookupSubmit?.();
+              }}
             >
-              {t("lookupLabel")}
-            </label>
-            <div className="mt-1 flex items-stretch gap-1.5">
-              <input
-                id="ham-map-lookup-callsign"
-                value={lookupValue}
-                maxLength={15}
-                disabled={lookupPending}
-                placeholder={t("lookupPlaceholder")}
-                autoCapitalize="characters"
-                spellCheck={false}
-                onChange={(event) =>
-                  onLookupValueChange(event.target.value.toUpperCase())
-                }
-                className={`min-w-0 flex-1 rounded-md border px-2.5 py-1.5 font-display text-sm tracking-wide uppercase outline-none disabled:opacity-50 ${fieldClass}`}
-              />
-              <button
-                type="submit"
-                disabled={lookupPending}
-                className={`shrink-0 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${buttonClass}`}
+              <label
+                htmlFor="ham-map-lookup-callsign"
+                className={`text-[10px] font-medium tracking-wide uppercase ${muted}`}
               >
-                {lookupPending ? t("lookupWorking") : t("lookupSubmit")}
-              </button>
-            </div>
-            {lookupError ? (
-              <p className={`mt-1 text-[11px] ${light ? "text-red-700" : "text-red-200"}`}>
-                {lookupError}
-              </p>
-            ) : null}
-          </form>
+                {t("lookupLabel")}
+              </label>
+              <div className="mt-1 flex items-stretch gap-1.5">
+                <input
+                  id="ham-map-lookup-callsign"
+                  value={lookupValue}
+                  maxLength={15}
+                  disabled={lookupPending}
+                  placeholder={t("lookupPlaceholder")}
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  onChange={(event) =>
+                    onLookupValueChange?.(event.target.value.toUpperCase())
+                  }
+                  className={`min-w-0 flex-1 rounded-md border px-2.5 py-1.5 font-display text-sm tracking-wide uppercase outline-none disabled:opacity-50 ${fieldClass}`}
+                />
+                <button
+                  type="submit"
+                  disabled={lookupPending}
+                  className={`shrink-0 rounded-md border px-2.5 text-xs font-medium transition disabled:opacity-50 ${buttonClass}`}
+                >
+                  {lookupPending ? t("lookupWorking") : t("lookupSubmit")}
+                </button>
+              </div>
+              {lookupError ? (
+                <p className={`mt-1 text-[11px] ${light ? "text-red-700" : "text-red-200"}`}>
+                  {lookupError}
+                </p>
+              ) : null}
+            </form>
+          ) : null}
         </div>
       </div>
 

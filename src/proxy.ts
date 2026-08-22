@@ -147,8 +147,11 @@ export default async function proxy(req: NextRequest) {
 
   const publicReq = asPublicRequest(req);
 
-  const bareQso = handleBareQso(publicReq);
+  const bareQso = handleBareLocaleMapRoute(publicReq, "qso");
   if (bareQso) return bareQso;
+
+  const bareQth = handleBareLocaleMapRoute(publicReq, "qth");
+  if (bareQth) return bareQth;
 
   const prefixedCallsign = redirectPrefixedCallsign(publicReq);
   if (prefixedCallsign) return prefixedCallsign;
@@ -159,15 +162,18 @@ export default async function proxy(req: NextRequest) {
   return intlMiddleware(publicReq);
 }
 
-/** Public URL is /qso. Prefixed /vi/qso and /en/qso redirect here. */
-function handleBareQso(req: NextRequest): NextResponse | null {
+/** Public URL is /qso or /qth. Prefixed /vi/* and /en/* redirect to the bare path. */
+function handleBareLocaleMapRoute(
+  req: NextRequest,
+  segment: "qso" | "qth",
+): NextResponse | null {
   const { pathname } = req.nextUrl;
-  if (pathname === "/vi/qso" || pathname === "/en/qso") {
+  if (pathname === `/vi/${segment}` || pathname === `/en/${segment}`) {
     const canonical = req.nextUrl.clone();
-    canonical.pathname = "/qso";
+    canonical.pathname = `/${segment}`;
     return NextResponse.redirect(canonical, 308);
   }
-  if (pathname !== "/qso") return null;
+  if (pathname !== `/${segment}`) return null;
 
   const locale = localeFromCookie(req);
   const headers = new Headers(req.headers);

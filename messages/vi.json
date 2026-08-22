@@ -158,9 +158,10 @@
       "themeDark": "Tối",
       "siteNav": "Menu trang",
       "homeMarkerLabel": "Grid Location",
-      "yourLocationLabel": "Vị trí hiện tại",
+      "yourLocationLabel": "{callsign} - Vị trí của bạn",
+      "yourLocationGuestLabel": "Vị trí hiện tại",
       "homeLocationPinLabel": "{callsign} - Vị trí nhà",
-      "mergedLocationPinLabel": "{callsign} - Vị trí hiện tại",
+      "mergedLocationPinLabel": "{callsign} - Vị trí của bạn",
       "homeLocationLabel": "Vị trí trạm",
       "homeLocationFromGps": "Từ vị trí đã lưu",
       "homeLocationFromGrid": "Tâm ô lưới (chưa có GPS)",
@@ -264,6 +265,30 @@
           "body": "Bấm nút trợ giúp (?) bất cứ lúc nào để xem lại hướng dẫn."
         }
       }
+    },
+    "qth": {
+      "title": "Bản đồ QTH",
+      "lede": "Các trạm chia sẻ công khai lưới và vị trí nhà.",
+      "stationCount": "{count, plural, one {# trạm} other {# trạm}}",
+      "toggleGrid": "Ô lưới",
+      "togglePins": "Điểm vị trí",
+      "themeLabel": "Giao diện bản đồ",
+      "themeLight": "Sáng",
+      "themeDark": "Tối",
+      "mapUnavailable": "Không thể hiển thị bản đồ",
+      "emptyTitle": "Chưa có vị trí công khai",
+      "emptyMessage": "Khi operator chia sẻ lưới nhà và vị trí công khai, họ sẽ xuất hiện tại đây.",
+      "verified": "đã xác minh",
+      "gridLabel": "Lưới",
+      "viewProfile": "Xem hồ sơ",
+      "yourLocationLabel": "Vị trí của bạn - {callsign}",
+      "youBadge": "Bạn",
+      "listTitle": "Vị trí công khai",
+      "listHandle": "Vị trí",
+      "listExpand": "Hiện danh sách vị trí",
+      "listCollapse": "Ẩn danh sách vị trí",
+      "listCount": "{count, plural, one {# trạm} other {# trạm}}",
+      "listEmpty": "Chưa có vị trí công khai."
     }
   },
   "account": {

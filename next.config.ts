@@ -8,7 +8,7 @@ const backupRestoreUploadLimit = Number(
 
 // Keep in sync with RESERVED_HAM_PATHS in src/lib/ham-reserved.ts (lowercase).
 const BARE_CALLSIGN_REWRITE_PATTERN =
-  "(?!_next|account|admin|api|callsigns|categories|en|favicon|logbook|maplibre|media|news|pages|qso|robots|sitemap|vi)[A-Za-z0-9]{3,15}";
+  "(?!_next|account|admin|api|callsigns|categories|en|favicon|logbook|maplibre|media|news|pages|qso|qth|robots|sitemap|vi)[A-Za-z0-9]{3,15}";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -51,6 +51,11 @@ const nextConfig: NextConfig = {
       {
         source: "/qso",
         destination: "/vi/qso",
+      },
+      // Bare /qth → /vi/qth (UI locale comes from the NEXT_LOCALE cookie).
+      {
+        source: "/qth",
+        destination: "/vi/qth",
       },
       // Bare /XV1ABC → /vi/XV1ABC. Must be next.config (not middleware):
       // Next.js 16 standalone turns middleware rewrites into a self-308 loop.

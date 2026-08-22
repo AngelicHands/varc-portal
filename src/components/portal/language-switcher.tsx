@@ -134,9 +134,9 @@ function switchHamProfileLocale(target: AppLocale, callsign: string) {
   window.location.assign(`${hamPublicPath(callsign)}${search}`);
 }
 
-function switchBareQsoLocale(target: AppLocale) {
+function switchBareLocaleMapRoute(target: AppLocale, segment: "qso" | "qth") {
   document.cookie = `NEXT_LOCALE=${target};path=/;max-age=31536000;samesite=lax`;
-  window.location.assign(`/qso${window.location.search}`);
+  window.location.assign(`/${segment}${window.location.search}`);
 }
 
 export function LanguageSwitcher({
@@ -154,7 +154,10 @@ export function LanguageSwitcher({
     pathname === "/[callsign]" && typeof paramRecord.callsign === "string"
       ? paramRecord.callsign
       : null;
-  const isBareQso = browserPathname === "/qso";
+  const isBareLocaleMap =
+    browserPathname === "/qso" || browserPathname === "/qth";
+  const bareLocaleMapSegment =
+    browserPathname === "/qth" ? "qth" : browserPathname === "/qso" ? "qso" : null;
 
   const hrefVi = hrefForLocale("vi", pathname, paramRecord, alternates);
   const hrefEn = hrefForLocale("en", pathname, paramRecord, alternates);
@@ -194,11 +197,11 @@ export function LanguageSwitcher({
             <FlagGB className="h-3.5 w-5" />
           </button>
         </>
-      ) : isBareQso ? (
+      ) : isBareLocaleMap && bareLocaleMapSegment ? (
         <>
           <button
             type="button"
-            onClick={() => switchBareQsoLocale("vi")}
+            onClick={() => switchBareLocaleMapRoute("vi", bareLocaleMapSegment)}
             aria-label="Tiếng Việt"
             aria-current={locale === "vi" ? "true" : undefined}
             title="Tiếng Việt"
@@ -210,7 +213,7 @@ export function LanguageSwitcher({
           </button>
           <button
             type="button"
-            onClick={() => switchBareQsoLocale("en")}
+            onClick={() => switchBareLocaleMapRoute("en", bareLocaleMapSegment)}
             aria-label="English"
             aria-current={locale === "en" ? "true" : undefined}
             title="English"

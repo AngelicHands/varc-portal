@@ -12,6 +12,7 @@ export const RESERVED_HAM_PATHS = new Set([
   "NEWS",
   "PAGES",
   "QSO",
+  "QTH",
   "VI",
   "EN",
   "ROBOTS",
@@ -39,6 +40,13 @@ export function parseBareCallsignPath(pathname: string): string | null {
 /** Public profile path without locale prefix (e.g. XV1ABC → /XV1ABC). */
 export function hamPublicPath(sign: string): string {
   return `/${normalizeCallsignQuery(sign)}`;
+}
+
+/** QSO map deep link for a callsign (e.g. /qso?callsign=XV1ABC). */
+export function qsoMapCallsignHref(sign: string): string {
+  const callsign = normalizeCallsignQuery(sign);
+  if (!callsign) return "/qso";
+  return `/qso?callsign=${encodeURIComponent(callsign)}`;
 }
 
 /** Valid ham URL segment, or null (punctuation / reserved / invalid). Case may still differ. */

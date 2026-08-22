@@ -22,6 +22,7 @@ export const QsoCacheKeys = {
   ) =>
     `qso:list:user:${userId}:p${page}:s${pageSize}:q${queryHash}:sort${sortKey}:${sortDir}:v2`,
   qsoCount: (userId: string) => `qso:count:user:${userId}:v1`,
+  publicQthLocations: () => "qth:public-locations:v1",
 };
 
 function userTag(userId: string): string {
@@ -113,6 +114,16 @@ export async function invalidateHamPublicCache(callsign: string): Promise<void> 
   }
 }
 
+export async function invalidatePublicQthLocationsCache(): Promise<void> {
+  const client = await getValkey();
+  if (!client) return;
+  try {
+    await client.del(QsoCacheKeys.publicQthLocations());
+  } catch (error) {
+    logServerError("valkey invalidate qth locations cache", error);
+  }
+}
+
 export async function invalidateQsoAndHamCache(params: {
   userId?: string;
   callsigns?: string[];
@@ -124,6 +135,7 @@ export async function invalidateQsoAndHamCache(params: {
   for (const callsign of uniqueTags((params.callsigns ?? []).map((item) => item.trim().toUpperCase()))) {
     tasks.push(invalidateHamPublicCache(callsign));
   }
+  tasks.push(invalidatePublicQthLocationsCache());
   await Promise.all(tasks);
 }
 

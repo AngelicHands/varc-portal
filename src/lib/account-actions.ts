@@ -32,6 +32,12 @@ function revalidateUserCallsignPaths(callsign: string) {
   revalidatePath(`/en/${callsign}`);
 }
 
+function revalidateQthMapPaths() {
+  revalidatePath("/qth");
+  revalidatePath("/vi/qth");
+  revalidatePath("/en/qth");
+}
+
 export async function updateProfileAction(raw: unknown) {
   try {
     const session = await requireAccountSession();
@@ -173,6 +179,7 @@ export async function updateHomeLocationAction(raw: unknown) {
 
     revalidatePath("/account");
     revalidateUserCallsignPaths(callsign);
+    revalidateQthMapPaths();
     await invalidateQsoAndHamCache({
       userId: session.user.id,
       callsigns: [callsign],
@@ -335,6 +342,7 @@ export async function updateSecuritySettingsAction(raw: unknown) {
       revalidatePath(`/vi/${callsign}`);
       revalidatePath(`/en/${callsign}`);
     }
+    revalidateQthMapPaths();
     await invalidateQsoAndHamCache({
       userId: session.user.id,
       callsigns: callsign ? [callsign] : [],

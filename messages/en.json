@@ -158,9 +158,10 @@
       "themeDark": "Dark",
       "siteNav": "Site menu",
       "homeMarkerLabel": "Home grid",
-      "yourLocationLabel": "Current location",
+      "yourLocationLabel": "{callsign} - Your location",
+      "yourLocationGuestLabel": "Current location",
       "homeLocationPinLabel": "{callsign} - Home location",
-      "mergedLocationPinLabel": "{callsign} - Current location",
+      "mergedLocationPinLabel": "{callsign} - Your location",
       "homeLocationLabel": "Station location",
       "homeLocationFromGps": "From saved location",
       "homeLocationFromGrid": "Grid center (no GPS saved)",
@@ -264,6 +265,30 @@
           "body": "Open this help button anytime to replay the tour."
         }
       }
+    },
+    "qth": {
+      "title": "QTH map",
+      "lede": "Stations that share their home grid and location publicly.",
+      "stationCount": "{count, plural, one {# station} other {# stations}}",
+      "toggleGrid": "Grid squares",
+      "togglePins": "Location pins",
+      "themeLabel": "Map theme",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "mapUnavailable": "Map unavailable",
+      "emptyTitle": "No public locations yet",
+      "emptyMessage": "When operators share their home grid and location publicly, they appear here.",
+      "verified": "verified",
+      "gridLabel": "Grid",
+      "viewProfile": "View profile",
+      "yourLocationLabel": "Your location - {callsign}",
+      "youBadge": "You",
+      "listTitle": "Public locations",
+      "listHandle": "Locations",
+      "listExpand": "Show location list",
+      "listCollapse": "Hide location list",
+      "listCount": "{count, plural, one {# station} other {# stations}}",
+      "listEmpty": "No public locations yet."
     }
   },
   "account": {

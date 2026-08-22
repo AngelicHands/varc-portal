@@ -516,6 +516,16 @@ function buildMarkerElement(
   return el;
 }
 
+function formatYourLocationPinLabel(
+  callsign: string,
+  t: (key: string, values?: Record<string, string>) => string,
+): string {
+  const sign = callsign.trim();
+  return sign
+    ? t("yourLocationLabel", { callsign: sign })
+    : t("yourLocationGuestLabel");
+}
+
 function formatTraceDistanceKm(km: number): string {
   if (!Number.isFinite(km) || km < 0) return "0";
   if (km < 100) {
@@ -809,6 +819,16 @@ type Props = {
   viewer?: HamMapViewer | null;
   hasGoogleLogin?: boolean;
   loginCallbackUrl?: string;
+  /** When set (e.g. /qso?callsign=XV1ABC), prefill the lookup field. */
+  initialLookupCallsign?: string;
+  /** Server-prefetched station when ?callsign= differs from the signed-in owner. */
+  initialViewed?: {
+    callsign: string;
+    homeMarker: HomeGridMarker | null;
+    qsos: QsoListItemDto[];
+    isOwner: boolean;
+  };
+  initialLookupError?: "invalid" | "notFound" | "private";
 };
 
 let mapLibreWorkerConfigured = false;
@@ -832,8 +852,19 @@ export function HamMapFullscreenView({
   viewer = null,
   hasGoogleLogin = false,
   loginCallbackUrl = "/qso",
+  initialLookupCallsign,
+  initialViewed,
+  initialLookupError,
 }: Props) {
   const t = useTranslations("ham.map");
+  const initialLookupErrorMessage =
+    initialLookupError === "private"
+      ? t("lookupPrivate")
+      : initialLookupError === "invalid"
+        ? t("lookupInvalid")
+        : initialLookupError === "notFound"
+          ? t("lookupNotFound")
+          : null;
   const shellRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -894,16 +925,22 @@ export function HamMapFullscreenView({
     lat: number;
     lng: number;
   } | null>(null);
-  const [lookupValue, setLookupValue] = useState(callsignProp);
-  const [lookupError, setLookupError] = useState<string | null>(null);
-  const [logbookPrivate, setLogbookPrivate] = useState(false);
+  const [lookupValue, setLookupValue] = useState(
+    () => initialLookupCallsign?.trim() || callsignProp,
+  );
+  const [lookupError, setLookupError] = useState<string | null>(
+    initialLookupErrorMessage,
+  );
+  const [logbookPrivate, setLogbookPrivate] = useState(
+    initialLookupError === "private",
+  );
   const [lookupPending, startLookup] = useTransition();
   const [viewed, setViewed] = useState<{
     callsign: string;
     homeMarker: HomeGridMarker | null;
     qsos: QsoListItemDto[];
     isOwner: boolean;
-  } | null>(null);
+  } | null>(initialViewed ?? null);
 
   const callsign = viewed?.callsign ?? callsignProp;
   const homeMarker = viewed ? viewed.homeMarker : homeMarkerProp;
@@ -1369,16 +1406,18 @@ export function HamMapFullscreenView({
       );
 
       if (showLocationMarkersRef.current && mapHomeMarker) {
+        const yourLocationLabel = formatYourLocationPinLabel(
+          mapHomeMarker.callsign,
+          t,
+        );
         const homePinLabel = showCallsignsRef.current
           ? mergedOwnLocation
-            ? t("mergedLocationPinLabel", {
-                callsign: mapHomeMarker.callsign,
-              })
+            ? yourLocationLabel
             : stationHome
               ? t("homeLocationPinLabel", {
                   callsign: mapHomeMarker.callsign,
                 })
-              : t("yourLocationLabel")
+              : yourLocationLabel
           : "";
         const homePinClass =
           mergedOwnLocation || stationHome ? stationPinClass : viewerPinClass;
@@ -1393,10 +1432,10 @@ export function HamMapFullscreenView({
               closeOnClick: false,
             }).setHTML(
               mergedOwnLocation
-                ? `<strong>${escapeHtml(t("mergedLocationPinLabel", { callsign: mapHomeMarker.callsign }))}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}`
+                ? `<strong>${escapeHtml(yourLocationLabel)}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}`
                 : stationHome
                   ? `<strong>${escapeHtml(t("homeLocationPinLabel", { callsign: mapHomeMarker.callsign }))}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${escapeHtml(mapHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid"))}</span>`
-                  : `<strong>${escapeHtml(t("yourLocationLabel"))}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}`,
+                  : `<strong>${escapeHtml(yourLocationLabel)}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}`,
             ),
           )
           .addTo(map);
@@ -1407,9 +1446,13 @@ export function HamMapFullscreenView({
       }
 
       if (showLocationMarkersRef.current && extraViewerHome) {
+        const extraYourLocationLabel = formatYourLocationPinLabel(
+          extraViewerHome.callsign,
+          t,
+        );
         const el = buildMarkerElement(
           viewerPinClass,
-          showCallsignsRef.current ? t("yourLocationLabel") : "",
+          showCallsignsRef.current ? extraYourLocationLabel : "",
           mapTheme,
         );
         const marker = new Marker({ element: el })
@@ -1421,7 +1464,7 @@ export function HamMapFullscreenView({
               closeButton: true,
               closeOnClick: false,
             }).setHTML(
-              `<strong>${escapeHtml(t("yourLocationLabel"))}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(extraViewerHome.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${extraViewerHome.lat.toFixed(5)}, ${extraViewerHome.lng.toFixed(5)}<br/><span style="font-size:12px">${escapeHtml(t("homeLocationFromGps"))}</span>`,
+              `<strong>${escapeHtml(extraYourLocationLabel)}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(extraViewerHome.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${extraViewerHome.lat.toFixed(5)}, ${extraViewerHome.lng.toFixed(5)}<br/><span style="font-size:12px">${escapeHtml(t("homeLocationFromGps"))}</span>`,
             ),
           )
           .addTo(map);
@@ -1736,33 +1779,42 @@ export function HamMapFullscreenView({
     };
   }, [mapTilerKey, themeReady]);
 
-  function submitLookup() {
-    setLookupError(null);
-    setLogbookPrivate(false);
-    startLookup(async () => {
-      const result = await lookupPublicQsoMapAction(lookupValue);
-      if (!result.ok) {
-        setViewed(null);
-        if (result.error === "private") {
-          setLogbookPrivate(true);
-          setLookupError(t("lookupPrivate"));
+  const runLookup = useCallback(
+    (raw: string) => {
+      setLookupError(null);
+      setLogbookPrivate(false);
+      startLookup(async () => {
+        const result = await lookupPublicQsoMapAction(raw);
+        if (!result.ok) {
+          setViewed(null);
+          if (result.error === "private") {
+            setLogbookPrivate(true);
+            setLookupError(t("lookupPrivate"));
+            return;
+          }
+          setLookupError(
+            result.error === "invalid"
+              ? t("lookupInvalid")
+              : t("lookupNotFound"),
+          );
           return;
         }
-        setLookupError(
-          result.error === "invalid" ? t("lookupInvalid") : t("lookupNotFound"),
-        );
-        return;
-      }
-      setLogbookPrivate(false);
-      setOverrideHomeMarker(null);
-      hasFittedCameraRef.current = false;
-      setViewed({
-        callsign: result.callsign,
-        homeMarker: result.homeMarker,
-        qsos: result.qsos,
-        isOwner: result.isOwner,
+        setLogbookPrivate(false);
+        setOverrideHomeMarker(null);
+        hasFittedCameraRef.current = false;
+        setViewed({
+          callsign: result.callsign,
+          homeMarker: result.homeMarker,
+          qsos: result.qsos,
+          isOwner: result.isOwner,
+        });
       });
-    });
+    },
+    [t],
+  );
+
+  function submitLookup() {
+    runLookup(lookupValue);
   }
 
   function onMapThemeChange(theme: HamMapTheme) {
