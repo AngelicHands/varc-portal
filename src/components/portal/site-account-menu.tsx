@@ -13,6 +13,24 @@ export type SiteAccountUser = {
   callsign: string;
 };
 
+function UserIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={className}
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="8" cy="5.25" r="2.25" />
+      <path d="M3.5 13c1.15-2.15 2.65-3.1 4.5-3.1s3.35.95 4.5 3.1" />
+    </svg>
+  );
+}
+
 export function SiteAccountMenu({
   user,
   compact = false,
@@ -44,8 +62,25 @@ export function SiteAccountMenu({
         : "inline-flex h-10 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[state=open]:bg-foreground/5";
 
   if (!user) {
+    if (compact) {
+      return (
+        <NextLink
+          href={loginHref}
+          className={compactTriggerClass}
+          aria-label={t("login")}
+        >
+          <UserIcon className="h-4 w-4 shrink-0" />
+          <span className="sr-only">{t("login")}</span>
+        </NextLink>
+      );
+    }
+
     return (
-      <NextLink href={loginHref} className={loginClass}>
+      <NextLink
+        href={loginHref}
+        className={`${loginClass} inline-flex items-center gap-1.5`}
+      >
+        <UserIcon className="h-4 w-4 shrink-0" />
         {t("login")}
       </NextLink>
     );
@@ -205,6 +240,30 @@ export function SiteAccountMenu({
               className="flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[highlighted]:bg-foreground/5"
             >
               <svg
+                viewBox="0 0 16 16"
+                className="h-4 w-4 shrink-0 text-muted"
+                aria-hidden
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4.5 2.75h5.25L13 6.25v6.5A1.25 1.25 0 0 1 11.75 14H4.5A1.25 1.25 0 0 1 3.25 12.75V4A1.25 1.25 0 0 1 4.5 2.75Z" />
+                <path d="M9.5 2.75V6H13" />
+                <path d="M5.5 8.25h5" />
+                <path d="M5.5 10.75h5" />
+              </svg>
+              {t("qsoMap")}
+            </NextLink>
+          </DropdownMenu.Item>
+
+          <DropdownMenu.Item asChild>
+            <NextLink
+              href="/qth"
+              className="flex cursor-pointer select-none items-center gap-2.5 rounded px-3 py-2 text-sm text-foreground outline-none transition hover:bg-foreground/5 data-[highlighted]:bg-foreground/5"
+            >
+              <svg
                 viewBox="0 0 24 24"
                 className="h-4 w-4 shrink-0 text-muted"
                 aria-hidden
@@ -214,10 +273,10 @@ export function SiteAccountMenu({
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <path d="M3 6.5 12 2l9 4.5v11L12 22l-9-4.5v-11Z" />
-                <path d="M12 22V11M3 6.5 12 11l9-4.5" />
+                <path d="M12 21s7-4.5 7-10a7 7 0 1 0-14 0c0 5.5 7 10 7 10Z" />
+                <circle cx="12" cy="11" r="2.5" />
               </svg>
-              {t("qsoMap")}
+              {t("qth")}
             </NextLink>
           </DropdownMenu.Item>
 
