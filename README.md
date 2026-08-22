@@ -140,7 +140,7 @@ docker compose up --build web
 
 ## Kubernetes / Argo CD
 
-Manifests for Argo CD live in `deploy/k8s/` (web Deployment, backup-worker Deployment, email-worker Deployment, Service, Ingress, ConfigMap, Valkey). App secrets are **not** synced by Argo — create them once in the cluster.
+Manifests for Argo CD live in `deploy/k8s/` (web Deployment, **API Deployment**, backup-worker Deployment, email-worker Deployment, Services, Ingress, ConfigMap, Valkey). App secrets are **not** synced by Argo — create them once in the cluster.
 
 Valkey (`deploy/k8s/valkey.yaml`) is a single in-cluster cache (`VALKEY_URL=redis://valkey:6379` in the ConfigMap). It requires `VALKEY_PASSWORD` in `varc-portal-secrets` (`--requirepass`, probes use `REDISCLI_AUTH`). It is not on the Ingress; data is ephemeral (LRU, no AOF).
 
@@ -172,6 +172,7 @@ Bump version, commit, then push a `v*` tag. The [Release](.github/workflows/rele
 - Pushes container images to GHCR:
   - `ghcr.io/<owner>/varc-portal:vX.Y.Z` (web)
   - `ghcr.io/<owner>/varc-portal-backup-worker:vX.Y.Z` (backup + email workers; same image)
+  - `ghcr.io/<owner>/varc-portal-api:vX.Y.Z` (Go QSO REST API)
 
 ```bash
 VERSION=1.0.26
@@ -191,9 +192,12 @@ Deploy is **not** triggered by tags. After a release exists:
 2. Enter the version (e.g. `1.0.26` or `v1.0.26`)
 3. The workflow verifies the GitHub Release + GHCR images, pins these manifests to `vX.Y.Z`, and pushes a `chore: deploy v…` commit:
    - `deploy/k8s/deployment.yaml` → web image
+   - `deploy/k8s/api-deployment.yaml` → API image
    - `deploy/k8s/backup-worker.yaml` → worker image
    - `deploy/k8s/email-worker.yaml` → worker image (same tag; different command)
 4. Argo CD syncs the new images from Git
+
+The API is exposed at **`https://api.hamvn.com`** via `deploy/k8s/ingress.yaml` (`varc-api` Ingress → `varc-api` Service → port 3100). It shares `varc-portal-secrets` and `varc-portal-config` with the portal (MongoDB, Valkey, `API_TOKEN_PEPPER`, `API_PUBLIC_URL`, etc.).
 
 ## Content model
 

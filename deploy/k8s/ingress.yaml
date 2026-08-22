@@ -36,6 +36,23 @@ spec:
                 name: varc-portal
                 port:
                   number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: varc-api
+  namespace: varc
+  labels:
+    classq.io/ingress-kind: default
+    app: varc-api
+  annotations:
+    # QSO API JSON bodies are capped at 64 KiB in the Go app.
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
     - host: api.hamvn.com
       http:
         paths:

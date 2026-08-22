@@ -188,6 +188,17 @@ Shared with the portal (see root `.env.example`):
 
 ## Deployment
 
-Kubernetes manifests: `deploy/k8s/api-deployment.yaml`, `api-service.yaml`. The API pod uses the same `varc-portal-secrets` and `varc-portal-config` as the web app. Ingress host: `api.hamvn.com`.
+Kubernetes manifests:
 
-Release workflow builds `ghcr.io/<owner>/varc-portal-api` on version tags.
+| File | Purpose |
+|------|---------|
+| `deploy/k8s/deployment.yaml` | Portal web |
+| `deploy/k8s/api-deployment.yaml` | Go QSO REST API |
+| `deploy/k8s/api-service.yaml` | API ClusterIP (80 → 3100) |
+| `deploy/k8s/backup-worker.yaml` | Backup worker |
+| `deploy/k8s/email-worker.yaml` | Email worker |
+| `deploy/k8s/ingress.yaml` | Portal (`hamvn.com`) + API (`api.hamvn.com`) |
+
+Release workflow builds `ghcr.io/<owner>/varc-portal-api` on version tags. The on-demand **Deploy** workflow pins `api-deployment.yaml` to the release tag; Argo CD syncs into namespace `varc`.
+
+Ingress host: `api.hamvn.com` → `varc-api` Service. The API pod uses the same `varc-portal-secrets` and `varc-portal-config` as the web app.
