@@ -8,6 +8,7 @@ import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { HamMapFullscreenView } from "@/components/portal/ham-map-fullscreen-view";
 import {
   HamOwnerDocumentsTabPanel,
+  HamOwnerPrivacyTabPanel,
   HamOwnerProfileTabPanel,
   HamOwnerQslTabPanel,
   HamOwnerSecurityTabPanel,
@@ -112,6 +113,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
       tabParam === "documents" ||
       tabParam === "logbook" ||
       tabParam === "qsl" ||
+      tabParam === "privacy" ||
       tabParam === "security"
     ) {
       qs.set("tab", tabParam);
@@ -221,7 +223,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
   }
 
   const visibleTabs: HamTabId[] = canEdit
-    ? ["profile", "logbook", "documents", "qsl", "security"]
+    ? ["profile", "logbook", "documents", "qsl", "privacy", "security"]
     : [
         ...(canViewProfile ? (["profile"] as HamTabId[]) : []),
         ...(canViewLogbook ? (["logbook"] as HamTabId[]) : []),
@@ -392,6 +394,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
             logbook={logbookPanel}
             documents={<HamOwnerDocumentsTabPanel />}
             qsl={<HamOwnerQslTabPanel />}
+            privacy={<HamOwnerPrivacyTabPanel />}
             security={<HamOwnerSecurityTabPanel />}
           />
         </HamOwnerTabDataProvider>
@@ -466,6 +469,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
           logbook={logbookPanel}
           documents={null}
           qsl={null}
+          privacy={null}
           security={null}
         />
       )}

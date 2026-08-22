@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import {
   HamOwnerDocumentsTabPanel,
   HamOwnerProfileTabPanel,
+  HamOwnerPrivacyTabPanel,
   HamOwnerQslTabPanel,
   HamOwnerSecurityTabPanel,
   HamOwnerTabDataProvider,
@@ -67,6 +68,7 @@ export default async function AccountPage({ params, searchParams }: Props) {
       tabParam === "documents" ||
       tabParam === "logbook" ||
       tabParam === "qsl" ||
+      tabParam === "privacy" ||
       tabParam === "security"
     ) {
       qs.set("tab", tabParam);
@@ -124,6 +126,7 @@ export default async function AccountPage({ params, searchParams }: Props) {
     "logbook",
     "documents",
     "qsl",
+    "privacy",
     "security",
   ];
   const activeTab = parseHamTab(tabParam, visibleTabs);
@@ -189,6 +192,7 @@ export default async function AccountPage({ params, searchParams }: Props) {
           }
           documents={<HamOwnerDocumentsTabPanel />}
           qsl={<HamOwnerQslTabPanel />}
+          privacy={<HamOwnerPrivacyTabPanel />}
           security={<HamOwnerSecurityTabPanel />}
         />
       </HamOwnerTabDataProvider>

@@ -17,6 +17,7 @@ const TABS: TabDef[] = [
   { id: "logbook", ownerOnly: false },
   { id: "documents", ownerOnly: true },
   { id: "qsl", ownerOnly: true },
+  { id: "privacy", ownerOnly: true },
   { id: "security", ownerOnly: true },
 ];
 
@@ -38,6 +39,7 @@ export function HamProfileTabs({
   profile,
   documents,
   qsl,
+  privacy,
   security,
 }: {
   basePath?: string;
@@ -50,6 +52,7 @@ export function HamProfileTabs({
   profile?: ReactNode;
   documents?: ReactNode;
   qsl?: ReactNode;
+  privacy?: ReactNode;
   security?: ReactNode;
 }) {
   const t = useTranslations("ham");
@@ -80,6 +83,7 @@ export function HamProfileTabs({
     logbook: t("tabLogbook"),
     documents: t("tabDocuments"),
     qsl: t("tabQsl"),
+    privacy: t("tabPrivacy"),
     security: t("tabSecurity"),
   };
 
@@ -100,6 +104,7 @@ export function HamProfileTabs({
     { id: "logbook", node: logbook },
     { id: "documents", node: documents },
     { id: "qsl", node: qsl },
+    { id: "privacy", node: privacy },
     { id: "security", node: security },
   ];
 

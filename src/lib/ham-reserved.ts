@@ -51,7 +51,13 @@ export function parseHamPathParam(raw: string): string | null {
   return sign;
 }
 
-export type HamTabId = "profile" | "logbook" | "documents" | "qsl" | "security";
+export type HamTabId =
+  | "profile"
+  | "logbook"
+  | "documents"
+  | "qsl"
+  | "privacy"
+  | "security";
 
 export function parseHamTab(
   raw: string | undefined,

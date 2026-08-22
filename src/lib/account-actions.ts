@@ -1,5 +1,6 @@
 "use server";
 
+import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
@@ -13,7 +14,7 @@ import { buildCallsignVerificationRequestEmail } from "@/lib/mail/callsign-verif
 import { failAction } from "@/lib/safe-error";
 import { getAccountProfile } from "@/lib/account";
 import { listUserDocuments } from "@/lib/user-documents";
-import { profilePatchSchema, homeLocationUpdateSchema } from "@/lib/validations/qso";
+import { profilePatchSchema, homeLocationUpdateSchema, changePasswordSchema } from "@/lib/validations/qso";
 import { User } from "@/models/User";
 
 async function requireAccountSession() {
@@ -339,7 +340,50 @@ export async function updateSecuritySettingsAction(raw: unknown) {
   }
 }
 
-/** Owner profile / documents / security tab data (client-fetched after tab paint). */
+export async function changePasswordAction(raw: unknown) {
+  try {
+    const session = await requireAccountSession();
+    if (!session) {
+      return { ok: false as const, error: "Unauthorized" };
+    }
+
+    const parsed = changePasswordSchema.safeParse(raw);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return {
+        ok: false as const,
+        error: issue?.message ?? "Invalid password",
+      };
+    }
+
+    await connectDb();
+    const user = await User.findById(session.user.id).select("passwordHash").lean();
+    if (!user) {
+      return { ok: false as const, error: "User not found" };
+    }
+
+    const hasPassword = Boolean(user.passwordHash);
+    if (hasPassword) {
+      const currentPassword = parsed.data.currentPassword?.trim() ?? "";
+      if (!currentPassword) {
+        return { ok: false as const, error: "Current password is required" };
+      }
+      const valid = await bcrypt.compare(currentPassword, user.passwordHash!);
+      if (!valid) {
+        return { ok: false as const, error: "Current password is incorrect" };
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+    await User.updateOne({ _id: session.user.id }, { $set: { passwordHash } });
+
+    return { ok: true as const };
+  } catch (error) {
+    return failAction(error, "Failed to change password");
+  }
+}
+
+/** Owner profile / documents / privacy / security tab data (client-fetched after tab paint). */
 export async function loadHamOwnerTabDataAction() {
   try {
     const session = await requireAccountSession();

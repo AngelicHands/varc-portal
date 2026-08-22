@@ -288,4 +288,22 @@ export const USER_DOCUMENT_MIME = [
   "image/webp",
 ] as const;
 
+const MAX_PASSWORD_CHARS = 128;
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().max(MAX_PASSWORD_CHARS).optional().default(""),
+    newPassword: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(MAX_PASSWORD_CHARS, "Password is too long"),
+    confirmPassword: z.string().max(MAX_PASSWORD_CHARS),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
+
 export const USER_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;

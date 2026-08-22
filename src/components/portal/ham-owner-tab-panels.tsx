@@ -12,6 +12,7 @@ import {
 import { useTranslations } from "next-intl";
 import { AccountProfileForm } from "@/components/portal/account-profile-form";
 import { SecuritySettingsForm } from "@/components/portal/security-settings-form";
+import { SecurityTabPanel } from "@/components/portal/security-tab-panel";
 import { UserDocumentsPanel } from "@/components/portal/user-documents-panel";
 import { loadHamOwnerTabDataAction } from "@/lib/account-actions";
 import type { AccountProfileDto, UserDocumentDto } from "@/lib/account-types";
@@ -208,7 +209,7 @@ export function HamOwnerDocumentsTabPanel() {
   );
 }
 
-export function HamOwnerSecurityTabPanel() {
+export function HamOwnerPrivacyTabPanel() {
   return (
     <OwnerTabGate>
       {(data) => (
@@ -219,6 +220,14 @@ export function HamOwnerSecurityTabPanel() {
           }}
         />
       )}
+    </OwnerTabGate>
+  );
+}
+
+export function HamOwnerSecurityTabPanel() {
+  return (
+    <OwnerTabGate>
+      {(data) => <SecurityTabPanel hasPassword={data.profile.hasPassword} />}
     </OwnerTabGate>
   );
 }

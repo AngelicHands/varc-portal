@@ -56,5 +56,6 @@ export async function getAccountProfile(
       typeof user.homeLng === "number" && Number.isFinite(user.homeLng)
         ? user.homeLng
         : null,
+    hasPassword: Boolean(user.passwordHash),
   };
 }

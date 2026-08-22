@@ -83,7 +83,7 @@ export function SecuritySettingsForm({ initial }: Props) {
         setError(result.error);
         return;
       }
-      setMessage(t("saved"));
+      setMessage(t("settingsSaved"));
       router.refresh();
     });
   }
@@ -131,7 +131,7 @@ export function SecuritySettingsForm({ initial }: Props) {
           disabled={pending}
           className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
         >
-          {pending ? t("saving") : t("save")}
+          {pending ? t("savingSettings") : t("saveSettings")}
         </button>
       </div>
     </form>

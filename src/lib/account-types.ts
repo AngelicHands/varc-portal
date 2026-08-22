@@ -32,6 +32,7 @@ export type AccountProfileDto = {
   homeGrid: string;
   homeLat: number | null;
   homeLng: number | null;
+  hasPassword: boolean;
 };
 
 export type QsoListItemDto = {
