@@ -155,9 +155,14 @@ export function LanguageSwitcher({
       ? paramRecord.callsign
       : null;
   const isBareLocaleMap =
-    browserPathname === "/qso" || browserPathname === "/qth";
+    browserPathname?.toLowerCase() === "/qso" ||
+    browserPathname?.toLowerCase() === "/qth";
   const bareLocaleMapSegment =
-    browserPathname === "/qth" ? "qth" : browserPathname === "/qso" ? "qso" : null;
+    browserPathname?.toLowerCase() === "/qth"
+      ? "qth"
+      : browserPathname?.toLowerCase() === "/qso"
+        ? "qso"
+        : null;
 
   const hrefVi = hrefForLocale("vi", pathname, paramRecord, alternates);
   const hrefEn = hrefForLocale("en", pathname, paramRecord, alternates);

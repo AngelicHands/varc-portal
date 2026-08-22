@@ -16,6 +16,8 @@ type Props = {
   selectedCallsign: string | null;
   viewerCallsign?: string;
   onSelectStation: (callsign: string | null) => void;
+  /** When true, the list is intentionally empty until the viewer signs in. */
+  guestList?: boolean;
 };
 
 export function HamMapQthListPanel({
@@ -26,6 +28,7 @@ export function HamMapQthListPanel({
   selectedCallsign,
   viewerCallsign = "",
   onSelectStation,
+  guestList = false,
 }: Props) {
   const t = useTranslations("ham.qth");
   const light = mapTheme === "light";
@@ -78,7 +81,7 @@ export function HamMapQthListPanel({
           {stations.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center px-6 py-8">
               <p className={`text-center text-sm text-balance ${muted}`}>
-                {t("listEmpty")}
+                {guestList ? t("listSignIn") : t("listEmpty")}
               </p>
             </div>
           ) : (

@@ -278,6 +278,8 @@
       "mapUnavailable": "Không thể hiển thị bản đồ",
       "emptyTitle": "Chưa có vị trí công khai",
       "emptyMessage": "Khi operator chia sẻ lưới nhà và vị trí công khai, họ sẽ xuất hiện tại đây.",
+      "guestEmptyTitle": "Cần đăng nhập",
+      "guestEmptyMessage": "Đăng nhập để xem vị trí operator đã chia sẻ trên bản đồ QTH.",
       "verified": "đã xác minh",
       "gridLabel": "Lưới",
       "viewProfile": "Xem hồ sơ",
@@ -288,7 +290,8 @@
       "listExpand": "Hiện danh sách vị trí",
       "listCollapse": "Ẩn danh sách vị trí",
       "listCount": "{count, plural, one {# trạm} other {# trạm}}",
-      "listEmpty": "Chưa có vị trí công khai."
+      "listEmpty": "Chưa có vị trí công khai.",
+      "listSignIn": "Đăng nhập để xem danh sách vị trí."
     }
   },
   "account": {

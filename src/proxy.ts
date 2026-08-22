@@ -168,12 +168,22 @@ function handleBareLocaleMapRoute(
   segment: "qso" | "qth",
 ): NextResponse | null {
   const { pathname } = req.nextUrl;
-  if (pathname === `/vi/${segment}` || pathname === `/en/${segment}`) {
+  const lowerPath = pathname.toLowerCase();
+
+  const prefixedMatch = lowerPath.match(/^\/(vi|en)\/(qso|qth)$/);
+  if (prefixedMatch && prefixedMatch[2] === segment) {
     const canonical = req.nextUrl.clone();
     canonical.pathname = `/${segment}`;
     return NextResponse.redirect(canonical, 308);
   }
-  if (pathname !== `/${segment}`) return null;
+
+  if (lowerPath !== `/${segment}`) return null;
+
+  if (pathname !== `/${segment}`) {
+    const canonical = req.nextUrl.clone();
+    canonical.pathname = `/${segment}`;
+    return NextResponse.redirect(canonical, 308);
+  }
 
   const locale = localeFromCookie(req);
   const headers = new Headers(req.headers);

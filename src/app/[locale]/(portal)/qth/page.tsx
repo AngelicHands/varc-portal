@@ -8,7 +8,7 @@ import { isGoogleAuthConfigured } from "@/lib/google-auth";
 import { profileAvatarUrl } from "@/lib/gravatar";
 import { readMapTilerApiKey } from "@/lib/map/maptiler-style";
 import { portalLocaleFromHeaders } from "@/lib/portal-locale-server";
-import { listPublicHamLocations } from "@/lib/qth-locations";
+import { listPublicHamLocations, appendViewerQthStation } from "@/lib/qth-locations";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -34,10 +34,24 @@ export default async function QthMapPage({ params }: Props) {
     ? await getAccountProfile(session.user.id, session.user.email)
     : null;
 
-  const [branding, stations] = await Promise.all([
+  const [branding, publicStations] = await Promise.all([
     getPublicSiteBranding(locale),
-    listPublicHamLocations(),
+    profile ? listPublicHamLocations() : Promise.resolve([]),
   ]);
+
+  const stations = appendViewerQthStation(
+    publicStations,
+    profile
+      ? {
+          callsign: profile.callsign,
+          name: profile.name,
+          callsignVerified: profile.callsignVerified,
+          homeGrid: profile.homeGrid,
+          homeLat: profile.homeLat,
+          homeLng: profile.homeLng,
+        }
+      : null,
+  );
 
   return (
     <HamQthMapView

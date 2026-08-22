@@ -180,7 +180,7 @@ export function HamQthMapView({
   const handleSelectStationRef = useRef<(callsign: string | null) => void>(() => undefined);
   const [mapTheme, setMapTheme] = useState<HamMapTheme | null>(null);
   const themeReady = mapTheme !== null;
-  const [qthListOpen, setQthListOpen] = useState(false);
+  const [qthListOpen, setQthListOpen] = useState(() => Boolean(viewer));
   const [selectedCallsign, setSelectedCallsign] = useState<string | null>(null);
   const [showGridRectangles, setShowGridRectangles] = useState(true);
   const [showLocationMarkers, setShowLocationMarkers] = useState(true);
@@ -199,6 +199,7 @@ export function HamQthMapView({
   const overlayDisplayGrid = profileGrid || guestGrid || storedGrid;
   const panelTheme = mapTheme ?? "light";
   const hasMarkers = stations.length > 0;
+  const listStations = viewer ? stations : [];
   const emptyBanner =
     panelTheme === "light"
       ? "border-zinc-300/80 bg-white/90 text-zinc-900 shadow-lg shadow-zinc-900/10"
@@ -686,10 +687,11 @@ export function HamQthMapView({
         mapTheme={panelTheme}
         open={qthListOpen}
         onOpenChange={setQthListOpen}
-        stations={stations}
+        stations={listStations}
         selectedCallsign={selectedCallsign}
         viewerCallsign={viewer?.callsign}
         onSelectStation={handleSelectStation}
+        guestList={!viewer}
       />
 
       <div className="pointer-events-none absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
@@ -725,10 +727,29 @@ export function HamQthMapView({
 
       {!hasMarkers ? (
         <div
-          className={`pointer-events-none absolute bottom-6 left-1/2 z-20 w-[min(92vw,28rem)] -translate-x-1/2 rounded-xl border px-4 py-3 text-center text-sm backdrop-blur-md ${emptyBanner}`}
+          className={`absolute bottom-6 left-1/2 z-20 w-[min(92vw,28rem)] -translate-x-1/2 rounded-xl border px-4 py-3 text-center text-sm backdrop-blur-md ${emptyBanner} ${
+            viewer ? "pointer-events-none" : "pointer-events-auto"
+          }`}
         >
-          <p className="font-medium">{tQth("emptyTitle")}</p>
-          <p className={`mt-1 text-xs ${emptyMuted}`}>{tQth("emptyMessage")}</p>
+          <p className="font-medium">
+            {viewer ? tQth("emptyTitle") : tQth("guestEmptyTitle")}
+          </p>
+          <p className={`mt-1 text-xs ${emptyMuted}`}>
+            {viewer ? tQth("emptyMessage") : tQth("guestEmptyMessage")}
+          </p>
+          {!viewer ? (
+            <button
+              type="button"
+              onClick={() => setLoginOpen(true)}
+              className={`mt-3 rounded-md border px-3 py-1.5 text-xs font-medium transition ${
+                panelTheme === "light"
+                  ? "border-zinc-300 bg-white hover:bg-zinc-50"
+                  : "border-white/15 bg-white/5 hover:bg-white/10"
+              }`}
+            >
+              {tMap("lookupSignIn")}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

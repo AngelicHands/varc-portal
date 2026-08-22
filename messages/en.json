@@ -278,6 +278,8 @@
       "mapUnavailable": "Map unavailable",
       "emptyTitle": "No public locations yet",
       "emptyMessage": "When operators share their home grid and location publicly, they appear here.",
+      "guestEmptyTitle": "Sign in required",
+      "guestEmptyMessage": "Log in to view shared operator locations on the QTH map.",
       "verified": "verified",
       "gridLabel": "Grid",
       "viewProfile": "View profile",
@@ -288,7 +290,8 @@
       "listExpand": "Show location list",
       "listCollapse": "Hide location list",
       "listCount": "{count, plural, one {# station} other {# stations}}",
-      "listEmpty": "No public locations yet."
+      "listEmpty": "No public locations yet.",
+      "listSignIn": "Sign in to view the location list."
     }
   },
   "account": {
