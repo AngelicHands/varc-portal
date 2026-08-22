@@ -74,7 +74,7 @@ export function HamMapQsoListPanel({
 
   return (
     <div
-      className={`pointer-events-none absolute bottom-0 left-0 top-0 z-[25] flex transition-transform duration-300 ease-out ${
+      className={`pointer-events-none absolute bottom-0 left-0 top-0 z-[25] flex transition-[translate] duration-300 ease-in-out motion-reduce:transition-none ${
         open ? "translate-x-0" : "-translate-x-full"
       }`}
       style={{ width: HAM_MAP_QSO_LIST_WIDTH_PX }}
