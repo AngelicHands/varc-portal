@@ -349,13 +349,42 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
       saveProfile({ gender: draftGender });
       return;
     }
-    // Grid and its GPS point are one unit: clearing the grid clears the marker.
+    // Grid and GPS point are saved together; coords may be edited after device lookup.
     const hasGrid = draftHomeGrid.trim().length > 0;
+    const lat = draftHomeLat;
+    const lng = draftHomeLng;
+    if (hasGrid && (lat != null) !== (lng != null)) {
+      setError(t("homeLocationCoordsPairRequired"));
+      return;
+    }
+    if (lat != null && (lat < -90 || lat > 90)) {
+      setError(t("homeLocationLatInvalid"));
+      return;
+    }
+    if (lng != null && (lng < -180 || lng > 180)) {
+      setError(t("homeLocationLngInvalid"));
+      return;
+    }
     saveProfile({
       homeGrid: draftHomeGrid,
-      homeLat: hasGrid ? draftHomeLat : null,
-      homeLng: hasGrid ? draftHomeLng : null,
+      homeLat: hasGrid ? lat : null,
+      homeLng: hasGrid ? lng : null,
     });
+  }
+
+  function parseDraftCoord(raw: string): number | null {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    const value = Number(trimmed);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function onDraftLatChange(raw: string) {
+    setDraftHomeLat(parseDraftCoord(raw));
+  }
+
+  function onDraftLngChange(raw: string) {
+    setDraftHomeLng(parseDraftCoord(raw));
   }
 
   function useCurrentLocation() {
@@ -593,12 +622,7 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
                 </span>
                 <input
                   value={draftHomeGrid}
-                  onChange={(e) => {
-                    setDraftHomeGrid(e.target.value.toUpperCase());
-                    // Manual grid edit clears GPS point until "use location" again.
-                    setDraftHomeLat(null);
-                    setDraftHomeLng(null);
-                  }}
+                  onChange={(e) => setDraftHomeGrid(e.target.value.toUpperCase())}
                   autoFocus
                   placeholder="OL20VX"
                   maxLength={12}
@@ -606,16 +630,39 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
                 />
               </label>
               <p className="text-xs text-muted">{t("homeLocationHelp")}</p>
-              {draftHomeLat != null && draftHomeLng != null ? (
-                <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground">
-                  {t("homeLocationCoords", {
-                    lat: draftHomeLat.toFixed(5),
-                    lng: draftHomeLng.toFixed(5),
-                  })}
-                </p>
-              ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                    {t("homeLocationLat")}
+                  </span>
+                  <input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={draftHomeLat ?? ""}
+                    onChange={(e) => onDraftLatChange(e.target.value)}
+                    placeholder="21.02850"
+                    className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                    {t("homeLocationLng")}
+                  </span>
+                  <input
+                    type="number"
+                    step="any"
+                    inputMode="decimal"
+                    value={draftHomeLng ?? ""}
+                    onChange={(e) => onDraftLngChange(e.target.value)}
+                    placeholder="105.85420"
+                    className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2"
+                  />
+                </label>
+              </div>
+              {draftHomeLat == null && draftHomeLng == null ? (
                 <p className="text-xs text-muted">{t("homeLocationMissing")}</p>
-              )}
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
