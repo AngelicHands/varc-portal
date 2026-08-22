@@ -15,6 +15,8 @@ import {
   HamOwnerTabDataProvider,
 } from "@/components/portal/ham-owner-tab-panels";
 import { HamProfileTabs } from "@/components/portal/ham-profile-tabs";
+import { PublicHamProfileTabPanel } from "@/components/portal/public-ham-profile-tab-panel";
+import { UserDocumentsPanel } from "@/components/portal/user-documents-panel";
 import { QsoLogbook } from "@/components/portal/qso-logbook";
 import { getAccountProfile } from "@/lib/account";
 import { findPublicHamByCallsign, hamPublicPath, hamPublicUrl } from "@/lib/ham-profile";
@@ -32,7 +34,14 @@ import { buildHomeGridMarker } from "@/lib/qso-map";
 import { listUserQsos } from "@/lib/qso";
 import { callsignHref, hamHref } from "@/lib/locale-hrefs";
 import { formatBirthdayDmy } from "@/lib/validations/qso";
-import { formatMaidenheadDisplay } from "@/lib/maidenhead";
+import {
+  canViewHamBasicProfile,
+  canViewHamDocuments,
+  canViewHamLocation,
+  canViewHamLogbook,
+  canViewHamProfileTab,
+} from "@/lib/ham-privacy";
+import { listUserDocuments } from "@/lib/user-documents";
 import { canManageUsers } from "@/lib/roles";
 import type { AppLocale } from "@/i18n/routing";
 
@@ -166,11 +175,18 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
       </div>
     );
   }
-  const canViewProfile = canEdit || canAdminManage || ham.isProfilePublic;
-  const canViewLogbook = canEdit || canAdminManage || ham.isQsoPublic;
+  const viewerAccess = { canEdit, canAdminManage };
+  const canViewBasicProfile = canViewHamBasicProfile(ham, viewerAccess);
+  const canViewLocation = canViewHamLocation(ham, viewerAccess);
+  const canViewDocuments = canViewHamDocuments(ham, viewerAccess);
+  const canViewProfileTab = canViewHamProfileTab(ham, viewerAccess);
+
+  const canViewLogbook = canViewHamLogbook(ham, viewerAccess);
   const verified = ham.callsignVerified;
 
-  const mapAccess = canAccessHamMapPage(isBlockedProfile);
+  const mapAccess =
+    canAccessHamMapPage(isBlockedProfile) &&
+    (canViewLocation || canViewLogbook);
 
   if (isMapView) {
     if (!mapAccess) {
@@ -180,7 +196,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
     const branding = await getPublicSiteBranding(locale);
 
     const showQsoMarkers = canViewQsoMapMarkers(canViewLogbook);
-    const showHomeMarker = canViewHomeMapMarker(canViewProfile, ham.homeGrid);
+    const showHomeMarker = canViewHomeMapMarker(canViewLocation, ham.homeGrid);
     const qsosForMap = showQsoMarkers ? await listUserQsos(ham.id) : [];
     const homeMarker = showHomeMarker
       ? buildHomeGridMarker(ham.homeGrid, ham.callsign, ham.homeLat, ham.homeLng)
@@ -195,10 +211,10 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
         <HamMapFullscreenView
           mapTilerKey={readMapTilerApiKey()}
           callsign={ham.callsign}
-          operatorName={canViewProfile ? ham.name : ""}
-          operatorImage={canViewProfile ? ham.image : null}
+          operatorName={canViewBasicProfile ? ham.name : ""}
+          operatorImage={canViewBasicProfile ? ham.image : null}
           verified={verified}
-          homeGrid={canViewProfile ? ham.homeGrid : ""}
+          homeGrid={canViewLocation ? ham.homeGrid : ""}
           homeMarker={homeMarker}
           qsos={qsosForMap}
           showQsoMarkers={showQsoMarkers}
@@ -225,21 +241,18 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
   const visibleTabs: HamTabId[] = canEdit
     ? ["profile", "logbook", "documents", "qsl", "privacy", "security"]
     : [
-        ...(canViewProfile ? (["profile"] as HamTabId[]) : []),
+        ...(canViewProfileTab ? (["profile"] as HamTabId[]) : []),
         ...(canViewLogbook ? (["logbook"] as HamTabId[]) : []),
+        ...(canViewDocuments ? (["documents"] as HamTabId[]) : []),
       ];
+
+  const publicDocuments =
+    canViewDocuments && !canEdit ? await listUserDocuments(ham.id) : [];
 
   const canLogWithOperator = canViewLogbook && Boolean(viewerProfile?.callsign?.trim());
   const activeTab = parseHamTab(tabParam, visibleTabs);
-  const birthdayLabel = canViewProfile ? formatBirthdayDmy(ham.birthday) || null : null;
-  const genderLabel = canViewProfile
-    ? ham.gender === "male"
-      ? t("genderMale")
-      : ham.gender === "female"
-        ? t("genderFemale")
-        : ham.gender === "other"
-          ? t("genderOther")
-          : null
+  const birthdayLabel = canViewBasicProfile
+    ? formatBirthdayDmy(ham.birthday) || null
     : null;
 
   const logbookT = await getTranslations("logbook");
@@ -285,7 +298,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
       </p>
 
       <div className="mt-6 flex flex-col gap-8 sm:flex-row sm:items-start">
-        {ham.image ? (
+        {canViewBasicProfile && ham.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={ham.image}
@@ -299,7 +312,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
               <h1 className="font-display text-5xl tracking-wide text-foreground md:text-6xl">
                 {ham.callsign}
               </h1>
-              {verified ? (
+              {canViewBasicProfile && verified ? (
                 <span
                   className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-700"
                   aria-label="Verified callsign"
@@ -354,23 +367,21 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
               </div>
             ) : null}
           </div>
-          {canViewProfile && !verified ? (
+          {canViewBasicProfile && !verified ? (
             <p className="mt-2 text-xs text-amber-800">{t("unverified")}</p>
           ) : null}
-          {canViewProfile ? (
+          {canViewBasicProfile ? (
             <p className="mt-2 text-lg text-foreground">{ham.name}</p>
           ) : (
             <p className="mt-2 text-sm text-muted">{accountT("securityProfilePrivateNotice")}</p>
           )}
-          {genderLabel || birthdayLabel ? (
-            <p className="mt-1 text-sm text-muted">
-              {[genderLabel, birthdayLabel].filter(Boolean).join(" · ")}
-            </p>
+          {birthdayLabel ? (
+            <p className="mt-1 text-sm text-muted">{birthdayLabel}</p>
           ) : null}
         </div>
       </div>
 
-      {canViewProfile && ham.archiveExists ? (
+      {canViewBasicProfile && ham.archiveExists ? (
         <p className="mt-6 text-sm text-muted">
           <Link
             href={callsignHref(ham.callsign)}
@@ -388,7 +399,7 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
             callsign={ham.callsign}
             active={activeTab}
             isOwner={canEdit}
-            canViewProfile={canViewProfile}
+            canViewProfile={canViewBasicProfile}
             canViewLogbook={canViewLogbook}
             profile={<HamOwnerProfileTabPanel />}
             logbook={logbookPanel}
@@ -404,70 +415,34 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
           callsign={ham.callsign}
           active={activeTab}
           isOwner={canEdit}
-          canViewProfile={canViewProfile}
+          canViewProfile={canViewBasicProfile}
           canViewLogbook={canViewLogbook}
           profile={
-            canViewProfile ? (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                    {accountT("name")}
-                  </p>
-                  <p className="mt-2 text-sm text-foreground">{ham.name}</p>
-                </div>
-                <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                    {accountT("callsign")}
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <p className="text-sm text-foreground">{ham.callsign}</p>
-                    {verified ? (
-                      <span
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700"
-                        aria-label="Verified callsign"
-                        title="Verified callsign"
-                      >
-                        <svg
-                          viewBox="0 0 16 16"
-                          className="h-3.5 w-3.5"
-                          aria-hidden
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M3.5 8.5 6.5 11.5 12.5 5.5" />
-                        </svg>
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                {genderLabel || birthdayLabel ? (
-                  <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                      {t("publicDetails")}
-                    </p>
-                    <p className="mt-2 text-sm text-foreground">
-                      {[genderLabel, birthdayLabel].filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
-                ) : null}
-                {ham.homeGrid ? (
-                  <div className="rounded-lg border border-border bg-surface p-4 md:p-5">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                      {accountT("homeGrid")}
-                    </p>
-                    <p className="mt-2 text-sm text-foreground">
-                      {formatMaidenheadDisplay(ham.homeGrid)}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
+            canViewProfileTab ? (
+              <PublicHamProfileTabPanel
+                ham={ham}
+                locale={locale}
+                access={viewerAccess}
+              />
             ) : null
           }
           logbook={logbookPanel}
-          documents={null}
+          documents={
+            canViewDocuments ? (
+              <UserDocumentsPanel
+                initialDocuments={publicDocuments}
+                uploadEndpoint=""
+                readOnly
+                canDelete={false}
+                variant="panels"
+                labels={{
+                  certificate: accountT("certificate"),
+                  license: accountT("license"),
+                  noDocuments: accountT("noDocuments"),
+                }}
+              />
+            ) : null
+          }
           qsl={null}
           privacy={null}
           security={null}

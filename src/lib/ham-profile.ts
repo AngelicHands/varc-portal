@@ -21,9 +21,13 @@ export type PublicHamProfile = {
   callsignVerified: boolean;
   isProfilePublic: boolean;
   isQsoPublic: boolean;
+  isLocationPublic: boolean;
+  isDocumentsPublic: boolean;
   homeGrid: string;
   homeLat: number | null;
   homeLng: number | null;
+  address: string;
+  addressCountry: string;
   birthday: string | null;
   gender: ProfileGender;
   archiveExists: boolean;
@@ -67,7 +71,7 @@ export async function findPublicHamByCallsign(
       const [user, archive] = await Promise.all([
         User.findOne({ callsign })
           .select(
-            "_id name image callsign callsignVerified isProfilePublic isQsoPublic homeGrid homeLat homeLng birthday gender",
+            "_id name image callsign callsignVerified isProfilePublic isQsoPublic isLocationPublic isDocumentsPublic homeGrid homeLat homeLng address addressCountry birthday gender",
           )
           .lean<
             Pick<
@@ -79,9 +83,13 @@ export async function findPublicHamByCallsign(
               | "callsignVerified"
               | "isProfilePublic"
               | "isQsoPublic"
+              | "isLocationPublic"
+              | "isDocumentsPublic"
               | "homeGrid"
               | "homeLat"
               | "homeLng"
+              | "address"
+              | "addressCountry"
               | "birthday"
               | "gender"
             > | null
@@ -99,6 +107,8 @@ export async function findPublicHamByCallsign(
         callsignVerified: Boolean(user.callsignVerified),
         isProfilePublic: user.isProfilePublic !== false,
         isQsoPublic: Boolean(user.isQsoPublic),
+        isLocationPublic: Boolean(user.isLocationPublic),
+        isDocumentsPublic: Boolean(user.isDocumentsPublic),
         homeGrid: user.homeGrid?.trim().toUpperCase() ?? "",
         homeLat:
           typeof user.homeLat === "number" && Number.isFinite(user.homeLat)
@@ -108,6 +118,8 @@ export async function findPublicHamByCallsign(
           typeof user.homeLng === "number" && Number.isFinite(user.homeLng)
             ? user.homeLng
             : null,
+        address: user.address?.trim() ?? "",
+        addressCountry: user.addressCountry?.trim().toUpperCase() ?? "",
         birthday: user.birthday
           ? (() => {
               const date = new Date(user.birthday);

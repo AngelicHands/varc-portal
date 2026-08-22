@@ -30,6 +30,7 @@ type Props = {
   initialDocuments: UserDocumentDto[];
   uploadEndpoint: string;
   canDelete?: boolean;
+  readOnly?: boolean;
   labels?: Partial<DocumentLabels>;
   tone?: "portal" | "admin";
   /** `panels` = dashed dropzones (documents tab). `list` = compact sections. */
@@ -117,12 +118,15 @@ export function UserDocumentsPanel({
   initialDocuments,
   uploadEndpoint,
   canDelete = true,
+  readOnly = false,
   labels: labelsProp,
   tone = "portal",
   variant = "list",
   onDocumentsChange,
 }: Props) {
   const t = { ...DEFAULT_LABELS, ...labelsProp };
+  const allowUpload = !readOnly && uploadEndpoint.trim().length > 0;
+  const allowDelete = canDelete && !readOnly;
   const cardClass =
     tone === "admin"
       ? "rounded-lg border border-gray-200 bg-white p-5"
@@ -297,7 +301,7 @@ export function UserDocumentsPanel({
                 {new Date(doc.createdAt).toLocaleString()}
               </p>
             </div>
-            {canDelete ? (
+            {allowDelete ? (
               <button
                 type="button"
                 disabled={pendingDelete}
@@ -321,7 +325,7 @@ export function UserDocumentsPanel({
       <section className={cardClass}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className={titleClass}>{title}</h3>
-          <UploadButton kind={kind} className={uploadBtnClass} />
+          {allowUpload ? <UploadButton kind={kind} className={uploadBtnClass} /> : null}
         </div>
         {items.length === 0 && !showPending ? (
           <p className={`mt-3 ${mutedClass}`}>{t.noDocuments}</p>
@@ -346,20 +350,24 @@ export function UserDocumentsPanel({
         {isEmpty ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-2 py-8">
             <p className="text-center text-sm text-muted">{t.noDocuments}</p>
-            <UploadButton
-              kind={kind}
-              className="inline-flex cursor-pointer items-center justify-center rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
-            />
+            {allowUpload ? (
+              <UploadButton
+                kind={kind}
+                className="inline-flex cursor-pointer items-center justify-center rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+              />
+            ) : null}
           </div>
         ) : (
           <div className="mt-4 flex flex-1 flex-col">
             <DocumentRows kind={kind} />
-            <div className="mt-auto flex justify-center pt-6">
-              <UploadButton
-                kind={kind}
-                className="inline-flex cursor-pointer items-center justify-center rounded-md border border-border bg-background px-5 py-2.5 text-sm font-medium hover:bg-foreground/5 disabled:opacity-60"
-              />
-            </div>
+            {allowUpload ? (
+              <div className="mt-auto flex justify-center pt-6">
+                <UploadButton
+                  kind={kind}
+                  className="inline-flex cursor-pointer items-center justify-center rounded-md border border-border bg-background px-5 py-2.5 text-sm font-medium hover:bg-foreground/5 disabled:opacity-60"
+                />
+              </div>
+            ) : null}
           </div>
         )}
       </section>

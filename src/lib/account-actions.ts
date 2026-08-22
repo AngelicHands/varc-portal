@@ -14,7 +14,7 @@ import { buildCallsignVerificationRequestEmail } from "@/lib/mail/callsign-verif
 import { failAction } from "@/lib/safe-error";
 import { getAccountProfile } from "@/lib/account";
 import { listUserDocuments } from "@/lib/user-documents";
-import { profilePatchSchema, homeLocationUpdateSchema, changePasswordSchema } from "@/lib/validations/qso";
+import { profilePatchSchema, homeLocationUpdateSchema, changePasswordSchema, privacySettingsSchema } from "@/lib/validations/qso";
 import { User } from "@/models/User";
 
 async function requireAccountSession() {
@@ -85,6 +85,12 @@ export async function updateProfileAction(raw: unknown) {
       set.homeGrid = patch.homeGrid;
       set.homeLat = hasLocation ? patch.homeLat : null;
       set.homeLng = hasLocation ? patch.homeLng : null;
+    }
+    if (patch.address !== undefined) {
+      set.address = patch.address;
+    }
+    if (patch.addressCountry !== undefined) {
+      set.addressCountry = patch.addressCountry;
     }
     if (patch.callsign !== undefined) {
       nextCallsign = patch.callsign;
@@ -293,13 +299,9 @@ export async function updateSecuritySettingsAction(raw: unknown) {
       return { ok: false as const, error: "Unauthorized" };
     }
 
-    if (
-      !raw ||
-      typeof raw !== "object" ||
-      typeof (raw as { isProfilePublic?: unknown }).isProfilePublic !== "boolean" ||
-      typeof (raw as { isQsoPublic?: unknown }).isQsoPublic !== "boolean"
-    ) {
-      return { ok: false as const, error: "Invalid security settings" };
+    const parsed = privacySettingsSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false as const, error: "Invalid privacy settings" };
     }
 
     await connectDb();
@@ -308,9 +310,10 @@ export async function updateSecuritySettingsAction(raw: unknown) {
       return { ok: false as const, error: "User not found" };
     }
 
-    const isProfilePublic = (raw as { isProfilePublic: boolean }).isProfilePublic;
-    const isQsoPublic =
-      isProfilePublic && (raw as { isQsoPublic: boolean }).isQsoPublic;
+    const isProfilePublic = parsed.data.isProfilePublic;
+    const isQsoPublic = isProfilePublic && parsed.data.isQsoPublic;
+    const isLocationPublic = isProfilePublic && parsed.data.isLocationPublic;
+    const isDocumentsPublic = isProfilePublic && parsed.data.isDocumentsPublic;
 
     await User.updateOne(
       { _id: session.user.id },
@@ -318,6 +321,8 @@ export async function updateSecuritySettingsAction(raw: unknown) {
         $set: {
           isProfilePublic,
           isQsoPublic,
+          isLocationPublic,
+          isDocumentsPublic,
         },
       },
     );

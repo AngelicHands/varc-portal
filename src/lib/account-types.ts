@@ -29,9 +29,13 @@ export type AccountProfileDto = {
   gender: ProfileGender;
   isProfilePublic: boolean;
   isQsoPublic: boolean;
+  isLocationPublic: boolean;
+  isDocumentsPublic: boolean;
   homeGrid: string;
   homeLat: number | null;
   homeLng: number | null;
+  address: string;
+  addressCountry: string;
   hasPassword: boolean;
 };
 

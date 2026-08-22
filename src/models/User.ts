@@ -28,6 +28,8 @@ const UserSchema = new Schema(
     },
     isProfilePublic: { type: Boolean, default: true },
     isQsoPublic: { type: Boolean, default: false },
+    isLocationPublic: { type: Boolean, default: false },
+    isDocumentsPublic: { type: Boolean, default: false },
     birthday: { type: Date, default: null },
     gender: {
       type: String,
@@ -38,6 +40,10 @@ const UserSchema = new Schema(
     /** WGS84 station location (marker); optional companion to homeGrid. */
     homeLat: { type: Number, default: null },
     homeLng: { type: Number, default: null },
+    /** Street / locality line; shared only when location is public. */
+    address: { type: String, default: "", trim: true },
+    /** ISO 3166-1 alpha-2 country code for address. */
+    addressCountry: { type: String, default: "", trim: true, uppercase: true },
     emailVerified: { type: Date, default: null },
   },
   { timestamps: true },

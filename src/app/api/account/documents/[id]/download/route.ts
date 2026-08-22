@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getObjectStream } from "@/lib/media/storage";
 import { canManageUsers } from "@/lib/roles";
-import { getUserDocumentById } from "@/lib/user-documents";
+import { getUserDocumentById, userAllowsPublicDocumentAccess } from "@/lib/user-documents";
 import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
@@ -10,11 +10,6 @@ export const runtime = "nodejs";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, context: RouteContext) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
     const { id } = await context.params;
     const doc = await getUserDocumentById(id);
@@ -22,9 +17,17 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const isOwner = String(doc.userId) === session.user.id;
-    const isAdmin = canManageUsers(session.user);
-    if (!isOwner && !isAdmin) {
+    const session = await auth();
+    const isOwner = Boolean(
+      session?.user?.id && String(doc.userId) === session.user.id,
+    );
+    const isAdmin = Boolean(session?.user && canManageUsers(session.user));
+    const isPublic = await userAllowsPublicDocumentAccess(String(doc.userId));
+
+    if (!isOwner && !isAdmin && !isPublic) {
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

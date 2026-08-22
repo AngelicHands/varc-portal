@@ -175,6 +175,8 @@ export function HamOwnerProfileTabPanel() {
             homeGrid: data.profile.homeGrid,
             homeLat: data.profile.homeLat,
             homeLng: data.profile.homeLng,
+            address: data.profile.address,
+            addressCountry: data.profile.addressCountry,
           }}
           initialDocuments={data.documents}
         />
@@ -217,6 +219,8 @@ export function HamOwnerPrivacyTabPanel() {
           initial={{
             isProfilePublic: data.profile.isProfilePublic,
             isQsoPublic: data.profile.isQsoPublic,
+            isLocationPublic: data.profile.isLocationPublic,
+            isDocumentsPublic: data.profile.isDocumentsPublic,
           }}
         />
       )}

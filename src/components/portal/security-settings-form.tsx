@@ -9,12 +9,14 @@ type Props = {
   initial: {
     isProfilePublic: boolean;
     isQsoPublic: boolean;
+    isLocationPublic: boolean;
+    isDocumentsPublic: boolean;
   };
 };
 
 const cardClass = "rounded-lg border border-border bg-surface p-4 md:p-5";
 
-function SecurityToggle({
+function PrivacyToggle({
   checked,
   onChange,
   title,
@@ -41,13 +43,9 @@ function SecurityToggle({
         disabled={disabled}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors ${
-          disabled
-            ? "cursor-not-allowed opacity-50"
-            : ""
+          disabled ? "cursor-not-allowed opacity-50" : ""
         } ${
-          checked
-            ? "border-accent bg-accent"
-            : "border-border bg-background"
+          checked ? "border-accent bg-accent" : "border-border bg-background"
         }`}
       >
         <span
@@ -66,6 +64,8 @@ export function SecuritySettingsForm({ initial }: Props) {
   const router = useRouter();
   const [isProfilePublic, setIsProfilePublic] = useState(initial.isProfilePublic);
   const [isQsoPublic, setIsQsoPublic] = useState(initial.isQsoPublic);
+  const [isLocationPublic, setIsLocationPublic] = useState(initial.isLocationPublic);
+  const [isDocumentsPublic, setIsDocumentsPublic] = useState(initial.isDocumentsPublic);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -78,6 +78,8 @@ export function SecuritySettingsForm({ initial }: Props) {
       const result = await updateSecuritySettingsAction({
         isProfilePublic,
         isQsoPublic,
+        isLocationPublic,
+        isDocumentsPublic,
       });
       if (!result.ok) {
         setError(result.error);
@@ -88,21 +90,49 @@ export function SecuritySettingsForm({ initial }: Props) {
     });
   }
 
+  function onProfilePublicChange(next: boolean) {
+    setIsProfilePublic(next);
+    if (!next) {
+      setIsQsoPublic(false);
+      setIsLocationPublic(false);
+      setIsDocumentsPublic(false);
+    }
+  }
+
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
-      <SecurityToggle
+      <PrivacyToggle
         checked={isProfilePublic}
-        onChange={(next) => {
-          setIsProfilePublic(next);
-          if (!next) {
-            setIsQsoPublic(false);
-          }
-        }}
+        onChange={onProfilePublicChange}
         title={t("securityProfilePublic")}
         description={t("securityProfilePublicHelp")}
       />
 
-      <SecurityToggle
+      <PrivacyToggle
+        checked={isLocationPublic}
+        onChange={setIsLocationPublic}
+        title={t("securityLocationPublic")}
+        description={
+          isProfilePublic
+            ? t("securityLocationPublicHelp")
+            : t("securityLocationPublicDisabledHelp")
+        }
+        disabled={!isProfilePublic}
+      />
+
+      <PrivacyToggle
+        checked={isDocumentsPublic}
+        onChange={setIsDocumentsPublic}
+        title={t("securityDocumentsPublic")}
+        description={
+          isProfilePublic
+            ? t("securityDocumentsPublicHelp")
+            : t("securityDocumentsPublicDisabledHelp")
+        }
+        disabled={!isProfilePublic}
+      />
+
+      <PrivacyToggle
         checked={isQsoPublic}
         onChange={setIsQsoPublic}
         title={t("securityQsoPublic")}

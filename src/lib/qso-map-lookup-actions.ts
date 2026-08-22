@@ -4,6 +4,11 @@ import { auth } from "@/auth";
 import type { QsoListItemDto } from "@/lib/account-types";
 import { getAccountProfile } from "@/lib/account";
 import { findPublicHamByCallsign } from "@/lib/ham-profile";
+import {
+  canViewHamBasicProfile,
+  canViewHamLocation,
+  canViewHamLogbook,
+} from "@/lib/ham-privacy";
 import { listUserQsos } from "@/lib/qso";
 import { buildHomeGridMarker, type HomeGridMarker } from "@/lib/qso-map";
 import { isValidCallsign, normalizeProfileCallsign } from "@/lib/validations/qso";
@@ -44,20 +49,24 @@ export async function lookupPublicQsoMapAction(
     Boolean(viewer && ham.id === viewer.id) ||
     Boolean(viewerCallsign && viewerCallsign === ham.callsign);
 
-  if (!ham.isQsoPublic && !isOwner) {
+  const viewerAccess = { canEdit: isOwner, canAdminManage: false };
+  const canViewLogbook = canViewHamLogbook(ham, viewerAccess);
+  const canViewBasicProfile = canViewHamBasicProfile(ham, viewerAccess);
+  const canViewLocation = canViewHamLocation(ham, viewerAccess);
+
+  if (!canViewLogbook && !canViewLocation && !isOwner) {
     return { ok: false, error: "private" };
   }
 
-  const qsos = await listUserQsos(ham.id);
-  const showProfile = ham.isProfilePublic || isOwner;
+  const qsos = canViewLogbook ? await listUserQsos(ham.id) : [];
   return {
     ok: true,
     callsign: ham.callsign,
-    name: showProfile ? ham.name : "",
-    image: showProfile ? ham.image : null,
-    verified: showProfile && ham.callsignVerified,
-    homeGrid: showProfile ? ham.homeGrid : "",
-    homeMarker: showProfile
+    name: canViewBasicProfile ? ham.name : "",
+    image: canViewBasicProfile ? ham.image : null,
+    verified: canViewBasicProfile && ham.callsignVerified,
+    homeGrid: canViewLocation ? ham.homeGrid : "",
+    homeMarker: canViewLocation
       ? buildHomeGridMarker(
           ham.homeGrid,
           ham.callsign,

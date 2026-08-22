@@ -47,6 +47,8 @@ export async function getAccountProfile(
     gender: toGender(user.gender),
     isProfilePublic: user.isProfilePublic !== false,
     isQsoPublic: Boolean(user.isQsoPublic),
+    isLocationPublic: Boolean(user.isLocationPublic),
+    isDocumentsPublic: Boolean(user.isDocumentsPublic),
     homeGrid: user.homeGrid?.trim().toUpperCase() ?? "",
     homeLat:
       typeof user.homeLat === "number" && Number.isFinite(user.homeLat)
@@ -56,6 +58,8 @@ export async function getAccountProfile(
       typeof user.homeLng === "number" && Number.isFinite(user.homeLng)
         ? user.homeLng
         : null,
+    address: user.address?.trim() ?? "",
+    addressCountry: user.addressCountry?.trim().toUpperCase() ?? "",
     hasPassword: Boolean(user.passwordHash),
   };
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { PortalDialog } from "@/components/portal/portal-dialog";
+import { BirthdayInlineField } from "@/components/portal/birthday-inline-field";
 import { UserDocumentsPanel } from "@/components/portal/user-documents-panel";
 import {
   requestCallsignVerificationAction,
@@ -16,11 +17,13 @@ import type {
 } from "@/lib/account-types";
 import { hamPublicPath } from "@/lib/ham-reserved";
 import {
-  formatBirthdayDmy,
-  maxBirthdayIso,
   parseBirthdayInput,
 } from "@/lib/validations/qso";
 import { latLngToMaidenhead, formatMaidenheadDisplay } from "@/lib/maidenhead";
+import {
+  formatProfileAddress,
+  profileCountryOptions,
+} from "@/lib/countries";
 
 type Props = {
   initial: {
@@ -34,11 +37,13 @@ type Props = {
     homeGrid: string;
     homeLat: number | null;
     homeLng: number | null;
+    address: string;
+    addressCountry: string;
   };
   initialDocuments: UserDocumentDto[];
 };
 
-type EditField = "name" | "callsign" | "birthday" | "gender" | "homeGrid";
+type EditField = "name" | "callsign" | "gender" | "homeGrid" | "address";
 
 /** Only the field(s) edited in a card — everything else is left untouched server-side. */
 type ProfilePatch = {
@@ -49,6 +54,8 @@ type ProfilePatch = {
   homeGrid?: string;
   homeLat?: number | null;
   homeLng?: number | null;
+  address?: string;
+  addressCountry?: string;
 };
 
 const cardClass =
@@ -147,6 +154,8 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
   const [homeGrid, setHomeGrid] = useState(initial.homeGrid ?? "");
   const [homeLat, setHomeLat] = useState<number | null>(initial.homeLat ?? null);
   const [homeLng, setHomeLng] = useState<number | null>(initial.homeLng ?? null);
+  const [address, setAddress] = useState(initial.address ?? "");
+  const [addressCountry, setAddressCountry] = useState(initial.addressCountry ?? "");
   const [verificationStatus, setVerificationStatus] = useState<CallsignVerificationStatus>(
     initial.callsignVerificationStatus,
   );
@@ -156,16 +165,16 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftCallsign, setDraftCallsign] = useState("");
-  const [draftBirthday, setDraftBirthday] = useState("");
   const [draftGender, setDraftGender] = useState<ProfileGender>("");
   const [draftHomeGrid, setDraftHomeGrid] = useState("");
   const [draftHomeLat, setDraftHomeLat] = useState<number | null>(null);
   const [draftHomeLng, setDraftHomeLng] = useState<number | null>(null);
+  const [draftAddress, setDraftAddress] = useState("");
+  const [draftAddressCountry, setDraftAddressCountry] = useState("");
   const [locating, setLocating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const birthdayInputRef = useRef<HTMLInputElement>(null);
 
   function genderLabel(value: ProfileGender): string {
     if (value === "male") return t("genderMale");
@@ -211,28 +220,20 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
       ? undefined
       : callsignStatusMeta(verificationStatus);
 
-  function openBirthdayPicker() {
-    const input = birthdayInputRef.current;
-    if (!input) return;
-    if (typeof input.showPicker === "function") {
-      input.showPicker();
-      return;
-    }
-    input.focus();
-    input.click();
-  }
-
   function openEdit(field: EditField) {
     setError(null);
     setEditField(field);
     if (field === "name") setDraftName(name);
     if (field === "callsign") setDraftCallsign(callsign);
-    if (field === "birthday") setDraftBirthday(birthday);
     if (field === "gender") setDraftGender(gender);
     if (field === "homeGrid") {
       setDraftHomeGrid(homeGrid);
       setDraftHomeLat(homeLat);
       setDraftHomeLng(homeLng);
+    }
+    if (field === "address") {
+      setDraftAddress(address);
+      setDraftAddressCountry(addressCountry);
     }
   }
 
@@ -279,6 +280,8 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
         setHomeLat(patch.homeLat ?? null);
         setHomeLng(patch.homeLng ?? null);
       }
+      if (patch.address !== undefined) setAddress(patch.address);
+      if (patch.addressCountry !== undefined) setAddressCountry(patch.addressCountry);
 
       const previous = savedCallsign;
       let nextCallsign = previous;
@@ -330,6 +333,10 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
     });
   }
 
+  function saveBirthday(iso: string) {
+    saveProfile({ birthday: iso });
+  }
+
   function onSaveEdit(event: React.FormEvent) {
     event.preventDefault();
     if (!editField) return;
@@ -341,14 +348,18 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
       saveProfile({ callsign: draftCallsign });
       return;
     }
-    if (editField === "birthday") {
-      saveProfile({ birthday: draftBirthday });
-      return;
-    }
     if (editField === "gender") {
       saveProfile({ gender: draftGender });
       return;
     }
+    if (editField === "address") {
+      saveProfile({
+        address: draftAddress,
+        addressCountry: draftAddressCountry,
+      });
+      return;
+    }
+    if (editField !== "homeGrid") return;
     // Grid and GPS point are saved together; coords may be edited after device lookup.
     const hasGrid = draftHomeGrid.trim().length > 0;
     const lat = draftHomeLat;
@@ -425,9 +436,9 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
   const editTitles: Record<EditField, string> = {
     name: t("name"),
     callsign: t("callsign"),
-    birthday: t("birthday"),
     gender: t("gender"),
     homeGrid: t("homeGrid"),
+    address: t("address"),
   };
 
   const canRequestVerification =
@@ -437,6 +448,9 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
   const missingDocsLabel = missingDocs
     .map((kind) => (kind === "certificate" ? t("certificate") : t("license")))
     .join(", ");
+  const countryOptions = profileCountryOptions(locale);
+  const addressDisplay =
+    formatProfileAddress(address, addressCountry, locale).trim() || "—";
 
   return (
     <>
@@ -473,11 +487,19 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
             }
           />
 
-          <ProfileFieldCard
-            label={t("birthday")}
-            value={formatBirthdayDmy(birthday)}
-            onEdit={() => openEdit("birthday")}
-          />
+          <div className={cardClass}>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">
+              {t("birthday")}
+            </p>
+            <BirthdayInlineField
+              key={birthday}
+              value={birthday}
+              disabled={pending}
+              pickDateLabel={t("birthdayPickDate")}
+              onCommit={saveBirthday}
+              onInvalid={() => setError(t("birthdayInvalid"))}
+            />
+          </div>
 
           <ProfileFieldCard
             label={t("gender")}
@@ -496,6 +518,13 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
             }
             valueClass="text-xl font-semibold tracking-wide text-foreground"
             onEdit={() => openEdit("homeGrid")}
+          />
+
+          <ProfileFieldCard
+            label={t("address")}
+            value={addressDisplay}
+            valueClass="whitespace-pre-wrap text-sm text-foreground"
+            onEdit={() => openEdit("address")}
           />
         </div>
 
@@ -549,50 +578,6 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
             </label>
           ) : null}
 
-          {editField === "birthday" ? (
-            <div className="text-sm">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted">
-                {t("birthday")}
-              </span>
-              <button
-                type="button"
-                onClick={openBirthdayPicker}
-                className="mt-2 flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:bg-foreground/5"
-              >
-                <span
-                  className={draftBirthday ? "text-foreground" : "text-muted"}
-                >
-                  {formatBirthdayDmy(draftBirthday) || "dd/mm/yyyy"}
-                </span>
-                <svg
-                  viewBox="0 0 16 16"
-                  className="h-4 w-4 shrink-0 text-muted"
-                  aria-hidden
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="2" y="3" width="12" height="11" rx="1.5" />
-                  <path d="M2 6.5h12M5 2v2M11 2v2" />
-                </svg>
-              </button>
-              <input
-                ref={birthdayInputRef}
-                type="date"
-                lang="en-GB"
-                value={draftBirthday}
-                min="1900-01-01"
-                max={maxBirthdayIso()}
-                onChange={(e) => setDraftBirthday(e.target.value)}
-                aria-label={t("birthday")}
-                tabIndex={-1}
-                className="sr-only"
-              />
-            </div>
-          ) : null}
-
           {editField === "gender" ? (
             <label className="block text-sm">
               <span className="text-xs font-medium uppercase tracking-wide text-muted">
@@ -612,6 +597,42 @@ export function AccountProfileForm({ initial, initialDocuments }: Props) {
                 <option value="other">{t("genderOther")}</option>
               </select>
             </label>
+          ) : null}
+
+          {editField === "address" ? (
+            <div className="grid gap-4 text-sm">
+              <label className="block">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                  {t("address")}
+                </span>
+                <input
+                  type="text"
+                  value={draftAddress}
+                  onChange={(e) => setDraftAddress(e.target.value)}
+                  autoFocus
+                  maxLength={400}
+                  placeholder={t("addressPlaceholder")}
+                  className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted">
+                  {t("addressCountry")}
+                </span>
+                <select
+                  value={draftAddressCountry}
+                  onChange={(e) => setDraftAddressCountry(e.target.value)}
+                  className="mt-2 w-full rounded-md border border-border bg-background px-3 py-2"
+                >
+                  <option value="">{t("addressCountryUnset")}</option>
+                  {countryOptions.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           ) : null}
 
           {editField === "homeGrid" ? (

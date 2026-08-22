@@ -8,6 +8,7 @@ import {
 } from "@/lib/media/storage";
 import type { UserDocumentDto } from "@/lib/account-types";
 import type { UserDocumentKind } from "@/lib/validations/qso";
+import { User } from "@/models/User";
 import { UserDocumentModel } from "@/models/UserDocument";
 
 export type { UserDocumentDto };
@@ -91,6 +92,14 @@ export async function deleteUserDocumentForUser(
 export async function getUserDocumentById(documentId: string) {
   await connectDb();
   return UserDocumentModel.findById(documentId).lean();
+}
+
+export async function userAllowsPublicDocumentAccess(userId: string): Promise<boolean> {
+  await connectDb();
+  const user = await User.findById(userId)
+    .select("isProfilePublic isDocumentsPublic")
+    .lean();
+  return Boolean(user?.isProfilePublic && user?.isDocumentsPublic);
 }
 
 export function adminDocumentDownloadUrl(documentId: string): string {

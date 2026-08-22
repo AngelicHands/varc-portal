@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isProfileCountryCode } from "@/lib/countries";
 import { normalizeCallsignQuery } from "@/lib/callsigns-normalize";
 import { isReservedHamPath } from "@/lib/ham-reserved";
 import { isValidMaidenheadGrid, normalizeGrid } from "@/lib/maidenhead";
@@ -58,6 +59,42 @@ export function formatBirthdayDmy(iso: string | null | undefined): string {
   if (!match) return "";
   const [, year, month, day] = match;
   return `${day}/${month}/${year}`;
+}
+
+export function splitBirthdayIso(iso: string | null | undefined): {
+  day: string;
+  month: string;
+  year: string;
+} {
+  if (!iso) return { day: "", month: "", year: "" };
+  const match = DATE_ONLY.exec(iso);
+  if (!match) return { day: "", month: "", year: "" };
+  const [, year, month, day] = match;
+  return {
+    day: String(Number(day)),
+    month: String(Number(month)),
+    year,
+  };
+}
+
+export function daysInBirthdayMonth(month: number, year: number): number {
+  if (!Number.isInteger(month) || month < 1 || month > 12) return 31;
+  if (!Number.isInteger(year) || year < 1900) return 31;
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Empty parts → "". All parts → ISO or null if invalid. Partial parts → null. */
+export function composeBirthdayIso(
+  day: string,
+  month: string,
+  year: string,
+): string | null {
+  const dayTrim = day.trim();
+  const monthTrim = month.trim();
+  const yearTrim = year.trim();
+  if (!dayTrim && !monthTrim && !yearTrim) return "";
+  if (!dayTrim || !monthTrim || !yearTrim) return null;
+  return parseBirthdayInput(`${dayTrim}/${monthTrim}/${yearTrim}`);
 }
 
 /** Parse dd/mm/yyyy (or yyyy-mm-dd) to ISO yyyy-mm-dd. Empty → "". Invalid → null. */
@@ -138,6 +175,14 @@ export const profileFormSchema = z.object({
         value == null || (Number.isFinite(value) && value >= -180 && value <= 180),
       { message: "Invalid longitude" },
     ),
+  address: z.string().trim().max(400),
+  addressCountry: z
+    .string()
+    .trim()
+    .transform((value) => value.toUpperCase())
+    .refine((value) => value === "" || isProfileCountryCode(value), {
+      message: "Select a valid country",
+    }),
 });
 
 /**
@@ -305,5 +350,14 @@ export const changePasswordSchema = z
   });
 
 export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
+
+export const privacySettingsSchema = z.object({
+  isProfilePublic: z.boolean(),
+  isQsoPublic: z.boolean(),
+  isLocationPublic: z.boolean(),
+  isDocumentsPublic: z.boolean(),
+});
+
+export type PrivacySettingsValues = z.infer<typeof privacySettingsSchema>;
 
 export const USER_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
