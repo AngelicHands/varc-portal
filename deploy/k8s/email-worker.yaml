@@ -21,7 +21,7 @@ spec:
         - name: worker
           # Reuses the backup-worker image (contains run-email-worker.js).
           # Deploy workflow pins this tag together with backup-worker.yaml.
-          image: ghcr.io/varc-vietnam/varc-portal-backup-worker:v1.0.14
+          image: ghcr.io/varc-vietnam/varc-portal-backup-worker:v1.0.15
           imagePullPolicy: Always
           command: ["node", "dist/worker/run-email-worker.js"]
           envFrom:
