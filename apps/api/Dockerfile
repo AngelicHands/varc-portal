@@ -8,10 +8,10 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/varc-api ./cmd/server
 
 FROM alpine:3.21
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -g 10001 -S app && adduser -u 10001 -S app -G app
 WORKDIR /app
 COPY --from=builder /out/varc-api /app/varc-api
-USER app
+USER 10001:10001
 EXPOSE 3100
 ENV API_PORT=3100
 ENTRYPOINT ["/app/varc-api"]
