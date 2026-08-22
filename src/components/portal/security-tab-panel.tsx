@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { PortalDialog } from "@/components/portal/portal-dialog";
+import { ApiTokensPanel } from "@/components/portal/api-tokens-panel";
 import { changePasswordAction } from "@/lib/account-actions";
 
 type Props = {
@@ -193,6 +194,8 @@ export function SecurityTabPanel({ hasPassword: initialHasPassword }: Props) {
           setMessage(t("passwordSaved"));
         }}
       />
+
+      <ApiTokensPanel />
     </div>
   );
 }
