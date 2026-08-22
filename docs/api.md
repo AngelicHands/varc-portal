@@ -2,6 +2,10 @@
 
 Standalone Go service (`apps/api`) for external QSO logbook access. Uses the same MongoDB database and `.env` as the portal.
 
+**Interactive documentation:** [https://api.hamvn.com/docs](https://api.hamvn.com/docs) (local: [http://localhost:3100/docs](http://localhost:3100/docs))
+
+OpenAPI spec: [`apps/api/openapi.yaml`](../apps/api/openapi.yaml) (embedded in the API binary at `/openapi.yaml`).
+
 ## Local development
 
 `pnpm dev:all` starts four processes:
@@ -138,6 +142,42 @@ Notes:
 - Your account must have a callsign set.
 - API-created QSOs use `source: "api"`.
 - **No confirmation emails** are sent for API create/update (portal logbook only).
+
+## Rate limiting
+
+Rate limits use Valkey sliding windows (fixed window via `INCR` + TTL). They apply only to **`/v1/*`** routes. `/health`, `/docs`, and `/openapi.yaml` are not rate limited.
+
+| Layer | Default limit | Window | Valkey key | Applies to |
+|-------|---------------|--------|------------|------------|
+| **Per IP** | 30 requests | 1 minute | `rate:api:ip:{ip}` | All `/v1/*` requests (including failed auth) |
+| **Per token (read)** | 120 requests | 1 minute | `rate:api:token:{tokenId}` | Authenticated GET (and other non-write methods) |
+| **Per token (write)** | 30 requests | 1 minute | `rate:api:token:{tokenId}:write` | `POST`, `PATCH`, `DELETE` on `/v1/qsos` |
+
+Production defaults are set in [`deploy/k8s/configmap.yaml`](../deploy/k8s/configmap.yaml). Override via environment:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_RATE_LIMIT` | `120` | Max authenticated requests per token per window (reads count toward this) |
+| `API_RATE_LIMIT_WRITE` | `30` | Max write requests (`POST`/`PATCH`/`DELETE`) per token per window |
+| `API_RATE_LIMIT_WINDOW` | `1m` | Window duration (`1m`, `30s`, Go duration syntax) |
+
+The per-IP limit (30/min) is fixed in code and not configurable via env.
+
+**429 response** when a limit is exceeded:
+
+```json
+{ "error": "Too many requests" }
+```
+
+**If Valkey is unavailable:**
+
+| Limit | Behavior |
+|-------|----------|
+| Per IP | Fail-open (requests allowed) |
+| Per token (read) | Fail-open |
+| Per token (write) | Fail-closed (writes rejected) |
+
+Set `VALKEY_URL` in production so limits and caching work as intended.
 
 ## Caching (Valkey)
 

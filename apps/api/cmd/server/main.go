@@ -78,6 +78,9 @@ func main() {
 	router.Use(middleware.AuthenticatedRateLimit(cfg, valkeyClient))
 
 	router.Get("/health", handler.NewHealthHandler(mongoClient).ServeHTTP)
+	router.Get("/openapi.yaml", handler.OpenAPIYAML)
+	router.Get("/docs", handler.Docs)
+	router.Get("/docs/", handler.Docs)
 	router.Route("/v1", func(r chi.Router) {
 		r.Get("/qsos", qsoHandler.List)
 		r.Post("/qsos", qsoHandler.Create)

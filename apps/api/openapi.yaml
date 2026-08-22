@@ -1,0 +1,592 @@
+openapi: 3.1.0
+info:
+  title: HAMVN API documentation
+  version: 1.0.0
+  description: |
+    REST API for external QSO logbook access. Create API tokens in the portal under
+    **Account → Security → API tokens**.
+
+    Interactive documentation: `/docs`
+
+    ## Rate limiting
+
+    Limits apply to `/v1/*` only (not `/health` or `/docs`). Uses Valkey fixed windows.
+
+    | Layer | Default | Window | Notes |
+    |-------|---------|--------|-------|
+    | Per client IP | 30 requests | 1 min | All `/v1/*` traffic, including failed auth |
+    | Per API token | 120 requests | 1 min | Authenticated reads and non-write methods |
+    | Per API token (writes) | 30 requests | 1 min | `POST`, `PATCH`, `DELETE` on QSOs |
+
+    Configure token limits with `API_RATE_LIMIT`, `API_RATE_LIMIT_WRITE`, and
+    `API_RATE_LIMIT_WINDOW`. Exceeding a limit returns **429** with
+    `{ "error": "Too many requests" }`.
+
+    Requires `VALKEY_URL`. If Valkey is down: read/IP limits fail-open; write limits fail-closed.
+
+servers:
+  - url: https://api.hamvn.com
+    description: Production
+  - url: http://localhost:3100
+    description: Local development
+
+tags:
+  - name: Health
+  - name: QSOs
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Unauthenticated liveness probe (MongoDB ping).
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: MongoDB unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/qsos:
+    get:
+      tags: [QSOs]
+      summary: List QSOs
+      description: |
+        Paginated list of QSOs for the token owner. Always paginated (max 1000 per page).
+        Unknown or duplicate query parameters are rejected.
+      operationId: listQsos
+      security:
+        - bearerAuth: [qso:read]
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/pageSize"
+        - $ref: "#/components/parameters/q"
+        - $ref: "#/components/parameters/sort"
+        - $ref: "#/components/parameters/dir"
+        - $ref: "#/components/parameters/fromDate"
+        - $ref: "#/components/parameters/toDate"
+        - $ref: "#/components/parameters/workedCallsign"
+        - $ref: "#/components/parameters/band"
+        - $ref: "#/components/parameters/mode"
+        - $ref: "#/components/parameters/source"
+        - $ref: "#/components/parameters/grid"
+        - $ref: "#/components/parameters/qso_sent"
+        - $ref: "#/components/parameters/qso_confirmed"
+      responses:
+        "200":
+          description: Paginated QSO list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QsoPageResult"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    post:
+      tags: [QSOs]
+      summary: Create QSO
+      description: |
+        Creates a QSO with `source: api`. Your account must have a callsign set.
+        No confirmation emails are sent from the API path.
+      operationId: createQso
+      security:
+        - bearerAuth: [qso:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QsoInput"
+      responses:
+        "201":
+          description: QSO created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QsoMutationResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/qsos/{id}:
+    parameters:
+      - $ref: "#/components/parameters/qsoId"
+
+    get:
+      tags: [QSOs]
+      summary: Get QSO
+      operationId: getQso
+      security:
+        - bearerAuth: [qso:read]
+      responses:
+        "200":
+          description: QSO details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QsoSingleResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    patch:
+      tags: [QSOs]
+      summary: Update QSO
+      description: Full body required (same fields as create). No confirmation emails.
+      operationId: updateQso
+      security:
+        - bearerAuth: [qso:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QsoInput"
+      responses:
+        "200":
+          description: QSO updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QsoMutationResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+    delete:
+      tags: [QSOs]
+      summary: Delete QSO
+      operationId: deleteQso
+      security:
+        - bearerAuth: [qso:write]
+      responses:
+        "200":
+          description: QSO deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: varc_
+      description: |
+        API token from the portal (Account → Security). Format: `Bearer varc_…`
+
+  parameters:
+    qsoId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[a-f0-9]{24}$"
+      description: MongoDB ObjectId of the QSO
+    page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: 1-based page index
+    pageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 1000
+      description: Items per page (max 1000)
+    q:
+      name: q
+      in: query
+      schema:
+        type: string
+        maxLength: 80
+      description: Search callsign, mode, band, grid, notes
+    sort:
+      name: sort
+      in: query
+      schema:
+        type: string
+        enum: [qsoAt, workedCallsign, band, mode, grid]
+        default: qsoAt
+    dir:
+      name: dir
+      in: query
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+    fromDate:
+      name: fromDate
+      in: query
+      schema:
+        type: string
+      description: YYYY-MM-DD or RFC3339 (year 1900–2100)
+    toDate:
+      name: toDate
+      in: query
+      schema:
+        type: string
+      description: YYYY-MM-DD or RFC3339; must be >= fromDate
+    workedCallsign:
+      name: workedCallsign
+      in: query
+      schema:
+        type: string
+      description: Filter by worked callsign (normalized uppercase)
+    band:
+      name: band
+      in: query
+      schema:
+        $ref: "#/components/schemas/QsoBand"
+    mode:
+      name: mode
+      in: query
+      schema:
+        type: string
+        maxLength: 32
+    source:
+      name: source
+      in: query
+      schema:
+        $ref: "#/components/schemas/QsoSource"
+    grid:
+      name: grid
+      in: query
+      schema:
+        type: string
+        minLength: 4
+        maxLength: 12
+      description: Maidenhead locator (even length)
+    qso_sent:
+      name: qso_sent
+      in: query
+      schema:
+        type: boolean
+    qso_confirmed:
+      name: qso_confirmed
+      in: query
+      schema:
+        type: boolean
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid Bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Token lacks required scope
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: QSO not found (or not owned by token user)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ValidationError:
+      description: Invalid request parameters or body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorResponse"
+    TooManyRequests:
+      description: |
+        Rate limit exceeded. Default limits (per 1-minute window): 30 requests per IP on
+        `/v1/*`, 120 authenticated requests per token, 30 write requests per token
+        (`POST`/`PATCH`/`DELETE`). Response body: `{ "error": "Too many requests" }`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error: Too many requests
+    InternalError:
+      description: Server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UnsupportedMediaType:
+      description: Content-Type must be application/json
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          example: true
+
+    OkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+          example: true
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Unauthorized
+
+    ValidationErrorResponse:
+      type: object
+      required: [ok, error]
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: Invalid band
+
+    QsoBand:
+      type: string
+      enum:
+        - 160m
+        - 80m
+        - 60m
+        - 40m
+        - 30m
+        - 20m
+        - 17m
+        - 15m
+        - 12m
+        - 10m
+        - 6m
+        - 2m
+        - 70cm
+        - 23cm
+        - other
+
+    QsoSource:
+      type: string
+      enum: [portal, api, qrz, eqsl, adif]
+
+    QsoInput:
+      type: object
+      required: [workedCallsign, qsoAt, band, freqMhz, mode, grid]
+      properties:
+        workedCallsign:
+          type: string
+          minLength: 3
+          maxLength: 15
+          example: XV1ABC
+        qsoAt:
+          type: string
+          format: date-time
+          example: "2026-08-22T10:00:00.000Z"
+        band:
+          $ref: "#/components/schemas/QsoBand"
+        freqMhz:
+          type: number
+          exclusiveMinimum: 0
+          example: 14.074
+        mode:
+          type: string
+          maxLength: 32
+          example: FT8
+        rstSent:
+          type: string
+          maxLength: 16
+          default: "59"
+        rstRcvd:
+          type: string
+          maxLength: 16
+          default: "59"
+        qso_sent:
+          type: boolean
+          default: false
+        grid:
+          type: string
+          minLength: 4
+          maxLength: 12
+          example: OK30
+        notes:
+          type: string
+          maxLength: 2000
+
+    QsoListItem:
+      type: object
+      properties:
+        id:
+          type: string
+        workedCallsign:
+          type: string
+        qsoAt:
+          type: string
+          format: date-time
+        band:
+          $ref: "#/components/schemas/QsoBand"
+        freqMhz:
+          type: number
+          nullable: true
+        mode:
+          type: string
+        rstSent:
+          type: string
+        rstRcvd:
+          type: string
+        qso_sent:
+          type: boolean
+        qso_confirmed:
+          type: boolean
+        source:
+          $ref: "#/components/schemas/QsoSource"
+        grid:
+          type: string
+        notes:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        hasNext:
+          type: boolean
+        hasPrev:
+          type: boolean
+
+    AppliedFilters:
+      type: object
+      properties:
+        search:
+          type: string
+        fromDate:
+          type: string
+        toDate:
+          type: string
+        band:
+          $ref: "#/components/schemas/QsoBand"
+        mode:
+          type: string
+        workedCallsign:
+          type: string
+        source:
+          $ref: "#/components/schemas/QsoSource"
+        grid:
+          type: string
+        qso_sent:
+          type: boolean
+        qso_confirmed:
+          type: boolean
+
+    QsoPageResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/QsoListItem"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        filters:
+          $ref: "#/components/schemas/AppliedFilters"
+        sortKey:
+          type: string
+        sortDir:
+          type: string
+          enum: [asc, desc]
+
+    QsoSingleResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        qso:
+          $ref: "#/components/schemas/QsoListItem"
+
+    QsoMutationResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        qso:
+          $ref: "#/components/schemas/QsoListItem"

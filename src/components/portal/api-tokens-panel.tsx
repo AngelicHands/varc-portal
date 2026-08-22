@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { PortalDialog } from "@/components/portal/portal-dialog";
+import { CopyIcon } from "@/components/admin/admin-action-icons";
 import {
   createApiTokenAction,
   listApiTokensAction,
@@ -162,17 +163,21 @@ function TokenCreatedDialog({
     >
       <div className="grid gap-4">
         <p className="text-sm text-amber-800">{t("apiTokenCreatedWarning")}</p>
-        <code className="block break-all rounded-md border border-border bg-background px-3 py-2 text-xs">
-          {token}
-        </code>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex items-start gap-2">
+          <code className="block min-w-0 flex-1 break-all rounded-md border border-border bg-background px-3 py-2 text-xs">
+            {token}
+          </code>
           <button
             type="button"
             onClick={copyToken}
-            className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-foreground/5"
+            aria-label={copied ? t("apiTokenCopied") : t("apiTokenCopy")}
+            title={copied ? t("apiTokenCopied") : t("apiTokenCopy")}
+            className="shrink-0 rounded-md border border-border p-2 text-foreground hover:bg-foreground/5"
           >
-            {copied ? t("apiTokenCopied") : t("apiTokenCopy")}
+            <CopyIcon />
           </button>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
@@ -249,6 +254,15 @@ export function ApiTokensPanel() {
             <p className="mt-2 text-xs text-muted">
               {t("apiTokenBaseUrl")}:{" "}
               <code className="rounded bg-background px-1 py-0.5">{apiPublicUrl}</code>
+              {" · "}
+              <a
+                href={`${apiPublicUrl.replace(/\/$/, "")}/docs`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:underline"
+              >
+                {t("apiTokenDocsLink")}
+              </a>
             </p>
           </div>
           <button

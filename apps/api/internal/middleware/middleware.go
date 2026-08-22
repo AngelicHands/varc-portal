@@ -157,10 +157,19 @@ func AuthenticatedRateLimit(cfg config.Config, valkey *cache.Valkey) func(http.H
 	}
 }
 
+func isPublicPath(path string) bool {
+	switch path {
+	case "/health", "/docs", "/docs/", "/openapi.yaml", "/openapi.json":
+		return true
+	default:
+		return false
+	}
+}
+
 func BearerAuth(cfg config.Config, store *appmongo.Store, valkey *cache.Valkey) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/health" {
+			if isPublicPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}

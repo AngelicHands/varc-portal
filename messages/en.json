@@ -346,6 +346,7 @@
     "apiTokenCardTitle": "API tokens",
     "apiTokenCardHelp": "Create tokens for external apps and scripts to access your QSO logbook via the REST API.",
     "apiTokenBaseUrl": "API base URL",
+    "apiTokenDocsLink": "API documentation",
     "apiTokenCreateTitle": "Create API token",
     "apiTokenCreateHelp": "Give the token a name so you can recognize it later. The secret is shown only once.",
     "apiTokenNameLabel": "Token name",

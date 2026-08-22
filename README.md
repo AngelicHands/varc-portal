@@ -126,7 +126,7 @@ That starts:
 
 Create API tokens under **Account → Security**. See [docs/api.md](docs/api.md) for REST endpoints and `curl` examples.
 
-Run only the API: `pnpm dev:api`.
+Run only the API: `pnpm dev:api`. Interactive API docs: http://localhost:3100/docs ([OpenAPI spec](apps/api/openapi.yaml)).
 
 ## Docker Compose (app + Mongo)
 
@@ -197,7 +197,7 @@ Deploy is **not** triggered by tags. After a release exists:
    - `deploy/k8s/email-worker.yaml` → worker image (same tag; different command)
 4. Argo CD syncs the new images from Git
 
-The API is exposed at **`https://api.hamvn.com`** via `deploy/k8s/ingress.yaml` (`varc-api` Ingress → `varc-api` Service → port 3100). It shares `varc-portal-secrets` and `varc-portal-config` with the portal (MongoDB, Valkey, `API_TOKEN_PEPPER`, `API_PUBLIC_URL`, etc.).
+The API is exposed at **`https://api.hamvn.com`** via `deploy/k8s/ingress.yaml` (`varc-api` Ingress → `varc-api` Service → port 3100). Interactive docs: **https://api.hamvn.com/docs**. It shares `varc-portal-secrets` and `varc-portal-config` with the portal (MongoDB, Valkey, `API_TOKEN_PEPPER`, `API_PUBLIC_URL`, etc.).
 
 ## Content model
 
