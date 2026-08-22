@@ -74,6 +74,33 @@ const TRACE_SOURCE_ID = "ham-qso-traces";
 const TRACE_LAYER_ID = "ham-qso-traces-line";
 const TRACE_LABEL_LAYER_ID = "ham-qso-traces-label";
 
+/** ~50 m — treat closer fixes as the same saved station location. */
+const LOCATION_MATCH_EPS = 0.0005;
+
+function savedLocationDiffersFromDevice(
+  saved: HomeGridMarker | null,
+  device: HomeGridMarker | null,
+): boolean {
+  if (!device?.fromLocation) return false;
+  if (!saved) return true;
+  if (normalizeGrid(saved.grid) !== normalizeGrid(device.grid)) return true;
+  if (!saved.fromLocation) return true;
+  return (
+    Math.abs(saved.lat - device.lat) >= LOCATION_MATCH_EPS ||
+    Math.abs(saved.lng - device.lng) >= LOCATION_MATCH_EPS
+  );
+}
+
+function sameGridField(
+  a: HomeGridMarker | null,
+  b: HomeGridMarker | null,
+): boolean {
+  if (!a || !b) return false;
+  return (
+    truncateMaidenhead(a.grid, 4) === truncateMaidenhead(b.grid, 4)
+  );
+}
+
 type GridFeatureProps = {
   kind: "home" | "viewer" | "qso" | "pick";
   grid: string;
@@ -867,13 +894,12 @@ export function HamMapFullscreenView({
   const canPromptHomeLocation = viewed ? viewed.isOwner : canSetHomeLocation;
   const [savedProfileGrid, setSavedProfileGrid] = useState("");
   const lastSilentFixRef = useRef("");
-  const overlayGrid =
-    guestGrid || storedGrid || viewer?.homeGrid.trim() || "";
+  const profileGrid = savedProfileGrid || viewer?.homeGrid.trim() || "";
+  const overlayDisplayGrid = profileGrid || guestGrid || storedGrid;
   const deviceFix = sessionFix ?? storedCoords;
 
   function rememberOverlayGrid(grid: string, lat?: number, lng?: number) {
     persistHamMapLocation(grid, lat, lng);
-    setGuestGrid(grid);
     if (
       typeof lat === "number" &&
       Number.isFinite(lat) &&
@@ -881,6 +907,9 @@ export function HamMapFullscreenView({
       Number.isFinite(lng)
     ) {
       setSessionFix({ lat, lng });
+    }
+    if (!(savedProfileGrid || viewer?.homeGrid.trim())) {
+      setGuestGrid(grid);
     }
   }
 
@@ -897,18 +926,22 @@ export function HamMapFullscreenView({
         const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
         if (lastSilentFixRef.current === key) return;
         lastSilentFixRef.current = key;
-        rememberOverlayGrid(grid, lat, lng);
+        persistHamMapLocation(grid, lat, lng);
+        setSessionFix({ lat, lng });
+        if (!(savedProfileGrid || viewer?.homeGrid.trim())) {
+          setGuestGrid(grid);
+        }
       },
       () => undefined,
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 },
     );
-  }, [locationAllowed]);
+  }, [locationAllowed, savedProfileGrid, viewer?.homeGrid]);
 
   const viewerLocationMarker = useMemo(() => {
     const gpsGrid = deviceFix
       ? latLngToMaidenhead(deviceFix.lat, deviceFix.lng, 6)
       : "";
-    const grid = gpsGrid || overlayGrid;
+    const grid = gpsGrid || overlayDisplayGrid;
     if (!grid) return null;
     return buildHomeGridMarker(
       grid,
@@ -916,7 +949,7 @@ export function HamMapFullscreenView({
       deviceFix?.lat ?? null,
       deviceFix?.lng ?? null,
     );
-  }, [overlayGrid, viewer?.callsign, deviceFix]);
+  }, [overlayDisplayGrid, viewer?.callsign, deviceFix]);
 
   const stationHome = homeMarker ?? overrideHomeMarker;
   const devicePin =
@@ -928,10 +961,7 @@ export function HamMapFullscreenView({
         stationHome.callsign &&
         normalizeGrid(stationHome.callsign) === normalizeGrid(viewer.callsign),
     );
-  const activeHomeMarker =
-    devicePin && (viewingOwnStation || !stationHome)
-      ? devicePin
-      : (stationHome ?? viewerLocationMarker);
+  const activeHomeMarker = stationHome ?? devicePin ?? viewerLocationMarker;
   const filteredQsos = useMemo(
     () => (showQsoMarkers ? filterQsosByTimeRange(qsos, qsoTimeRange) : []),
     [showQsoMarkers, qsos, qsoTimeRange],
@@ -953,25 +983,52 @@ export function HamMapFullscreenView({
     if (!qso?.grid) return null;
     return truncateMaidenhead(qso.grid, 4);
   }, [activeSelectedQsoId, filteredQsos]);
+  const mergedOwnLocation = useMemo(
+    () =>
+      Boolean(
+        viewingOwnStation &&
+          stationHome &&
+          devicePin &&
+          sameGridField(stationHome, devicePin),
+      ),
+    [viewingOwnStation, stationHome, devicePin],
+  );
   const mapHomeMarker = useMemo(() => {
-    if (!focusGrid) return activeHomeMarker;
-    if (!activeHomeMarker) return null;
-    const field = truncateMaidenhead(activeHomeMarker.grid, 4);
+    let primary =
+      stationHome ??
+      (devicePin && !stationHome ? devicePin : null) ??
+      viewerLocationMarker;
+    if (mergedOwnLocation && stationHome && devicePin) {
+      primary = {
+        ...stationHome,
+        lat: devicePin.lat,
+        lng: devicePin.lng,
+        fromLocation: true,
+      };
+    }
+    if (!primary) return null;
+    if (!focusGrid) return primary;
+    const field = truncateMaidenhead(primary.grid, 4);
     const bounds = field ? maidenheadBounds(field) : null;
     if (!field || !bounds) return null;
-    return { ...activeHomeMarker, grid: field, bounds };
-  }, [focusGrid, activeHomeMarker]);
+    return { ...primary, grid: field, bounds };
+  }, [
+    focusGrid,
+    stationHome,
+    devicePin,
+    viewerLocationMarker,
+    mergedOwnLocation,
+  ]);
   const extraViewerHome = useMemo(() => {
-    if (!devicePin || !stationHome || viewingOwnStation) return null;
-    if (normalizeGrid(devicePin.grid) === normalizeGrid(stationHome.grid)) {
-      return null;
-    }
+    if (!devicePin || !stationHome) return null;
+    if (mergedOwnLocation) return null;
+    if (!savedLocationDiffersFromDevice(stationHome, devicePin)) return null;
+    if (viewingOwnStation && sameGridField(stationHome, devicePin)) return null;
     return devicePin;
-  }, [devicePin, stationHome, viewingOwnStation]);
+  }, [devicePin, stationHome, mergedOwnLocation, viewingOwnStation]);
   const liveGrid = deviceFix
     ? latLngToMaidenhead(deviceFix.lat, deviceFix.lng, 6)
     : "";
-  const profileGrid = savedProfileGrid || viewer?.homeGrid.trim() || "";
   const locationIntent = !viewer
     ? "guest"
     : !locationAllowed
@@ -979,12 +1036,15 @@ export function HamMapFullscreenView({
       : "update";
   const askProfileUpdate = Boolean(
     viewer &&
+      locationAllowed &&
+      devicePin &&
       liveGrid &&
-      normalizeGrid(liveGrid) !== normalizeGrid(profileGrid) &&
-      normalizeGrid(skippedProfileGrid) !== normalizeGrid(liveGrid),
+      normalizeGrid(skippedProfileGrid) !== normalizeGrid(liveGrid) &&
+      !mergedOwnLocation &&
+      (!stationHome ||
+        !sameGridField(stationHome, devicePin)),
   );
-  const locationPromptEnabled =
-    !locationAllowed || (locationIntent === "update" && askProfileUpdate);
+  const locationPromptEnabled = !locationAllowed || askProfileUpdate;
   const stationHomeKind: "home" | "viewer" = stationHome ? "home" : "viewer";
   const stationPinClass =
     stationHomeKind === "viewer"
@@ -1210,11 +1270,20 @@ export function HamMapFullscreenView({
       );
 
       if (showLocationMarkersRef.current && mapHomeMarker) {
-        const el = buildMarkerElement(
-          stationPinClass,
-          showCallsignsRef.current ? mapHomeMarker.callsign : "",
-          mapTheme,
-        );
+        const homePinLabel = showCallsignsRef.current
+          ? mergedOwnLocation
+            ? t("mergedLocationPinLabel", {
+                callsign: mapHomeMarker.callsign,
+              })
+            : stationHome
+              ? t("homeLocationPinLabel", {
+                  callsign: mapHomeMarker.callsign,
+                })
+              : t("yourLocationLabel")
+          : "";
+        const homePinClass =
+          mergedOwnLocation || stationHome ? stationPinClass : viewerPinClass;
+        const el = buildMarkerElement(homePinClass, homePinLabel, mapTheme);
         const marker = new Marker({ element: el })
           .setLngLat([mapHomeMarker.lng, mapHomeMarker.lat])
           .setPopup(
@@ -1224,7 +1293,11 @@ export function HamMapFullscreenView({
               closeButton: true,
               closeOnClick: false,
             }).setHTML(
-              `<strong>${escapeHtml(mapHomeMarker.callsign)}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${escapeHtml(mapHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid"))}</span>`,
+              mergedOwnLocation
+                ? `<strong>${escapeHtml(t("mergedLocationPinLabel", { callsign: mapHomeMarker.callsign }))}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}`
+                : stationHome
+                  ? `<strong>${escapeHtml(t("homeLocationPinLabel", { callsign: mapHomeMarker.callsign }))}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}<br/><span style="font-size:12px">${escapeHtml(mapHomeMarker.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid"))}</span>`
+                  : `<strong>${escapeHtml(t("yourLocationLabel"))}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(mapHomeMarker.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${mapHomeMarker.lat.toFixed(5)}, ${mapHomeMarker.lng.toFixed(5)}`,
             ),
           )
           .addTo(map);
@@ -1237,7 +1310,7 @@ export function HamMapFullscreenView({
       if (showLocationMarkersRef.current && extraViewerHome) {
         const el = buildMarkerElement(
           viewerPinClass,
-          showCallsignsRef.current ? extraViewerHome.callsign : "",
+          showCallsignsRef.current ? t("yourLocationLabel") : "",
           mapTheme,
         );
         const marker = new Marker({ element: el })
@@ -1249,7 +1322,7 @@ export function HamMapFullscreenView({
               closeButton: true,
               closeOnClick: false,
             }).setHTML(
-              `<strong>${escapeHtml(extraViewerHome.callsign || t("guestName"))}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(extraViewerHome.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${extraViewerHome.lat.toFixed(5)}, ${extraViewerHome.lng.toFixed(5)}<br/><span style="font-size:12px">${escapeHtml(extraViewerHome.fromLocation ? t("homeLocationFromGps") : t("homeLocationFromGrid"))}</span>`,
+              `<strong>${escapeHtml(t("yourLocationLabel"))}</strong><br/>${escapeHtml(t("homeMarkerLabel"))}: ${escapeHtml(formatMaidenheadDisplay(extraViewerHome.grid))}<br/>${escapeHtml(t("homeLocationLabel"))}: ${extraViewerHome.lat.toFixed(5)}, ${extraViewerHome.lng.toFixed(5)}<br/><span style="font-size:12px">${escapeHtml(t("homeLocationFromGps"))}</span>`,
             ),
           )
           .addTo(map);
@@ -1270,6 +1343,18 @@ export function HamMapFullscreenView({
         bounds.extend([activeHomeMarker.bounds.west, activeHomeMarker.bounds.south]);
         bounds.extend([activeHomeMarker.bounds.east, activeHomeMarker.bounds.north]);
         bounds.extend([activeHomeMarker.lng, activeHomeMarker.lat]);
+        hasBounds = true;
+      }
+      if (!focusMode && extraViewerHome) {
+        bounds.extend([
+          extraViewerHome.bounds.west,
+          extraViewerHome.bounds.south,
+        ]);
+        bounds.extend([
+          extraViewerHome.bounds.east,
+          extraViewerHome.bounds.north,
+        ]);
+        bounds.extend([extraViewerHome.lng, extraViewerHome.lat]);
         hasBounds = true;
       }
 
@@ -1370,7 +1455,7 @@ export function HamMapFullscreenView({
     return () => {
       map.off("style.load", onStyleLoad);
     };
-  }, [activeHomeMarker, extraViewerHome, focusGrid, mapHomeMarker, mapQsoMarkers, showQsoMarkers, showLocationMarkers, showCallsigns, mapTheme, mapTilerKey, stationHomeKind, stationPinClass, t]);
+  }, [activeHomeMarker, extraViewerHome, focusGrid, mapHomeMarker, mapQsoMarkers, showQsoMarkers, showLocationMarkers, showCallsigns, mapTheme, mapTilerKey, stationHomeKind, stationPinClass, viewerPinClass, stationHome, mergedOwnLocation, t]);
 
   // Keep pick rectangle on the grid layer without re-fitting the camera.
   useEffect(() => {
@@ -1641,7 +1726,9 @@ export function HamMapFullscreenView({
   }
 
   const hasMarkers =
-    Boolean(activeHomeMarker) || (showQsoMarkers && qsoMarkers.length > 0);
+    Boolean(activeHomeMarker) ||
+    Boolean(extraViewerHome) ||
+    (showQsoMarkers && qsoMarkers.length > 0);
   const panelTheme = mapTheme ?? "light";
   const emptyBanner =
     panelTheme === "light"
@@ -1688,7 +1775,7 @@ export function HamMapFullscreenView({
         lookupError={lookupError}
         onLoginClick={viewer ? undefined : () => setLoginOpen(true)}
         onFocusGrid={focusOverlayGrid}
-        guestGrid={overlayGrid}
+        guestGrid={overlayDisplayGrid}
         onGuestGrid={rememberOverlayGrid}
       />
 
