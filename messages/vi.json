@@ -252,8 +252,12 @@
           "body": "Mở danh sách bên cạnh để xem liên lạc. Chọn một QSO để phóng to ô lưới và đường nối trên bản đồ."
         },
         "pins": {
-          "title": "Ghim và ô lưới",
-          "body": "Bấm ghim để xem chi tiết QSO. Hình chữ nhật lưới dùng ô Maidenhead 4 ký tự (ví dụ OL20)."
+          "title": "Ô lưới",
+          "body": "Hình chữ nhật màu thể hiện ô Maidenhead 4 ký tự (ví dụ OL20) quanh trạm và các liên lạc của bạn."
+        },
+        "locationPin": {
+          "title": "Ghim vị trí",
+          "body": "Bấm ghim vị trí để xem chi tiết — ô lưới, tọa độ và hô hiệu (nếu đang hiển thị)."
         },
         "done": {
           "title": "Sẵn sàng",

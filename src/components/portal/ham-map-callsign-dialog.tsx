@@ -19,8 +19,8 @@ type Props = {
 };
 
 /**
- * Lets an owner claim a callsign without leaving the map. Mount it only while
- * open — the draft and error state then reset on their own between openings.
+ * Lets an owner claim a callsign without leaving the map. Form state persists
+ * while mounted; the list panel keeps this closed via `open={false}`.
  */
 export function HamMapCallsignDialog({ open, mapTheme, onClose }: Props) {
   const t = useTranslations("ham.map");
@@ -77,6 +77,7 @@ export function HamMapCallsignDialog({ open, mapTheme, onClose }: Props) {
   return (
     <PortalDialog
       open={open}
+      animated
       title={t("callsignPromptTitle")}
       onClose={onClose}
       closeDisabled={pending}

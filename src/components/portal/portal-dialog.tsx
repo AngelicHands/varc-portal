@@ -14,6 +14,8 @@ function dialogPortalRoot(): HTMLElement {
   return document.body;
 }
 
+const DIALOG_TRANSITION_MS = 300;
+
 type Props = {
   open: boolean;
   title: string;
@@ -29,6 +31,8 @@ type Props = {
   panelClassName?: string;
   titleClassName?: string;
   closeClassName?: string;
+  /** Ease-in-out fade/slide enter and exit (map view dialogs). */
+  animated?: boolean;
 };
 
 export function PortalDialog({
@@ -43,10 +47,44 @@ export function PortalDialog({
   panelClassName = "border-border bg-surface",
   titleClassName = "text-foreground",
   closeClassName = "text-muted hover:bg-foreground/5",
+  animated = false,
 }: Props) {
   const titleId = useId();
   const [mounted, setMounted] = useState(false);
   const [container, setContainer] = useState<HTMLElement | null>(null);
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [leaving, setLeaving] = useState(false);
+  const [shown, setShown] = useState(false);
+
+  if (animated && open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setLeaving(false);
+      setShown(false);
+    } else {
+      setLeaving(true);
+      setShown(false);
+    }
+  }
+
+  const visible = animated ? open || leaving : open;
+
+  useEffect(() => {
+    if (!animated || !open) return;
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => setShown(true));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [animated, open]);
+
+  useEffect(() => {
+    if (!animated || open || !leaving) return;
+    const timer = window.setTimeout(
+      () => setLeaving(false),
+      DIALOG_TRANSITION_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [animated, open, leaving]);
 
   useEffect(() => {
     const syncRoot = () => setContainer(dialogPortalRoot());
@@ -64,7 +102,7 @@ export function PortalDialog({
   }, []);
 
   useEffect(() => {
-    if (!open || !mounted) return;
+    if (!visible || !mounted) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !closeDisabled) onClose();
     };
@@ -75,13 +113,25 @@ export function PortalDialog({
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prev;
     };
-  }, [open, mounted, closeDisabled, onClose]);
+  }, [visible, mounted, closeDisabled, onClose]);
 
-  if (!mounted || !open || !container) return null;
+  if (!mounted || !visible || !container) return null;
+
+  const motionClass = animated
+    ? "duration-300 ease-in-out motion-reduce:transition-none"
+    : "";
+  const overlayMotionClass = animated
+    ? `transition-opacity ${motionClass} ${shown ? "opacity-100" : "opacity-0"}`
+    : "";
+  const panelMotionClass = animated
+    ? `transition-[opacity,translate] ${motionClass} ${
+        shown ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"
+      }`
+    : "";
 
   return createPortal(
     <div
-      className={`fixed inset-0 flex items-center justify-center bg-black/40 p-4 ${overlayClassName}`}
+      className={`fixed inset-0 flex items-center justify-center bg-black/40 p-4 ${overlayClassName} ${overlayMotionClass}`}
       style={{ zIndex }}
       role="presentation"
       onClick={closeDisabled ? undefined : onClose}
@@ -90,7 +140,7 @@ export function PortalDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`max-h-[90dvh] w-full overflow-y-auto rounded-xl border p-6 shadow-xl backdrop-blur-md ${panelClassName} ${
+        className={`max-h-[90dvh] w-full overflow-y-auto rounded-xl border p-6 shadow-xl backdrop-blur-md ${panelClassName} ${panelMotionClass} ${
           size === "lg" ? "max-w-2xl" : "max-w-lg"
         }`}
         onClick={(event) => event.stopPropagation()}

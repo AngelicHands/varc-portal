@@ -80,6 +80,7 @@ export function QsoMapLoginDialog({
   return (
     <PortalDialog
       open={open}
+      animated
       title={t("loginTitle")}
       onClose={onClose}
       closeDisabled={pending}

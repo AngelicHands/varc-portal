@@ -33,6 +33,8 @@ type Props = {
   onFocusGrid?: (grid: string) => void;
   guestGrid?: string;
   onGuestGrid?: (grid: string, lat?: number, lng?: number) => void;
+  onLocationAcquireStart?: () => void;
+  onLocationAcquireEnd?: () => void;
 };
 
 function SunIcon({ className }: { className?: string }) {
@@ -159,6 +161,8 @@ export function HamMapFloatingPanel({
   onFocusGrid,
   guestGrid = "",
   onGuestGrid,
+  onLocationAcquireStart,
+  onLocationAcquireEnd,
 }: Props) {
   const t = useTranslations("ham.map");
   const locale = useLocale();
@@ -207,6 +211,7 @@ export function HamMapFloatingPanel({
       return;
     }
     setLocating(true);
+    onLocationAcquireStart?.();
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const grid = latLngToMaidenhead(
@@ -216,6 +221,7 @@ export function HamMapFloatingPanel({
         );
         if (!grid) {
           setLocating(false);
+          onLocationAcquireEnd?.();
           setLocationError(t("homeLocationFailed"));
           return;
         }
@@ -230,9 +236,11 @@ export function HamMapFloatingPanel({
           position.coords.longitude,
         );
         setLocating(false);
+        onLocationAcquireEnd?.();
       },
       () => {
         setLocating(false);
+        onLocationAcquireEnd?.();
         setLocationError(t("homeLocationFailed"));
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },

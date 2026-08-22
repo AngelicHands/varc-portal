@@ -111,7 +111,7 @@ export function getServerStoredCoords(): StoredHamMapCoords | null {
 }
 
 export function getServerLocationAllowed() {
-  return true;
+  return false;
 }
 
 export function subscribeHamMapLocation(onStoreChange: () => void) {

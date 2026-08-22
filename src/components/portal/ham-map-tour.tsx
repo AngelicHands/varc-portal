@@ -12,31 +12,46 @@ import type { HamMapTheme } from "@/lib/map/maptiler-style";
 import {
   HAM_MAP_TOUR_ANCHORS,
   HAM_MAP_TOUR_CLAMPED_STEPS,
+  HAM_MAP_TOUR_MAP_SPOT_STEPS,
   HAM_MAP_TOUR_STEP_IDS,
   hasSeenHamMapTour,
   markHamMapTourSeen,
+  type HamMapTourSpotRect,
   type HamMapTourStepId,
 } from "@/lib/map/ham-map-tour";
+
+type SpotRect = HamMapTourSpotRect;
 
 type Props = {
   mapTheme: HamMapTheme;
   enabled?: boolean;
   autoStart?: boolean;
+  /** When set, auto-start waits until this flips true (e.g. location acquired). */
+  autoStartWhen?: boolean;
+  /** Viewport rect for map spotlight steps (grid field, location pin, …). */
+  mapSpotRect?: SpotRect | null;
+  onStepChange?: (stepId: HamMapTourStepId | null, open: boolean) => void;
   children: (api: { startTour: () => void }) => React.ReactNode;
-};
-
-type SpotRect = {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
 };
 
 function stepAnchorId(step: HamMapTourStepId): string {
   return HAM_MAP_TOUR_ANCHORS[step];
 }
 
-function readSpot(step: HamMapTourStepId): SpotRect | null {
+function readSpot(
+  step: HamMapTourStepId,
+  mapSpotRect?: SpotRect | null,
+): SpotRect | null {
+  if (HAM_MAP_TOUR_MAP_SPOT_STEPS.has(step) && mapSpotRect) {
+    const pad = 10;
+    return {
+      top: Math.max(0, mapSpotRect.top - pad),
+      left: Math.max(0, mapSpotRect.left - pad),
+      width: mapSpotRect.width + pad * 2,
+      height: mapSpotRect.height + pad * 2,
+    };
+  }
+
   const el = document.getElementById(stepAnchorId(step));
   if (!el) return null;
   const rect = el.getBoundingClientRect();
@@ -118,6 +133,9 @@ export function HamMapTour({
   mapTheme,
   enabled = true,
   autoStart = true,
+  autoStartWhen = true,
+  mapSpotRect = null,
+  onStepChange,
   children,
 }: Props) {
   const t = useTranslations("ham.map");
@@ -133,8 +151,21 @@ export function HamMapTour({
   const stepId = HAM_MAP_TOUR_STEP_IDS[stepIndex] ?? "welcome";
   const isLast = stepIndex >= HAM_MAP_TOUR_STEP_IDS.length - 1;
   const light = mapTheme === "light";
-  const spot = open ? readSpot(stepId) : null;
+  const spot = open ? readSpot(stepId, mapSpotRect) : null;
   void spotTick;
+  void mapSpotRect;
+
+  useEffect(() => {
+    onStepChange?.(open ? stepId : null, open);
+  }, [open, stepId, onStepChange]);
+
+  useEffect(() => {
+    if (!open || !HAM_MAP_TOUR_MAP_SPOT_STEPS.has(stepId)) return;
+    const frame = window.requestAnimationFrame(() => {
+      setSpotTick((value) => value + 1);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, stepId, mapSpotRect]);
 
   const closeTour = useCallback((persist: boolean) => {
     setOpen(false);
@@ -149,14 +180,18 @@ export function HamMapTour({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !autoStart || startedRef.current) return;
-    startedRef.current = true;
-    if (hasSeenHamMapTour()) return;
+    if (!enabled || !autoStart || !autoStartWhen || startedRef.current) return;
+    if (hasSeenHamMapTour()) {
+      startedRef.current = true;
+      return;
+    }
     const timer = window.setTimeout(() => {
+      if (startedRef.current) return;
+      startedRef.current = true;
       startTour();
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [enabled, autoStart, startTour]);
+  }, [enabled, autoStart, autoStartWhen, startTour]);
 
   useEffect(() => {
     if (!open) return;

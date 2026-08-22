@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { PortalDialog } from "@/components/portal/portal-dialog";
@@ -23,6 +23,9 @@ type Props = {
   onLocationSaved: (marker: HomeGridMarker) => void;
   onLocated?: (grid: string, lat: number, lng: number) => void;
   onSkipUpdate?: () => void;
+  onOpenChange?: (open: boolean) => void;
+  onLocationAcquireStart?: () => void;
+  onLocationAcquireEnd?: () => void;
 };
 
 export function HamMapHomeLocationPrompt({
@@ -36,6 +39,9 @@ export function HamMapHomeLocationPrompt({
   onLocationSaved,
   onLocated,
   onSkipUpdate,
+  onOpenChange,
+  onLocationAcquireStart,
+  onLocationAcquireEnd,
 }: Props) {
   const t = useTranslations("ham.map");
   const router = useRouter();
@@ -47,6 +53,10 @@ export function HamMapHomeLocationPrompt({
   const promptKey = `${intent}:${updateGrid}`;
 
   const open = enabled && dismissedKey !== promptKey;
+
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
 
   function dismiss() {
     if (intent === "update") onSkipUpdate?.();
@@ -60,6 +70,7 @@ export function HamMapHomeLocationPrompt({
   }
 
   function saveToProfile(grid: string, lat: number, lng: number) {
+    onLocationAcquireStart?.();
     startTransition(async () => {
       const result = await updateHomeLocationAction({
         homeGrid: grid,
@@ -67,6 +78,7 @@ export function HamMapHomeLocationPrompt({
         homeLng: lng,
       });
       setLocating(false);
+      onLocationAcquireEnd?.();
       if (!result.ok) {
         setError(result.error);
         return;
@@ -108,6 +120,7 @@ export function HamMapHomeLocationPrompt({
     }
 
     setLocating(true);
+    onLocationAcquireStart?.();
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const lat = position.coords.latitude;
@@ -115,16 +128,19 @@ export function HamMapHomeLocationPrompt({
         const grid = latLngToMaidenhead(lat, lng, 6);
         if (!grid) {
           setLocating(false);
+          onLocationAcquireEnd?.();
           setError(t("homeLocationFailed"));
           return;
         }
 
         persistAndShow(grid, lat, lng);
         setLocating(false);
+        onLocationAcquireEnd?.();
         setDismissedKey(promptKey);
       },
       () => {
         setLocating(false);
+        onLocationAcquireEnd?.();
         setError(t("homeLocationFailed"));
       },
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 0 },
@@ -178,6 +194,7 @@ export function HamMapHomeLocationPrompt({
   return (
     <PortalDialog
       open={open}
+      animated
       title={title}
       onClose={dismiss}
       closeDisabled={busy}

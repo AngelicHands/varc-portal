@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import {
   GeoJSONSource,
   LngLatBounds,
@@ -34,6 +34,12 @@ import { HamMapFloatingPanel, type HamMapViewer } from "@/components/portal/ham-
 import { QsoMapLoginDialog } from "@/components/portal/qso-map-login-dialog";
 import { lookupPublicQsoMapAction } from "@/lib/qso-map-lookup-actions";
 import { HamMapTour, HamMapTourHelpButton } from "@/components/portal/ham-map-tour";
+import {
+  computeLocationPinClickTourSpot,
+  computeLocationPinsTourSpot,
+  HAM_MAP_TOUR_MAP_SPOT_STEPS,
+  type HamMapTourStepId,
+} from "@/lib/map/ham-map-tour";
 import { HamMapControlsPanel } from "@/components/portal/ham-map-controls-panel";
 import { HamMapQsoTimeFilter } from "@/components/portal/ham-map-qso-time-filter";
 import {
@@ -851,6 +857,19 @@ export function HamMapFullscreenView({
   const [fullscreenSupported, setFullscreenSupported] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [guestGrid, setGuestGrid] = useState("");
+  const [locationPromptOpen, setLocationPromptOpen] = useState(true);
+  const [locationAcquirePending, setLocationAcquirePending] = useState(0);
+  const [tourStep, setTourStep] = useState<HamMapTourStepId | null>(null);
+  const [mapTourSpotRect, setMapTourSpotRect] = useState<
+    ReturnType<typeof computeLocationPinsTourSpot>
+  >(null);
+  const beginLocationAcquire = useCallback(() => {
+    setLocationAcquirePending((count) => count + 1);
+  }, []);
+  const endLocationAcquire = useCallback(() => {
+    setLocationAcquirePending((count) => Math.max(0, count - 1));
+  }, []);
+  const locationAcquiring = locationAcquirePending > 0;
   const storedGrid = useSyncExternalStore(
     subscribeHamMapLocation,
     readStoredHamMapGrid,
@@ -916,26 +935,49 @@ export function HamMapFullscreenView({
   useEffect(() => {
     if (!locationAllowed || typeof navigator === "undefined") return;
     if (!navigator.geolocation) return;
+    if (storedCoords) return;
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        const grid = latLngToMaidenhead(lat, lng, 6);
-        if (!grid) return;
-        const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
-        if (lastSilentFixRef.current === key) return;
-        lastSilentFixRef.current = key;
-        persistHamMapLocation(grid, lat, lng);
-        setSessionFix({ lat, lng });
-        if (!(savedProfileGrid || viewer?.homeGrid.trim())) {
-          setGuestGrid(grid);
-        }
-      },
-      () => undefined,
-      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 },
-    );
-  }, [locationAllowed, savedProfileGrid, viewer?.homeGrid]);
+    let cancelled = false;
+    let frame = 0;
+    frame = window.requestAnimationFrame(() => {
+      if (cancelled) return;
+      beginLocationAcquire();
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          if (cancelled) return;
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const grid = latLngToMaidenhead(lat, lng, 6);
+          endLocationAcquire();
+          if (!grid) return;
+          const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+          if (lastSilentFixRef.current === key) return;
+          lastSilentFixRef.current = key;
+          persistHamMapLocation(grid, lat, lng);
+          setSessionFix({ lat, lng });
+          if (!(savedProfileGrid || viewer?.homeGrid.trim())) {
+            setGuestGrid(grid);
+          }
+        },
+        () => {
+          if (!cancelled) endLocationAcquire();
+        },
+        { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 },
+      );
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+      endLocationAcquire();
+    };
+  }, [
+    locationAllowed,
+    storedCoords,
+    savedProfileGrid,
+    viewer?.homeGrid,
+    beginLocationAcquire,
+    endLocationAcquire,
+  ]);
 
   const viewerLocationMarker = useMemo(() => {
     const gpsGrid = deviceFix
@@ -1045,6 +1087,63 @@ export function HamMapFullscreenView({
         !sameGridField(stationHome, devicePin)),
   );
   const locationPromptEnabled = !locationAllowed || askProfileUpdate;
+  const hasDeviceLocation = Boolean(deviceFix || storedCoords);
+  const locationAcquired =
+    hasDeviceLocation ||
+    (Boolean(stationHome) && !locationPromptEnabled);
+  const tourAutoStartWhen =
+    locationAcquired &&
+    !locationAcquiring &&
+    (!locationPromptEnabled || !locationPromptOpen);
+
+  const onTourStepChange = useCallback(
+    (stepId: HamMapTourStepId | null) => {
+      setTourStep(stepId);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!tourStep || !HAM_MAP_TOUR_MAP_SPOT_STEPS.has(tourStep)) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    const update = () => {
+      if (tourStep === "pins") {
+        setMapTourSpotRect(
+          computeLocationPinsTourSpot(map, mapHomeMarker, extraViewerHome),
+        );
+        return;
+      }
+      if (tourStep === "locationPin") {
+        setMapTourSpotRect(
+          computeLocationPinClickTourSpot(
+            map,
+            mapHomeMarker,
+            extraViewerHome,
+          ),
+        );
+      }
+    };
+
+    update();
+    map.on("moveend", update);
+    map.on("zoomend", update);
+    map.on("resize", update);
+    window.addEventListener("resize", update);
+    return () => {
+      map.off("moveend", update);
+      map.off("zoomend", update);
+      map.off("resize", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [tourStep, mapHomeMarker, extraViewerHome, mapTilerKey, themeReady]);
+
+  const tourMapSpotRect =
+    tourStep && HAM_MAP_TOUR_MAP_SPOT_STEPS.has(tourStep)
+      ? mapTourSpotRect
+      : null;
+
   const stationHomeKind: "home" | "viewer" = stationHome ? "home" : "viewer";
   const stationPinClass =
     stationHomeKind === "viewer"
@@ -1743,7 +1842,6 @@ export function HamMapFullscreenView({
         // (inset collapses to height 0 → black map, no tiles). See .cursor/rules/maplibre-container.mdc
         <div
           ref={containerRef}
-          id="ham-map-tour-pins"
           className="h-full w-full"
           aria-label={t("title")}
         />
@@ -1777,6 +1875,8 @@ export function HamMapFullscreenView({
         onFocusGrid={focusOverlayGrid}
         guestGrid={overlayDisplayGrid}
         onGuestGrid={rememberOverlayGrid}
+        onLocationAcquireStart={beginLocationAcquire}
+        onLocationAcquireEnd={endLocationAcquire}
       />
 
       <div className="pointer-events-none absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
@@ -1784,6 +1884,9 @@ export function HamMapFullscreenView({
           mapTheme={panelTheme}
           enabled={Boolean(mapTilerKey) && themeReady}
           autoStart={Boolean(mapTilerKey) && themeReady}
+          autoStartWhen={tourAutoStartWhen}
+          mapSpotRect={tourMapSpotRect}
+          onStepChange={(stepId) => onTourStepChange(stepId)}
         >
           {({ startTour }) => (
             <>
@@ -1871,6 +1974,9 @@ export function HamMapFullscreenView({
         onSkipUpdate={() => {
           if (liveGrid) skipProfileLocationUpdate(liveGrid);
         }}
+        onOpenChange={setLocationPromptOpen}
+        onLocationAcquireStart={beginLocationAcquire}
+        onLocationAcquireEnd={endLocationAcquire}
       />
 
       <QsoMapLoginDialog

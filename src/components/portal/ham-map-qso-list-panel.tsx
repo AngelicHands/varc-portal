@@ -199,21 +199,17 @@ export function HamMapQsoListPanel({
         </span>
       </button>
 
-      {callsignDialogOpen ? (
-        <HamMapCallsignDialog
-          open
-          mapTheme={mapTheme}
-          onClose={() => setCallsignDialogOpen(false)}
-        />
-      ) : null}
+      <HamMapCallsignDialog
+        open={callsignDialogOpen}
+        mapTheme={mapTheme}
+        onClose={() => setCallsignDialogOpen(false)}
+      />
 
-      {qsoDialogOpen ? (
-        <HamMapQsoDialog
-          open
-          mapTheme={mapTheme}
-          onClose={() => setQsoDialogOpen(false)}
-        />
-      ) : null}
+      <HamMapQsoDialog
+        open={qsoDialogOpen}
+        mapTheme={mapTheme}
+        onClose={() => setQsoDialogOpen(false)}
+      />
     </div>
   );
 }

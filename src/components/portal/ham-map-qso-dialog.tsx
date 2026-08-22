@@ -209,6 +209,7 @@ export function HamMapQsoDialog({
   return (
     <PortalDialog
       open={open}
+      animated
       title={t("addQso")}
       onClose={onClose}
       closeDisabled={pending}

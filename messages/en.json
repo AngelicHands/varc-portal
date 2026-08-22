@@ -252,8 +252,12 @@
           "body": "Open the side list to browse contacts. Select one to focus that grid and path on the map."
         },
         "pins": {
-          "title": "Pins and grids",
-          "body": "Click a pin for QSO details. Grid rectangles use 4-character Maidenhead fields (for example OL20)."
+          "title": "Grid squares",
+          "body": "Colored rectangles show 4-character Maidenhead grid fields (for example OL20) around your station and contacts."
+        },
+        "locationPin": {
+          "title": "Location pins",
+          "body": "Tap a location pin to open its details — grid square, coordinates, and callsign when shown."
         },
         "done": {
           "title": "You’re set",
