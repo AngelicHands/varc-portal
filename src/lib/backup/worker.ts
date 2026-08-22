@@ -42,6 +42,7 @@ import { publicErrorMessage } from "@/lib/safe-error";
 import { BackupJob, type BackupJobDocument } from "@/models/BackupJob";
 import { FormSubmission } from "@/models/FormSubmission";
 import { Media } from "@/models/Media";
+import { UserDocumentModel } from "@/models/UserDocument";
 import { isFormUploadValue } from "@/lib/validations/forms";
 
 type BackupManifest = {
@@ -131,9 +132,10 @@ function extractFormUploadKeys(payload: unknown): BackupMediaEntry[] {
 }
 
 async function collectBackupMediaEntries(): Promise<BackupMediaEntry[]> {
-  const [mediaDocs, submissionDocs] = await Promise.all([
+  const [mediaDocs, submissionDocs, userDocumentDocs] = await Promise.all([
     Media.find({}, { key: 1, contentType: 1, size: 1 }).lean(),
     FormSubmission.find({}, { payload: 1 }).lean(),
+    UserDocumentModel.find({}, { key: 1, contentType: 1, size: 1 }).lean(),
   ]);
   const byKey = new Map<string, BackupMediaEntry>();
 
@@ -150,6 +152,18 @@ async function collectBackupMediaEntries(): Promise<BackupMediaEntry[]> {
   for (const doc of submissionDocs) {
     for (const upload of extractFormUploadKeys(doc.payload)) {
       if (!byKey.has(upload.key)) byKey.set(upload.key, upload);
+    }
+  }
+
+  for (const doc of userDocumentDocs) {
+    const key = String(doc.key || "").trim();
+    if (!key) continue;
+    if (!byKey.has(key)) {
+      byKey.set(key, {
+        key,
+        contentType: String(doc.contentType || contentTypeForObjectKey(key)),
+        size: Number(doc.size || 0),
+      });
     }
   }
 
@@ -439,7 +453,10 @@ async function restoreCollectionFromEntry(params: {
     const parsed = EJSON.parse(trimmed) as Record<string, unknown>;
     if (params.collectionName === FormSubmission.collection.collectionName) {
       parsed.payload = rewriteSubmissionPayloadUrls(parsed.payload);
-    } else if (params.collectionName === Media.collection.collectionName) {
+    } else if (
+      params.collectionName === Media.collection.collectionName ||
+      params.collectionName === UserDocumentModel.collection.collectionName
+    ) {
       parsed.url = publicUrlForObjectKey(String(parsed.key || ""));
     }
     batch.push(parsed);
@@ -454,9 +471,10 @@ async function restoreCollectionFromEntry(params: {
 }
 
 async function collectCurrentManagedKeys(): Promise<Set<string>> {
-  const [mediaDocs, formDocs] = await Promise.all([
+  const [mediaDocs, formDocs, userDocumentDocs] = await Promise.all([
     Media.find({}, { key: 1 }).lean(),
     FormSubmission.find({}, { payload: 1 }).lean(),
+    UserDocumentModel.find({}, { key: 1 }).lean(),
   ]);
   const keys = new Set<string>();
   for (const doc of mediaDocs) {
@@ -468,7 +486,19 @@ async function collectCurrentManagedKeys(): Promise<Set<string>> {
       keys.add(upload.key);
     }
   }
+  for (const doc of userDocumentDocs) {
+    const key = String(doc.key || "").trim();
+    if (key) keys.add(key);
+  }
   return keys;
+}
+
+async function clearBackupCollection(collectionName: string): Promise<void> {
+  const backupCollection = getBackupCollectionByName(collectionName);
+  if (!backupCollection) {
+    throw new Error(`Unknown collection: ${collectionName}`);
+  }
+  await backupCollection.collection.deleteMany({});
 }
 
 async function restoreMediaEntries(params: {
@@ -542,13 +572,6 @@ async function restoreBackupArchive(job: BackupJobDocument): Promise<void> {
       }
     }
 
-    if (
-      collectionNames.length !== BACKUP_COLLECTION_NAMES.length ||
-      BACKUP_COLLECTION_NAMES.some((name) => !collectionNames.includes(name))
-    ) {
-      throw new Error("Backup is missing one or more required collections");
-    }
-
     await updateBackupJobProgress(String(job._id), {
       phase: "restoring-mongo",
       message: "Replacing MongoDB collections",
@@ -564,12 +587,17 @@ async function restoreBackupArchive(job: BackupJobDocument): Promise<void> {
       const entry = collectionEntries.find(
         (item) => item.path === `mongo/${collectionName}.jsonl`,
       );
-      if (!entry) throw new Error(`Missing collection file for ${collectionName}`);
-      await restoreCollectionFromEntry({ collectionName, entry });
+      if (entry) {
+        await restoreCollectionFromEntry({ collectionName, entry });
+      } else {
+        await clearBackupCollection(collectionName);
+      }
       collectionsDone += 1;
       await updateBackupJobProgress(String(job._id), {
         collectionsDone,
-        message: `Restored ${collectionName}`,
+        message: entry
+          ? `Restored ${collectionName}`
+          : `Cleared ${collectionName} (not in backup)`,
       });
     }
 

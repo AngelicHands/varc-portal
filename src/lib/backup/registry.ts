@@ -1,3 +1,4 @@
+import { ApiToken } from "@/models/ApiToken";
 import { AppRole } from "@/models/AppRole";
 import { Article } from "@/models/Article";
 import { Callsign } from "@/models/Callsign";
@@ -12,8 +13,10 @@ import { Media } from "@/models/Media";
 import { MenuItem } from "@/models/MenuItem";
 import { Page } from "@/models/Page";
 import { PageTemplate } from "@/models/PageTemplate";
+import { QsoLog } from "@/models/QsoLog";
 import { SiteSettings } from "@/models/SiteSettings";
 import { User } from "@/models/User";
+import { UserDocumentModel } from "@/models/UserDocument";
 
 type BackupCollectionEntry = {
   key: string;
@@ -77,6 +80,19 @@ export const BACKUP_COLLECTIONS: BackupCollectionEntry[] = [
   {
     key: "users",
     collection: User.collection as unknown as BackupCollectionEntry["collection"],
+  },
+  {
+    key: "qsoLogs",
+    collection: QsoLog.collection as unknown as BackupCollectionEntry["collection"],
+  },
+  {
+    key: "apiTokens",
+    collection: ApiToken.collection as unknown as BackupCollectionEntry["collection"],
+  },
+  {
+    key: "userDocuments",
+    collection:
+      UserDocumentModel.collection as unknown as BackupCollectionEntry["collection"],
   },
   {
     key: "appRoles",

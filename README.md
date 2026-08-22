@@ -104,11 +104,11 @@ Uses the Cloudflare Email Sending REST API (`POST /accounts/{account_id}/email/s
 
 Site managers can use **Admin → Backup** to queue a background backup or restore job.
 
-- **Backup** creates a ZIP with MongoDB collections plus managed media/form-upload files
+- **Backup** creates a ZIP with MongoDB collections plus managed media/form-upload/user-document files
 - the finished ZIP is stored as an artifact and emailed to the admin who started the job
 - **Restore** can start from either an uploaded ZIP or a remote HTTPS URL
-- restore replaces current CMS content, users, callsigns, and managed files
-- Valkey is **not** included; cache is rebuilt after restore
+- restore replaces current CMS content, users, QSO logs, API tokens, callsigns, and managed files
+- operational queues (`backupjobs`, `emailjobs`) are not included; Valkey is **not** included — cache is rebuilt after restore
 
 Backup artifacts use local disk (`BACKUP_ARTIFACT_DIR`) in local development or S3-compatible object storage (`BACKUP_S3_BUCKET` / `BACKUP_S3_PREFIX`) when `STORAGE_DRIVER=s3`.
 
