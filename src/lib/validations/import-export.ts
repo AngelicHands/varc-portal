@@ -332,6 +332,36 @@ export const importExportDirectionSchema = z.enum(["import", "export"]);
 
 export type ImportExportDirection = z.infer<typeof importExportDirectionSchema>;
 
+export const IMPORT_EXPORT_SCHEDULE_INTERVALS = [1, 5, 15, 30, 60, 360, 1440] as const;
+export type ImportExportScheduleInterval =
+  (typeof IMPORT_EXPORT_SCHEDULE_INTERVALS)[number];
+
+export type ImportExportScheduleState = {
+  enabled: boolean;
+  intervalMinutes: ImportExportScheduleInterval;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+};
+
+export const importExportScheduleIntervalSchema = z.coerce
+  .number()
+  .int()
+  .refine(
+    (value): value is ImportExportScheduleInterval =>
+      (IMPORT_EXPORT_SCHEDULE_INTERVALS as readonly number[]).includes(value),
+    { message: "Choose a valid schedule interval" },
+  );
+
+export const importExportScheduleFormSchema = z.object({
+  direction: importExportDirectionSchema,
+  enabled: z.boolean(),
+  intervalMinutes: importExportScheduleIntervalSchema,
+});
+
+export type ImportExportScheduleFormValues = z.infer<
+  typeof importExportScheduleFormSchema
+>;
+
 export const importExportVerifyRequestSchema = z
   .object({
     direction: importExportDirectionSchema,
@@ -395,6 +425,10 @@ export type ImportExportSettingsEditorData = {
   configuredSecrets: ImportExportSettingsConfiguredSecrets;
   verifyState: ImportExportSettingsVerifyState;
   savedSettings: ImportExportSettingsSavedState;
+  schedule: {
+    import: ImportExportScheduleState;
+    export: ImportExportScheduleState;
+  };
 };
 
 export function getDefaultImportExportSettingsPublicForm(): ImportExportSettingsPublicFormValues {
@@ -414,6 +448,29 @@ export function getDefaultImportExportSettingsPublicForm(): ImportExportSettings
     exportCustomUrl: "",
     exportCustomUsername: "",
   };
+}
+
+export function labelImportExportScheduleInterval(
+  minutes: ImportExportScheduleInterval,
+): string {
+  switch (minutes) {
+    case 1:
+      return "Every 1 minute";
+    case 5:
+      return "Every 5 minutes";
+    case 15:
+      return "Every 15 minutes";
+    case 30:
+      return "Every 30 minutes";
+    case 60:
+      return "Hourly";
+    case 360:
+      return "Every 6 hours";
+    case 1440:
+      return "Daily";
+    default:
+      return `Every ${minutes} minutes`;
+  }
 }
 
 export function getDefaultImportExportSettingsForm(): ImportExportSettingsFormValues {

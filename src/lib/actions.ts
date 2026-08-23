@@ -45,12 +45,17 @@ import {
 import { getImportExportSettingsEditorData } from "@/lib/import-export-settings";
 import {
   importExportSaveRequestSchema,
+  importExportScheduleFormSchema,
   importExportVerifyRequestSchema,
   normalizeGithubBranch,
   normalizeGithubPath,
   type ImportExportDirectionVerifyState,
   type ImportExportSettingsEditorData,
 } from "@/lib/validations/import-export";
+import {
+  createImportExportJob,
+  hasActiveImportExportJob,
+} from "@/lib/import-export/jobs";
 import {
   normalizeGithubRepoUrl,
   verifyImportExportSource,
@@ -2595,6 +2600,72 @@ export async function saveImportExportSettingsAction(
   }
 }
 
+export async function saveImportExportScheduleAction(
+  raw: unknown,
+): Promise<
+  | { ok: true; data: ImportExportSettingsEditorData }
+  | { ok: false; error: string }
+> {
+  try {
+    await requireImportExportManager();
+    const parsed = importExportScheduleFormSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid schedule",
+      };
+    }
+
+    const { direction, enabled, intervalMinutes } = parsed.data;
+    const isImport = direction === "import";
+    await connectDb();
+
+    const existing = await ImportExportSettings.findOne({
+      key: IMPORT_EXPORT_SETTINGS_KEY,
+    }).lean<ImportExportSettingsDocument | null>();
+
+    const wasEnabled = isImport
+      ? Boolean(existing?.importScheduleEnabled)
+      : Boolean(existing?.exportScheduleEnabled);
+
+    const update: Record<string, unknown> = {};
+    const now = new Date();
+    if (isImport) {
+      update.importScheduleEnabled = enabled;
+      update.importScheduleIntervalMinutes = intervalMinutes;
+      if (enabled) {
+        if (!wasEnabled || !existing?.importScheduleNextRunAt) {
+          update.importScheduleNextRunAt = now;
+        }
+      } else {
+        update.importScheduleNextRunAt = null;
+      }
+    } else {
+      update.exportScheduleEnabled = enabled;
+      update.exportScheduleIntervalMinutes = intervalMinutes;
+      if (enabled) {
+        if (!wasEnabled || !existing?.exportScheduleNextRunAt) {
+          update.exportScheduleNextRunAt = now;
+        }
+      } else {
+        update.exportScheduleNextRunAt = null;
+      }
+    }
+
+    await ImportExportSettings.findOneAndUpdate(
+      { key: IMPORT_EXPORT_SETTINGS_KEY },
+      { $set: update },
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+    );
+
+    revalidatePath("/admin/import-export", "page");
+    const data = await getImportExportSettingsEditorData();
+    return { ok: true, data };
+  } catch (error) {
+    return failAction(error, "Failed to save schedule");
+  }
+}
+
 export type CmsExportActionResult =
   | {
       ok: true;
@@ -2607,22 +2678,36 @@ export type CmsExportActionResult =
         markdownFiles: number;
         totalFiles: number;
       };
+      queued?: boolean;
     }
   | { ok: false; error: string };
 
 export async function runCmsExportAction(): Promise<CmsExportActionResult> {
   try {
-    await requireImportExportManager();
-    const { runCmsExportToGithub } = await import(
-      "@/lib/import-export/export/run-export"
-    );
-    const result = await runCmsExportToGithub();
+    const session = await requireImportExportManager();
+    if (await hasActiveImportExportJob("export")) {
+      return { ok: false, error: "Another export job is already active" };
+    }
+    await createImportExportJob({
+      kind: "export",
+      trigger: "manual",
+      requestedByUserId: session.user.id,
+      requestedByEmail: session.user.email,
+      requestedByName: session.user.name,
+    });
     revalidatePath("/admin/import-export", "page");
     return {
       ok: true,
-      commitSha: result.commitSha,
-      htmlUrl: result.htmlUrl,
-      stats: result.stats,
+      commitSha: "",
+      htmlUrl: "",
+      stats: {
+        categories: 0,
+        articles: 0,
+        mediaFiles: 0,
+        markdownFiles: 0,
+        totalFiles: 0,
+      },
+      queued: true,
     };
   } catch (error) {
     return {
@@ -2641,23 +2726,29 @@ export type CmsImportActionResult =
         mediaFiles: number;
         skippedPairs: number;
       };
+      queued?: boolean;
     }
   | { ok: false; error: string };
 
 export async function runCmsImportAction(): Promise<CmsImportActionResult> {
   try {
     const session = await requireImportExportManager();
-    const { runCmsImportFromGithub } = await import(
-      "@/lib/import-export/import/run-import"
-    );
-    const result = await runCmsImportFromGithub({
-      fallbackUserId: session.user.id,
+    if (await hasActiveImportExportJob("import")) {
+      return { ok: false, error: "Another import job is already active" };
+    }
+    await createImportExportJob({
+      kind: "import",
+      trigger: "manual",
+      requestedByUserId: session.user.id,
+      requestedByEmail: session.user.email,
+      requestedByName: session.user.name,
     });
-    await refreshPortal();
     revalidatePath("/admin/import-export", "page");
-    revalidatePath("/admin/articles", "page");
-    revalidatePath("/admin/categories", "page");
-    return { ok: true, stats: result.stats };
+    return {
+      ok: true,
+      stats: { categories: 0, articles: 0, mediaFiles: 0, skippedPairs: 0 },
+      queued: true,
+    };
   } catch (error) {
     return {
       ok: false,

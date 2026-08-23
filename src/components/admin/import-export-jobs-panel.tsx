@@ -1,0 +1,403 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { notifyAction } from "@/components/admin/admin-toast";
+import { TrashIcon } from "@/components/admin/admin-action-icons";
+import { IconActionButton } from "@/components/admin/icon-action-button";
+import { useImportExportJobsStream } from "@/components/admin/use-import-export-jobs-stream";
+import { useConfirm } from "@/components/admin/use-confirm";
+import type { AdminImportExportJob } from "@/lib/import-export/jobs-shared";
+import {
+  IMPORT_EXPORT_JOBS_DEFAULT_PAGE_SIZE,
+  IMPORT_EXPORT_JOBS_PAGE_SIZES,
+  type ImportExportJobsPage,
+  type ImportExportJobsPageSize,
+} from "@/lib/import-export/jobs-shared";
+
+type SettingsSummary = {
+  source: string;
+  isConfigured: boolean;
+  isVerified: boolean;
+  repoUrl: string;
+  branch: string;
+  syncRoot: string;
+};
+
+type Props = {
+  kind: "import" | "export";
+  settings: SettingsSummary;
+  initialPage: ImportExportJobsPage;
+};
+
+function formatDate(value: string | null) {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("vi-VN");
+}
+
+function statusClass(status: string) {
+  if (status === "succeeded") return "text-green-700";
+  if (status === "failed") return "text-red-700";
+  if (status === "cancelled") return "text-gray-500";
+  if (status === "running") return "text-amber-700";
+  return "text-gray-600";
+}
+
+function triggerLabel(trigger: string) {
+  return trigger === "scheduled" ? "Scheduled" : "Manual";
+}
+
+async function readPayload(
+  response: Response,
+): Promise<{ error?: string; job?: AdminImportExportJob }> {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return (await response.json()) as { error?: string; job?: AdminImportExportJob };
+  }
+  const text = (await response.text()).trim();
+  return { error: text || undefined };
+}
+
+function pageNumbers(current: number, total: number): number[] {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+  const pages = new Set<number>([1, total, current - 1, current, current + 1]);
+  return [...pages]
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b);
+}
+
+export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
+  const [page, setPage] = useState(initialPage.page);
+  const [pageSize, setPageSize] = useState<ImportExportJobsPageSize>(
+    (initialPage.pageSize as ImportExportJobsPageSize) ||
+      IMPORT_EXPORT_JOBS_DEFAULT_PAGE_SIZE,
+  );
+  const { jobs, total, totalPages, setData } = useImportExportJobsStream(
+    kind,
+    initialPage,
+    page,
+    pageSize,
+  );
+  const [pending, setPending] = useState(false);
+  const [actionJobId, setActionJobId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { ask, modal } = useConfirm();
+
+  const canRun =
+    settings.source === "github" && settings.isConfigured && settings.isVerified;
+
+  const hasActive = useMemo(
+    () => jobs.some((job) => job.status === "queued" || job.status === "running"),
+    [jobs],
+  );
+
+  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, total);
+
+  async function onRunJob() {
+    setError(null);
+    setPending(true);
+    try {
+      const response = await fetch("/api/admin/import-export/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind }),
+      });
+      const payload = await readPayload(response);
+      if (!response.ok) {
+        setError(payload.error ?? `Failed to queue ${kind} job`);
+        return;
+      }
+      if (payload.job && page === 1) {
+        setData((current) => ({
+          ...current,
+          jobs: [
+            payload.job!,
+            ...current.jobs.filter((job) => job.id !== payload.job!.id),
+          ].slice(0, pageSize),
+          total: current.total + 1,
+        }));
+      }
+      notifyAction(
+        { ok: true },
+        kind === "import" ? "Import job queued" : "Export job queued",
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function confirmDeleteJob(job: AdminImportExportJob) {
+    const jobLabel = kind === "import" ? "import job" : "export job";
+    const confirmed = await ask({
+      title: `Delete ${jobLabel}?`,
+      message: `Remove this ${triggerLabel(job.trigger).toLowerCase()} ${jobLabel} from ${formatDate(job.createdAt)}? This cannot be undone.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
+    setActionJobId(job.id);
+    try {
+      await deleteJob(job.id);
+    } finally {
+      setActionJobId(null);
+    }
+  }
+
+  async function deleteJob(jobId: string) {
+    const response = await fetch(`/api/admin/import-export/jobs/${jobId}`, {
+      method: "DELETE",
+    });
+    const payload = (await response.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    if (!response.ok) {
+      notifyAction(
+        { ok: false, error: payload.error || "Failed to delete job" },
+        "",
+      );
+      return;
+    }
+    if (jobs.length === 1 && page > 1) {
+      setPage(page - 1);
+    } else {
+      setData((current) => ({
+        ...current,
+        jobs: current.jobs.filter((job) => job.id !== jobId),
+        total: Math.max(0, current.total - 1),
+        totalPages: Math.max(
+          1,
+          Math.ceil(Math.max(0, current.total - 1) / pageSize),
+        ),
+      }));
+    }
+    notifyAction({ ok: true }, "Job deleted");
+  }
+
+  const title = kind === "import" ? "Import jobs" : "Export jobs";
+  const runLabel =
+    pending ? "Queueing…" : hasActive ? "Job in progress…" : kind === "import" ? "Run import" : "Run export";
+  const description =
+    kind === "import"
+      ? "Sync categories, articles, and media from GitHub into MongoDB."
+      : "Commit CMS content from MongoDB to GitHub as Markdown.";
+
+  return (
+    <>
+      <div className="mt-8">
+      <section className="rounded-lg border border-gray-200 bg-white">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            <p className="mt-1 text-sm text-gray-600">{description}</p>
+            {settings.isConfigured ? (
+              <p className="mt-2 truncate font-mono text-xs text-gray-500">
+                {settings.repoUrl || "—"}
+                {settings.branch ? `@${settings.branch}` : ""}
+                {settings.syncRoot ? ` · ${settings.syncRoot}` : ""}
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            disabled={!canRun || pending || hasActive}
+            onClick={() => void onRunJob()}
+            className="shrink-0 rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
+          >
+            {runLabel}
+          </button>
+        </div>
+
+        {!settings.isConfigured ? (
+          <p className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+            Configure {kind} on the{" "}
+            <Link href="/admin/import-export" className="underline">
+              Settings
+            </Link>{" "}
+            tab first.
+          </p>
+        ) : null}
+
+        {settings.isConfigured && !settings.isVerified ? (
+          <p className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+            Verify the {kind} connection on the Settings tab before running jobs.
+          </p>
+        ) : null}
+
+        {settings.source !== "github" ? (
+          <p className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+            Custom URL {kind} is not supported yet. Switch to GitHub in Settings.
+          </p>
+        ) : null}
+
+        {error ? (
+          <p className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm text-red-700">
+            {error}
+          </p>
+        ) : null}
+
+        {jobs.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-gray-600">No jobs yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Created</th>
+                  <th className="px-4 py-3 font-medium">Trigger</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Details</th>
+                  <th className="px-4 py-3 font-medium">Requested by</th>
+                  <th className="px-4 py-3 text-right font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => (
+                  <tr key={job.id} className="border-t border-gray-100 align-top">
+                    <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                      {formatDate(job.createdAt)}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">{triggerLabel(job.trigger)}</td>
+                    <td className={`px-4 py-3 font-medium ${statusClass(job.status)}`}>
+                      <div>{job.status}</div>
+                      {job.phase ? (
+                        <div className="text-xs font-normal text-gray-500">{job.phase}</div>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700">
+                      <div>{job.error || job.message || "—"}</div>
+                      {job.kind === "export" && job.htmlUrl ? (
+                        <a
+                          href={job.htmlUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-block text-xs font-medium underline"
+                        >
+                          View commit
+                        </a>
+                      ) : null}
+                      {job.stats ? (
+                        <div className="mt-1 text-xs text-gray-500">
+                          {Object.entries(job.stats)
+                            .map(([entryKey, value]) => `${entryKey}: ${String(value)}`)
+                            .join(" · ")}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      <div>{job.requestedByName || "—"}</div>
+                      <div className="text-xs">{job.requestedByEmail}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {job.status !== "running" ? (
+                        <IconActionButton
+                          label={
+                            actionJobId === job.id ? "Deleting job" : "Delete job"
+                          }
+                          variant="danger"
+                          disabled={actionJobId === job.id}
+                          onClick={() => void confirmDeleteJob(job)}
+                        >
+                          <TrashIcon />
+                        </IconActionButton>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {total > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 px-5 py-4">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+              <span>
+                Showing {rangeStart}–{rangeEnd} of {total}
+              </span>
+              <label className="flex items-center gap-2">
+                <span>Rows</span>
+                <select
+                  value={pageSize}
+                  onChange={(event) => {
+                    setPageSize(Number(event.target.value) as ImportExportJobsPageSize);
+                    setPage(1);
+                  }}
+                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm"
+                >
+                  {IMPORT_EXPORT_JOBS_PAGE_SIZES.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {totalPages > 1 ? (
+              <nav
+                className="flex flex-wrap items-center gap-1"
+                aria-label={`${title} pagination`}
+              >
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  className="rounded border border-gray-300 px-3 py-1.5 text-sm disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                {pageNumbers(page, totalPages)
+                  .reduce<Array<number | "gap">>((acc, pageNumber, index, list) => {
+                    if (index > 0 && pageNumber - list[index - 1]! > 1) {
+                      acc.push("gap");
+                    }
+                    acc.push(pageNumber);
+                    return acc;
+                  }, [])
+                  .map((item, index) =>
+                    item === "gap" ? (
+                      <span key={`gap-${index}`} className="px-1 text-sm text-gray-400">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        aria-current={item === page ? "page" : undefined}
+                        onClick={() => setPage(item)}
+                        className={`rounded border px-3 py-1.5 text-sm ${
+                          item === page
+                            ? "border-gray-900 bg-gray-900 text-white"
+                            : "border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    ),
+                  )}
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages, current + 1))
+                  }
+                  className="rounded border border-gray-300 px-3 py-1.5 text-sm disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </nav>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+      </div>
+      {modal}
+    </>
+  );
+}

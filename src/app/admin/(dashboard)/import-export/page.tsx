@@ -1,10 +1,14 @@
+import { connection } from "next/server";
 import { AdminRouteTabs } from "@/components/admin/admin-route-tabs";
-import { ExportJobsPanel } from "@/components/admin/export-jobs-panel";
-import { ImportJobsPanel } from "@/components/admin/import-jobs-panel";
+import { ImportExportJobsPanel } from "@/components/admin/import-export-jobs-panel";
 import { ImportExportSettingsEditor } from "@/components/admin/import-export-settings-editor";
 import { requireImportExportPage } from "@/lib/admin-access";
 import { getExportSettingsSummary } from "@/lib/import-export/export/load-export-config";
 import { getImportSettingsSummary } from "@/lib/import-export/import/load-import-config";
+import {
+  IMPORT_EXPORT_JOBS_DEFAULT_PAGE_SIZE,
+  listImportExportJobsPage,
+} from "@/lib/import-export/jobs";
 import { getImportExportSettingsEditorData } from "@/lib/import-export-settings";
 import type { ImportExportSettingsEditorData } from "@/lib/validations/import-export";
 
@@ -36,6 +40,10 @@ function editorInstanceKey(data: ImportExportSettingsEditorData): string {
     data.savedSettings.export.updatedAt ?? "",
     data.savedSettings.import.isConfigured ? "1" : "0",
     data.savedSettings.export.isConfigured ? "1" : "0",
+    data.schedule.import.enabled ? "1" : "0",
+    data.schedule.export.enabled ? "1" : "0",
+    data.schedule.import.intervalMinutes,
+    data.schedule.export.intervalMinutes,
   ].join(":");
 }
 
@@ -46,6 +54,7 @@ function resolveTab(tab: string | undefined): TabId {
 
 export default async function AdminImportExportPage({ searchParams }: Props) {
   await requireImportExportPage();
+  await connection();
 
   const { tab } = await searchParams;
   const activeTab = resolveTab(tab);
@@ -57,6 +66,22 @@ export default async function AdminImportExportPage({ searchParams }: Props) {
     activeTab === "export" ? await getExportSettingsSummary() : null;
   const importSettings =
     activeTab === "import" ? await getImportSettingsSummary() : null;
+  const importJobsPage =
+    activeTab === "import"
+      ? await listImportExportJobsPage(
+          "import",
+          1,
+          IMPORT_EXPORT_JOBS_DEFAULT_PAGE_SIZE,
+        )
+      : null;
+  const exportJobsPage =
+    activeTab === "export"
+      ? await listImportExportJobsPage(
+          "export",
+          1,
+          IMPORT_EXPORT_JOBS_DEFAULT_PAGE_SIZE,
+        )
+      : null;
 
   return (
     <div>
@@ -64,12 +89,22 @@ export default async function AdminImportExportPage({ searchParams }: Props) {
 
       <AdminRouteTabs tabs={[...TABS]} active={activeTab} />
 
-      {activeTab === "import" && importSettings ? (
-        <ImportJobsPanel settings={importSettings} />
+      {activeTab === "import" && importSettings && importJobsPage ? (
+        <ImportExportJobsPanel
+          key="import-jobs"
+          kind="import"
+          settings={importSettings}
+          initialPage={importJobsPage}
+        />
       ) : null}
 
-      {activeTab === "export" && exportSettings ? (
-        <ExportJobsPanel settings={exportSettings} />
+      {activeTab === "export" && exportSettings && exportJobsPage ? (
+        <ImportExportJobsPanel
+          key="export-jobs"
+          kind="export"
+          settings={exportSettings}
+          initialPage={exportJobsPage}
+        />
       ) : null}
 
       {activeTab === "settings" && settingsData ? (

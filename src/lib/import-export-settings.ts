@@ -11,10 +11,13 @@ import {
   getDefaultVerifyState,
   type ImportExportDirectionSavedSettings,
   type ImportExportDirectionVerifyState,
+  type ImportExportScheduleInterval,
+  type ImportExportScheduleState,
   type ImportExportSettingsEditorData,
   type ImportExportSettingsPublicFormValues,
   type ImportExportSettingsSavedState,
   type ImportExportVerifyStatus,
+  IMPORT_EXPORT_SCHEDULE_INTERVALS,
 } from "@/lib/validations/import-export";
 import {
   IMPORT_EXPORT_SETTINGS_KEY,
@@ -86,6 +89,52 @@ function toDirectionSavedSettings(
     customPasswordConfigured: isImport
       ? Boolean(doc.importCustomPassword)
       : Boolean(doc.exportCustomPassword),
+  };
+}
+
+function normalizeScheduleInterval(value: unknown): ImportExportScheduleInterval {
+  const n = Number(value);
+  if ((IMPORT_EXPORT_SCHEDULE_INTERVALS as readonly number[]).includes(n)) {
+    return n as ImportExportScheduleInterval;
+  }
+  return 60;
+}
+
+function toDirectionSchedule(
+  doc: ImportExportSettingsDocument | null,
+  direction: "import" | "export",
+): ImportExportScheduleState {
+  if (!doc) {
+    return {
+      enabled: false,
+      intervalMinutes: 60,
+      nextRunAt: null,
+      lastRunAt: null,
+    };
+  }
+
+  const isImport = direction === "import";
+  const nextRaw = isImport ? doc.importScheduleNextRunAt : doc.exportScheduleNextRunAt;
+  const lastRaw = isImport ? doc.importScheduleLastRunAt : doc.exportScheduleLastRunAt;
+
+  return {
+    enabled: isImport
+      ? Boolean(doc.importScheduleEnabled)
+      : Boolean(doc.exportScheduleEnabled),
+    intervalMinutes: normalizeScheduleInterval(
+      isImport ? doc.importScheduleIntervalMinutes : doc.exportScheduleIntervalMinutes,
+    ),
+    nextRunAt: nextRaw ? new Date(nextRaw).toISOString() : null,
+    lastRunAt: lastRaw ? new Date(lastRaw).toISOString() : null,
+  };
+}
+
+function toScheduleState(
+  doc: ImportExportSettingsDocument | null,
+): ImportExportSettingsEditorData["schedule"] {
+  return {
+    import: toDirectionSchedule(doc, "import"),
+    export: toDirectionSchedule(doc, "export"),
   };
 }
 
@@ -171,15 +220,32 @@ export async function getImportExportSettingsEditorData(): Promise<ImportExportS
       configuredSecrets: getDefaultConfiguredSecrets(),
       verifyState: getDefaultVerifyState(),
       savedSettings: getDefaultSavedSettings(),
+      schedule: toScheduleState(null),
     };
   }
 
-  const verifiedDoc = await autoVerifyImportExportSettings(doc);
-
   return {
-    form: toPublicFormValues(verifiedDoc),
-    configuredSecrets: toConfiguredSecrets(verifiedDoc),
-    verifyState: toVerifyState(verifiedDoc),
-    savedSettings: toSavedSettings(verifiedDoc),
+    form: toPublicFormValues(doc),
+    configuredSecrets: toConfiguredSecrets(doc),
+    verifyState: toVerifyState(doc),
+    savedSettings: toSavedSettings(doc),
+    schedule: toScheduleState(doc),
   };
+}
+
+export async function refreshImportExportVerifyState(): Promise<
+  ImportExportSettingsEditorData["verifyState"]
+> {
+  noStore();
+  await connectDb();
+  const doc = await ImportExportSettings.findOne({
+    key: IMPORT_EXPORT_SETTINGS_KEY,
+  }).lean<ImportExportSettingsDocument | null>();
+
+  if (!doc) {
+    return getDefaultVerifyState();
+  }
+
+  const verifiedDoc = await autoVerifyImportExportSettings(doc);
+  return toVerifyState(verifiedDoc);
 }

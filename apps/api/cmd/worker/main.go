@@ -14,6 +14,7 @@ import (
 	"github.com/varc-vietnam/varc-portal/apps/api/internal/worker"
 	"github.com/varc-vietnam/varc-portal/apps/api/internal/worker/backup"
 	emailworker "github.com/varc-vietnam/varc-portal/apps/api/internal/worker/email"
+	importexportworker "github.com/varc-vietnam/varc-portal/apps/api/internal/worker/importexport"
 )
 
 func main() {
@@ -25,7 +26,7 @@ func main() {
 		log.Fatal("MONGODB_URI is required")
 	}
 	workerID := cfg.WorkerID
-	log.Printf("starting — id=%s email_poll=%s backup_poll=%s", workerID, cfg.EmailPoll, cfg.BackupPoll)
+	log.Printf("starting — id=%s email_poll=%s backup_poll=%s import_export_poll=%s", workerID, cfg.EmailPoll, cfg.BackupPoll, cfg.ImportExportPoll)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -57,6 +58,14 @@ func main() {
 	emailProc := &emailworker.Processor{DB: db, Valkey: valkeyClient, Config: cfg}
 	backupStore := &backup.JobStore{DB: db}
 	backupProc := backup.NewProcessor(backupStore, cfg, valkeyClient)
+	importExportStore := &importexportworker.JobStore{DB: db}
+	importExportProc := importexportworker.NewProcessor(importExportStore, cfg.PortalInternalURL, cfg.WorkerInternalSecret)
+
+	if cfg.WorkerInternalSecret == "" {
+		log.Printf("import-export-worker: WORKER_INTERNAL_SECRET/AUTH_SECRET unset; import/export jobs disabled")
+	} else {
+		log.Printf("import-export-worker: portal=%s", cfg.PortalInternalURL)
+	}
 
 	go worker.RunPollLoop(ctx, "email-worker", cfg.EmailPoll, func(loopCtx context.Context) {
 		emailProc.FailStale(loopCtx)
@@ -87,6 +96,24 @@ func main() {
 		backupProc.Process(loopCtx, job)
 		log.Printf("[backup-worker] job %s done", job.ID.Hex())
 	})
+
+	if cfg.WorkerInternalSecret != "" {
+		go worker.RunPollLoop(ctx, "import-export-worker", cfg.ImportExportPoll, func(loopCtx context.Context) {
+			importExportStore.FailStale(loopCtx, 2*time.Hour)
+			importExportProc.ProcessDueSchedules(loopCtx)
+			job, err := importExportStore.ClaimNext(loopCtx, workerID)
+			if err != nil {
+				log.Printf("[import-export-worker] claim error: %v", err)
+				return
+			}
+			if job == nil {
+				return
+			}
+			log.Printf("[import-export-worker] picked up job %s kind=%s trigger=%s", job.ID.Hex(), job.Kind, job.Trigger)
+			importExportProc.Process(loopCtx, job)
+			log.Printf("[import-export-worker] job %s done", job.ID.Hex())
+		})
+	}
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)

@@ -13,9 +13,12 @@ type WorkerConfig struct {
 	ValkeyPassword   string
 	EmailPoll        time.Duration
 	BackupPoll       time.Duration
+	ImportExportPoll time.Duration
 	WorkerID         string
 	AppVersion       string
 	PublicBaseURL    string
+	PortalInternalURL string
+	WorkerInternalSecret string
 	CloudflareMail   CloudflareMailConfig
 	MailRateLimit    MailRateLimitConfig
 	Storage          StorageConfig
@@ -72,6 +75,12 @@ func LoadWorker() WorkerConfig {
 			backupPoll = ms
 		}
 	}
+	importExportPoll := parseDuration(os.Getenv("IMPORT_EXPORT_WORKER_POLL_MS"), 15*time.Second)
+	if strings.TrimSpace(os.Getenv("IMPORT_EXPORT_WORKER_POLL_MS")) != "" {
+		if ms, err := time.ParseDuration(strings.TrimSpace(os.Getenv("IMPORT_EXPORT_WORKER_POLL_MS")) + "ms"); err == nil && ms >= 5*time.Second {
+			importExportPoll = ms
+		}
+	}
 
 	cfToken := strings.TrimSpace(os.Getenv("CF_MAIL_API_TOKEN"))
 	cfAccount := strings.TrimSpace(os.Getenv("CF_MAIL_ACCOUNT_ID"))
@@ -85,10 +94,13 @@ func LoadWorker() WorkerConfig {
 		ValkeyURL:      strings.TrimSpace(os.Getenv("VALKEY_URL")),
 		ValkeyPassword: strings.TrimSpace(os.Getenv("VALKEY_PASSWORD")),
 		WorkerID:       resolveWorkerID(),
-		EmailPoll:      emailPoll,
-		BackupPoll:     backupPoll,
-		AppVersion:     resolveAppVersion(),
-		PublicBaseURL:  resolvePublicBaseURL(),
+		EmailPoll:            emailPoll,
+		BackupPoll:           backupPoll,
+		ImportExportPoll:     importExportPoll,
+		AppVersion:           resolveAppVersion(),
+		PublicBaseURL:        resolvePublicBaseURL(),
+		PortalInternalURL:    resolvePortalInternalURL(),
+		WorkerInternalSecret: resolveWorkerInternalSecret(),
 		CloudflareMail: CloudflareMailConfig{
 			APIToken:   cfToken,
 			AccountID:  cfAccount,
@@ -237,4 +249,20 @@ func resolveWorkerID() string {
 		hostname = "worker"
 	}
 	return fmt.Sprintf("%s:%d", hostname, os.Getpid())
+}
+
+func resolvePortalInternalURL() string {
+	for _, key := range []string{"PORTAL_INTERNAL_URL", "AUTH_URL", "NEXTAUTH_URL", "NEXT_PUBLIC_SITE_URL"} {
+		if v := strings.TrimSuffix(strings.TrimSpace(os.Getenv(key)), "/"); v != "" {
+			return v
+		}
+	}
+	return "http://localhost:3099"
+}
+
+func resolveWorkerInternalSecret() string {
+	if v := strings.TrimSpace(os.Getenv("WORKER_INTERNAL_SECRET")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(os.Getenv("AUTH_SECRET"))
 }
