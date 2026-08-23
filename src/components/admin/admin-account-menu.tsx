@@ -73,7 +73,7 @@ export function AdminAccountMenu({
           )}
           <svg
             viewBox="0 0 16 16"
-            className={`h-3.5 w-3.5 shrink-0 text-gray-500 transition ${open ? "rotate-180" : ""}`}
+            className={`h-3.5 w-3.5 shrink-0 text-gray-500 transition-transform duration-300 ease-in-out motion-reduce:transition-none ${open ? "rotate-180" : ""}`}
             aria-hidden
             fill="none"
             stroke="currentColor"
@@ -90,7 +90,7 @@ export function AdminAccountMenu({
         <DropdownMenu.Content
           align="end"
           sideOffset={8}
-          className="z-50 min-w-[14rem] rounded-md border border-gray-200 bg-white p-1 shadow-md outline-none"
+          className="admin-account-menu-content z-50 min-w-[14rem] origin-top-right rounded-md border border-gray-200 bg-white p-1 shadow-md outline-none"
         >
           <div className="border-b border-gray-200 px-3 py-2">
             <p className="truncate text-sm font-medium text-gray-900">

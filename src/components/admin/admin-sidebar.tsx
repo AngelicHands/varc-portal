@@ -342,11 +342,29 @@ export function AdminSidebar({
 
   const showLabels = expanded || mobileOpen;
 
+  const collapseToggleButton = (
+    <button
+      type="button"
+      onClick={toggleExpanded}
+      className="flex w-full cursor-pointer items-center justify-center rounded-md py-2 text-gray-400 transition-colors duration-300 ease-in-out hover:bg-gray-50 hover:text-gray-600"
+      aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+      title={expanded ? "Collapse" : "Expand"}
+    >
+      <Icon
+        className={`h-4 w-4 transition-transform duration-300 ease-in-out motion-reduce:transition-none ${
+          expanded ? "rotate-0" : "rotate-180"
+        }`}
+      >
+        <path d="M15 6 9 12l6 6" />
+      </Icon>
+    </button>
+  );
+
   const nav = (
     <div className="flex h-full flex-col">
       <div
         className={`flex h-14 items-center border-b border-gray-200 px-3 ${
-          showLabels ? "justify-between gap-2" : "justify-center"
+          showLabels ? "justify-between gap-2 lg:justify-start" : "justify-center lg:hidden"
         }`}
       >
         {showLabels ? (
@@ -358,17 +376,6 @@ export function AdminSidebar({
             VARC Admin
           </Link>
         ) : null}
-        <button
-          type="button"
-          onClick={toggleExpanded}
-          className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-gray-200 text-gray-600 transition-colors duration-300 ease-in-out hover:bg-gray-50 lg:inline-flex"
-          aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-          title={expanded ? "Collapse" : "Expand"}
-        >
-          <Icon className={`transition-transform duration-300 ease-in-out motion-reduce:transition-none ${expanded ? "rotate-0" : "rotate-180"}`}>
-            <path d="M15 6 9 12l6 6" />
-          </Icon>
-        </button>
         <button
           type="button"
           onClick={() => setMobileOpen(false)}
@@ -439,6 +446,10 @@ export function AdminSidebar({
           </div>
         ))}
       </nav>
+
+      <div className="hidden shrink-0 border-t border-gray-200 lg:block">
+        {collapseToggleButton}
+      </div>
     </div>
   );
 

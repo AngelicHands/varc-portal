@@ -576,3 +576,18 @@ body.ham-map-view main {
 .ham-map-popup--dark .maplibregl-popup-close-button {
   color: #fafafa;
 }
+
+.admin-account-menu-content[data-state="open"] {
+  animation: adminDropdownIn 300ms ease-in-out;
+}
+
+.admin-account-menu-content[data-state="closed"] {
+  animation: adminDropdownOut 300ms ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-account-menu-content[data-state="open"],
+  .admin-account-menu-content[data-state="closed"] {
+    animation: none;
+  }
+}
