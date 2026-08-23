@@ -34,8 +34,10 @@ import {
   isFuturePublishAt,
   isScheduledPublish,
   nowIso,
+  PORTAL_TIMEZONE,
   toDatetimeLocalValue,
 } from "@/lib/datetime-local";
+import { useArticleAutosave } from "@/hooks/use-article-autosave";
 
 type CategoryOption = { id: string; label: string; depth?: number };
 
@@ -59,6 +61,64 @@ type PublishFieldErrors = {
   content?: string;
 };
 
+function formatAutosaveTime(value: Date) {
+  return value.toLocaleTimeString("vi-VN", {
+    timeZone: PORTAL_TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function ArticleAutosaveStatus({
+  saveState,
+  lastSavedAt,
+  saveError,
+  isDirty,
+  onRetry,
+}: {
+  saveState: "idle" | "saving" | "saved" | "error";
+  lastSavedAt: Date | null;
+  saveError: string | null;
+  isDirty: boolean;
+  onRetry: () => void;
+}) {
+  if (saveState === "saving") {
+    return <span className="text-sm text-gray-500">Saving…</span>;
+  }
+
+  if (saveState === "error") {
+    return (
+      <span className="inline-flex items-center gap-2 text-sm text-red-600">
+        Auto-save failed
+        <button
+          type="button"
+          onClick={onRetry}
+          className="underline underline-offset-2 hover:text-red-800"
+        >
+          Retry
+        </button>
+        {saveError ? (
+          <span className="sr-only">{saveError}</span>
+        ) : null}
+      </span>
+    );
+  }
+
+  if (saveState === "saved" && lastSavedAt) {
+    return (
+      <span className="text-sm text-gray-500">
+        Saved {formatAutosaveTime(lastSavedAt)}
+      </span>
+    );
+  }
+
+  if (isDirty) {
+    return <span className="text-sm text-amber-700">Unsaved changes</span>;
+  }
+
+  return null;
+}
+
 export function ArticleEditor({
   articleId,
   heading,
@@ -78,6 +138,22 @@ export function ArticleEditor({
   const asideExpanded = useArticleSectionAsideExpanded();
   const titleInputRef = useRef<HTMLInputElement>(null);
   const contentFieldRef = useRef<HTMLDivElement>(null);
+
+  const {
+    articleId: savedArticleId,
+    saveState,
+    lastSavedAt,
+    saveError,
+    isDirty,
+    flushSave,
+    syncSavedSnapshot,
+  } = useArticleAutosave({
+    initialArticleId: articleId,
+    form,
+    initialForm: initial,
+  });
+
+  const resolvedArticleId = savedArticleId ?? articleId;
 
   const publishedIsScheduled = isFuturePublishAt(form.publishedAt, now);
 
@@ -156,11 +232,12 @@ export function ArticleEditor({
         status === "published"
           ? form.publishedAt ?? nowIso()
           : form.publishedAt;
-      const result = await saveArticleAction(articleId ?? null, {
+      const payload = {
         ...form,
         status,
         publishedAt: nextPublishedAt,
-      });
+      };
+      const result = await saveArticleAction(resolvedArticleId ?? null, payload);
       const scheduled = isScheduledPublish(status, nextPublishedAt);
       if (
         !notifyAction(
@@ -175,13 +252,14 @@ export function ArticleEditor({
         setError(result.error);
         return;
       }
+      syncSavedSnapshot(payload);
       router.push(`/admin/articles/${result.id}`);
       router.refresh();
     });
   }
 
   async function onDelete() {
-    if (!articleId) return;
+    if (!resolvedArticleId) return;
     const confirmed = await ask({
       title: "Move to trash",
       message: "Move this article to trash?",
@@ -190,7 +268,7 @@ export function ArticleEditor({
     });
     if (!confirmed) return;
     startTransition(async () => {
-      const result = await deleteArticleAction(articleId);
+      const result = await deleteArticleAction(resolvedArticleId);
       if (!notifyAction(result, "Moved to trash")) {
         setError(result.error);
         return;
@@ -201,10 +279,10 @@ export function ArticleEditor({
   }
 
   function onClone() {
-    if (!articleId) return;
+    if (!resolvedArticleId) return;
     setError(null);
     startTransition(async () => {
-      const result = await cloneArticleAction(articleId);
+      const result = await cloneArticleAction(resolvedArticleId);
       if (!notifyAction(result, "Article cloned as draft")) {
         setError(result.error);
         return;
@@ -436,11 +514,20 @@ export function ArticleEditor({
         }`}
       >
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-semibold">{heading}</h1>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-2xl font-semibold">{heading}</h1>
+              <ArticleAutosaveStatus
+                saveState={saveState}
+                lastSavedAt={lastSavedAt}
+                saveError={saveError}
+                isDirty={isDirty}
+                onRetry={flushSave}
+              />
+            </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {articleId ? (
+              {resolvedArticleId ? (
                 <a
-                  href={`/${tab}/news/preview/${articleId}`}
+                  href={`/${tab}/news/preview/${resolvedArticleId}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mr-1 inline-flex items-center gap-1.5 text-sm text-gray-700 underline-offset-2 hover:text-gray-900 hover:underline"
@@ -476,7 +563,7 @@ export function ArticleEditor({
                 <PublishIcon />
                 Publish
               </button>
-              {articleId ? (
+              {resolvedArticleId ? (
                 <>
                   <IconActionButton
                     label="Clone as draft"

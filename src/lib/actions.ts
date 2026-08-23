@@ -27,9 +27,11 @@ import {
   UNCATEGORIZED_KEY,
 } from "@/lib/soft-delete";
 import {
+  articleAutoSaveSchema,
   articleFormSchema,
   categoryFormSchema,
   createUserSchema,
+  hasMinimalArticleContent,
   menuItemFormSchema,
   pageFormSchema,
   reorderCategoriesSchema,
@@ -37,6 +39,7 @@ import {
   roleFormSchema,
   siteSettingsFormSchema,
   updateAdminUserSchema,
+  type ArticleAutoSaveValues,
 } from "@/lib/validations/article";
 import {
   FORM_SUBMISSION_STATUSES,
@@ -278,6 +281,138 @@ async function pageSlugTaken(
   return Boolean(await Page.exists(filter));
 }
 
+function normalizeArticleCategoryIds(categoryIds: string[]) {
+  return categoryIds
+    .filter((value) => mongoose.isValidObjectId(value))
+    .map((value) => new mongoose.Types.ObjectId(value));
+}
+
+function normalizeArticleTags(tags: string[]) {
+  return Array.from(
+    new Map(
+      tags
+        .map((tag) => tag.trim().replace(/\s+/g, " "))
+        .filter(Boolean)
+        .map((tag) => [tag.toLowerCase(), tag] as const),
+    ).values(),
+  );
+}
+
+async function buildArticleLocales(
+  data: Pick<ArticleAutoSaveValues, "locales">,
+  id: string | null,
+) {
+  const viTitle = data.locales.vi.title.trim();
+  const enTitle = data.locales.en.title.trim();
+
+  return {
+    vi: {
+      title: viTitle,
+      slug: viTitle
+        ? await uniqueSlugFromTitle(viTitle, (slug) =>
+            articleSlugTaken("vi", slug, id),
+          )
+        : "",
+      excerpt: data.locales.vi.excerpt.trim(),
+      content: data.locales.vi.content,
+      metaTitle: data.locales.vi.metaTitle.trim(),
+      metaDescription: data.locales.vi.metaDescription.trim(),
+    },
+    en: {
+      title: enTitle,
+      slug: enTitle
+        ? await uniqueSlugFromTitle(enTitle, (slug) =>
+            articleSlugTaken("en", slug, id),
+          )
+        : "",
+      excerpt: data.locales.en.excerpt.trim(),
+      content: data.locales.en.content,
+      metaTitle: data.locales.en.metaTitle.trim(),
+      metaDescription: data.locales.en.metaDescription.trim(),
+    },
+  };
+}
+
+function buildArticleContentPatch(
+  data: ArticleAutoSaveValues,
+  locales: Awaited<ReturnType<typeof buildArticleLocales>>,
+  categoryIds: mongoose.Types.ObjectId[],
+  tags: string[],
+) {
+  return {
+    featured: data.featured,
+    coverImageUrl: data.coverImageUrl.trim(),
+    coverImageFocus: normalizeCoverFocus(data.coverImageFocus),
+    ogImageUrl: data.ogImageUrl.trim(),
+    categoryIds,
+    tags,
+    locales,
+  };
+}
+
+export async function autoSaveArticleAction(
+  id: string | null,
+  raw: unknown,
+): Promise<
+  { ok: true; id: string; savedAt: string } | { ok: false; error: string }
+> {
+  try {
+    const session = await requireArticleManager();
+    const parsed = articleAutoSaveSchema.safeParse(raw);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
+    }
+
+    const data = parsed.data;
+    await connectDb();
+
+    if (!id && !hasMinimalArticleContent(data)) {
+      return { ok: false, error: "Nothing to save yet" };
+    }
+
+    const locales = await buildArticleLocales(data, id);
+    const categoryIds = normalizeArticleCategoryIds(data.categoryIds);
+    const tags = normalizeArticleTags(data.tags);
+    const savedAt = new Date().toISOString();
+
+    if (id) {
+      const existing = await Article.findOne({ _id: id, ...notDeletedFilter });
+      if (!existing) return { ok: false, error: "Article not found" };
+
+      Object.assign(
+        existing,
+        buildArticleContentPatch(data, locales, categoryIds, tags),
+      );
+      if (data.createdAt) {
+        existing.set("createdAt", new Date(data.createdAt));
+      }
+      await existing.save();
+      return { ok: true, id: String(existing._id), savedAt };
+    }
+
+    const created = await Article.create({
+      status: "draft",
+      featured: data.featured,
+      coverImageUrl: data.coverImageUrl.trim(),
+      coverImageFocus: normalizeCoverFocus(data.coverImageFocus),
+      ogImageUrl: data.ogImageUrl.trim(),
+      categoryIds,
+      tags,
+      locales,
+      authorId: session.user.id,
+      publishedAt: null,
+      ...(data.createdAt ? { createdAt: new Date(data.createdAt) } : {}),
+    });
+    return { ok: true, id: String(created._id), savedAt };
+  } catch (error) {
+    const failed = failAction(error, "Failed to auto-save article");
+    if (failed.error === "A duplicate value already exists") {
+      return { ok: false, error: "Slug already exists for a locale" };
+    }
+    return failed;
+  }
+}
+
 export async function saveArticleAction(
   id: string | null,
   raw: unknown,
@@ -292,48 +427,9 @@ export async function saveArticleAction(
     const data = parsed.data;
     await connectDb();
 
-    const viTitle = data.locales.vi.title.trim();
-    const enTitle = data.locales.en.title.trim();
-
-    const locales = {
-      vi: {
-        title: viTitle,
-        slug: viTitle
-          ? await uniqueSlugFromTitle(viTitle, (slug) =>
-              articleSlugTaken("vi", slug, id),
-            )
-          : "",
-        excerpt: data.locales.vi.excerpt.trim(),
-        content: data.locales.vi.content,
-        metaTitle: data.locales.vi.metaTitle.trim(),
-        metaDescription: data.locales.vi.metaDescription.trim(),
-      },
-      en: {
-        title: enTitle,
-        slug: enTitle
-          ? await uniqueSlugFromTitle(enTitle, (slug) =>
-              articleSlugTaken("en", slug, id),
-            )
-          : "",
-        excerpt: data.locales.en.excerpt.trim(),
-        content: data.locales.en.content,
-        metaTitle: data.locales.en.metaTitle.trim(),
-        metaDescription: data.locales.en.metaDescription.trim(),
-      },
-    };
-
-    const categoryIds = data.categoryIds
-      .filter((value) => mongoose.isValidObjectId(value))
-      .map((value) => new mongoose.Types.ObjectId(value));
-
-    const tags = Array.from(
-      new Map(
-        data.tags
-          .map((tag) => tag.trim().replace(/\s+/g, " "))
-          .filter(Boolean)
-          .map((tag) => [tag.toLowerCase(), tag] as const),
-      ).values(),
-    );
+    const locales = await buildArticleLocales(data, id);
+    const categoryIds = normalizeArticleCategoryIds(data.categoryIds);
+    const tags = normalizeArticleTags(data.tags);
 
     if (id) {
       const existing = await Article.findById(id);
@@ -343,13 +439,10 @@ export async function saveArticleAction(
       const prevEnSlug = existing.locales?.en?.slug ?? "";
 
       existing.status = data.status;
-      existing.featured = data.featured;
-      existing.coverImageUrl = data.coverImageUrl.trim();
-      existing.coverImageFocus = normalizeCoverFocus(data.coverImageFocus);
-      existing.ogImageUrl = data.ogImageUrl.trim();
-      existing.categoryIds = categoryIds;
-      existing.tags = tags;
-      existing.locales = locales;
+      Object.assign(
+        existing,
+        buildArticleContentPatch(data, locales, categoryIds, tags),
+      );
       if (data.publishedAt) {
         existing.publishedAt = new Date(data.publishedAt);
       } else if (data.status === "published") {

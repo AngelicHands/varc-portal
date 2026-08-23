@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId } from "react";
+import { useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type ConfirmModalProps = {
   open: boolean;
@@ -28,8 +29,14 @@ export function ConfirmModal({
   onConfirm,
 }: ConfirmModalProps) {
   const titleId = useId();
+  const [mounted, setMounted] = useState(false);
   const resolvedConfirmLabel =
     confirmLabel ?? (variant === "danger" ? "Delete" : "Confirm");
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setMounted(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -45,7 +52,7 @@ export function ConfirmModal({
     };
   }, [open, pending, onCancel]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const panelClass =
     theme === "portal"
@@ -72,9 +79,9 @@ export function ConfirmModal({
         ? "cursor-pointer rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         : "cursor-pointer rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black disabled:cursor-not-allowed disabled:opacity-50";
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
       role="presentation"
       onClick={pending ? undefined : onCancel}
     >
@@ -108,6 +115,7 @@ export function ConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

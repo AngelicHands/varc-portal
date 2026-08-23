@@ -23,29 +23,53 @@ const articleLocaleSchema = z.object({
   metaDescription: z.string().trim().max(MAX_TEXT_CHARS),
 });
 
-export const articleFormSchema = z
-  .object({
-    status: z.enum(["draft", "published"]),
-    featured: z.boolean(),
-    coverImageUrl: safeUrlSchema,
-    coverImageFocus: z.object({
-      x: z.number().min(0).max(100),
-      y: z.number().min(0).max(100),
-      width: z.number().min(1).max(100),
-      height: z.number().min(1).max(100),
-    }),
-    ogImageUrl: safeUrlSchema,
-    categoryIds: z.array(z.string().max(64)).max(50),
-    tags: z.array(z.string().trim().min(1).max(64)).max(30),
-    /** ISO datetime string, or null when unset / draft. */
-    publishedAt: z.string().datetime().nullable(),
-    /** ISO datetime string, or null to keep server default. */
-    createdAt: z.string().datetime().nullable(),
-    locales: z.object({
-      vi: articleLocaleSchema,
-      en: articleLocaleSchema,
-    }),
-  })
+const articleFormFieldsSchema = z.object({
+  status: z.enum(["draft", "published"]),
+  featured: z.boolean(),
+  coverImageUrl: safeUrlSchema,
+  coverImageFocus: z.object({
+    x: z.number().min(0).max(100),
+    y: z.number().min(0).max(100),
+    width: z.number().min(1).max(100),
+    height: z.number().min(1).max(100),
+  }),
+  ogImageUrl: safeUrlSchema,
+  categoryIds: z.array(z.string().max(64)).max(50),
+  tags: z.array(z.string().trim().min(1).max(64)).max(30),
+  /** ISO datetime string, or null when unset / draft. */
+  publishedAt: z.string().datetime().nullable(),
+  /** ISO datetime string, or null to keep server default. */
+  createdAt: z.string().datetime().nullable(),
+  locales: z.object({
+    vi: articleLocaleSchema,
+    en: articleLocaleSchema,
+  }),
+});
+
+function sanitizeArticleLocales<
+  T extends {
+    locales: {
+      vi: { content: string };
+      en: { content: string };
+    };
+  },
+>(data: T) {
+  return {
+    ...data,
+    locales: {
+      vi: {
+        ...data.locales.vi,
+        content: sanitizeHtml(data.locales.vi.content),
+      },
+      en: {
+        ...data.locales.en,
+        content: sanitizeHtml(data.locales.en.content),
+      },
+    },
+  };
+}
+
+export const articleFormSchema = articleFormFieldsSchema
   .superRefine((data, ctx) => {
     if (data.status !== "published") return;
 
@@ -64,21 +88,27 @@ export const articleFormSchema = z
       });
     }
   })
-  .transform((data) => ({
-    ...data,
-    locales: {
-      vi: {
-        ...data.locales.vi,
-        content: sanitizeHtml(data.locales.vi.content),
-      },
-      en: {
-        ...data.locales.en,
-        content: sanitizeHtml(data.locales.en.content),
-      },
-    },
-  }));
+  .transform(sanitizeArticleLocales);
+
+/** Auto-save: same fields, no publish requirements; status is ignored on update. */
+export const articleAutoSaveSchema =
+  articleFormFieldsSchema.transform(sanitizeArticleLocales);
 
 export type ArticleFormValues = z.input<typeof articleFormSchema>;
+export type ArticleAutoSaveValues = z.infer<typeof articleAutoSaveSchema>;
+
+export function hasMinimalArticleContent(
+  data: Pick<ArticleFormValues, "locales">,
+): boolean {
+  const vi = data.locales.vi;
+  const en = data.locales.en;
+  return (
+    Boolean(vi.title.trim()) ||
+    Boolean(en.title.trim()) ||
+    !isEmptyHtml(vi.content) ||
+    !isEmptyHtml(en.content)
+  );
+}
 
 const categoryLocaleSchema = z.object({
   name: z.string().trim().max(MAX_TEXT_CHARS),
