@@ -30,7 +30,7 @@ func (e *httpExecutor) RunJob(ctx context.Context, jobID string) error {
 	client := &http.Client{Timeout: 45 * time.Minute}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("portal request failed")
+		return fmt.Errorf("portal request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)

@@ -39,6 +39,13 @@ yarn-error.log*
 # local media uploads
 /uploads
 /.backup-artifacts
+**/.backup-artifacts/
+
+# Go binaries (local `go build` in apps/api; images build via Dockerfile)
+/apps/api/varc-api
+/apps/api/varc-worker
+/apps/api/worker
+/apps/api/server
 
 # vercel
 .vercel
