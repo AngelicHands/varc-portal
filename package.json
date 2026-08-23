@@ -1,6 +1,6 @@
 {
   "name": "varc-portal",
-  "version": "1.0.25",
+  "version": "1.0.26",
   "private": true,
   "packageManager": "pnpm@10.28.0",
   "scripts": {
