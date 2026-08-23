@@ -1,6 +1,7 @@
 import { auth, signOut } from "@/auth";
 import {
   canManageEditorial,
+  canManageImportExport,
   canManagePages,
   canManageRoles,
   canManageSite,
@@ -20,6 +21,7 @@ export default async function AdminDashboardLayout({
   // Prefer session JWT callsign — avoid a Mongo round-trip on every admin nav.
   const callsign = user?.callsign?.trim() ?? "";
   const showEditorial = canManageEditorial(user);
+  const showImportExport = canManageImportExport(user);
   const showPages = canManagePages(user);
   const showSite = canManageSite(user);
   const showUsers = canManageUsers(user);
@@ -34,6 +36,7 @@ export default async function AdminDashboardLayout({
     <div className="min-h-[100dvh] bg-[var(--admin-bg)] text-[var(--admin-ink)] lg:flex">
       <AdminSidebar
         showEditorial={showEditorial}
+        showImportExport={showImportExport}
         showPages={showPages}
         showSite={showSite}
         showUsers={showUsers}

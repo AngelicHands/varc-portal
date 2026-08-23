@@ -259,6 +259,18 @@ export function canManageCallsigns(source?: CapabilitySource): boolean {
   return canManageSite(source);
 }
 
+/** GitHub CMS import/export — Setup Admin and Administrator only. */
+export function canManageImportExport(source?: CapabilitySource): boolean {
+  const role =
+    isCapabilityObject(source) && source.role != null
+      ? source.role
+      : typeof source === "string"
+        ? source
+        : null;
+  const key = normalizeRoleKey(role);
+  return key === "setup_admin" || key === "administrator";
+}
+
 /**
  * Who may change whose role:
  * - Setup Admin: anyone (including self)

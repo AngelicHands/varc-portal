@@ -38,7 +38,14 @@ function setExpandedPreference(next: boolean) {
   window.dispatchEvent(new Event(SIDEBAR_EVENT));
 }
 
-type NavFlag = "always" | "editorial" | "pages" | "site" | "users" | "roles";
+type NavFlag =
+  | "always"
+  | "editorial"
+  | "importExport"
+  | "pages"
+  | "site"
+  | "users"
+  | "roles";
 
 type NavItem = {
   href: string;
@@ -184,6 +191,19 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
+        href: "/admin/import-export",
+        label: "Import/Export",
+        flag: "importExport",
+        icon: (
+          <Icon>
+            <path d="M4 12a8 8 0 0 1 13.66-5.66" />
+            <path d="M20 4v5h-5" />
+            <path d="M20 12a8 8 0 0 1-13.66 5.66" />
+            <path d="M4 20v-5h5" />
+          </Icon>
+        ),
+      },
+      {
         href: "/admin/media",
         label: "Media",
         flag: "editorial",
@@ -276,6 +296,7 @@ function isLinkVisible(
   link: NavItem,
   flags: {
     showEditorial: boolean;
+    showImportExport: boolean;
     showPages: boolean;
     showSite: boolean;
     showUsers: boolean;
@@ -283,6 +304,7 @@ function isLinkVisible(
   },
 ) {
   if (link.flag === "editorial") return flags.showEditorial;
+  if (link.flag === "importExport") return flags.showImportExport;
   if (link.flag === "pages") return flags.showPages;
   if (link.flag === "site") return flags.showSite;
   if (link.flag === "users") return flags.showUsers;
@@ -292,6 +314,7 @@ function isLinkVisible(
 
 type Props = {
   showEditorial: boolean;
+  showImportExport: boolean;
   showPages: boolean;
   showSite: boolean;
   showUsers: boolean;
@@ -304,6 +327,7 @@ type Props = {
 
 export function AdminSidebar({
   showEditorial,
+  showImportExport,
   showPages,
   showSite,
   showUsers,
@@ -331,6 +355,7 @@ export function AdminSidebar({
       items: group.items.filter((link) =>
         isLinkVisible(link, {
           showEditorial,
+          showImportExport,
           showPages,
           showSite,
           showUsers,

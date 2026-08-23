@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import {
   canManageEditorial,
+  canManageImportExport,
   canManagePages,
   canManageSite,
   canManageUsers,
@@ -20,6 +21,14 @@ export async function requireAdminPage() {
 export async function requireEditorialPage() {
   const session = await requireAdminPage();
   if (!canManageEditorial(session.user)) {
+    redirect("/admin");
+  }
+  return session;
+}
+
+export async function requireImportExportPage() {
+  const session = await requireAdminPage();
+  if (!canManageImportExport(session.user)) {
     redirect("/admin");
   }
   return session;

@@ -7,5 +7,10 @@ export async function register() {
 
     const { startEmailWorker } = await import("@/lib/mail/worker-runtime");
     startEmailWorker();
+
+    const { runImportExportStartupVerification } = await import(
+      "@/lib/import-export-auto-verify"
+    );
+    void runImportExportStartupVerification();
   }
 }

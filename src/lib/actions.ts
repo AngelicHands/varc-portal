@@ -9,6 +9,7 @@ import {
   canChangeUserRole,
   canManageArticles,
   canManageCategories,
+  canManageImportExport,
   canManagePages,
   canManageRoles,
   canManageSite,
@@ -41,6 +42,19 @@ import {
   updateAdminUserSchema,
   type ArticleAutoSaveValues,
 } from "@/lib/validations/article";
+import { getImportExportSettingsEditorData } from "@/lib/import-export-settings";
+import {
+  importExportSaveRequestSchema,
+  importExportVerifyRequestSchema,
+  normalizeGithubBranch,
+  normalizeGithubPath,
+  type ImportExportDirectionVerifyState,
+  type ImportExportSettingsEditorData,
+} from "@/lib/validations/import-export";
+import {
+  normalizeGithubRepoUrl,
+  verifyImportExportSource,
+} from "@/lib/import-export-verify";
 import {
   FORM_SUBMISSION_STATUSES,
   formDefinitionFormSchema,
@@ -79,6 +93,11 @@ import { Page } from "@/models/Page";
 import { FormDefinition } from "@/models/FormDefinition";
 import { FormSubmission } from "@/models/FormSubmission";
 import { SITE_SETTINGS_KEY, SiteSettings } from "@/models/SiteSettings";
+import {
+  IMPORT_EXPORT_SETTINGS_KEY,
+  ImportExportSettings,
+  type ImportExportSettingsDocument,
+} from "@/models/ImportExportSettings";
 import { User } from "@/models/User";
 import { deleteObject } from "@/lib/media/storage";
 import { failAction, logServerError } from "@/lib/safe-error";
@@ -175,6 +194,14 @@ async function requirePageManager() {
 async function requireSiteManager() {
   const session = await requireAdmin();
   if (!canManageSite(session.user)) {
+    throw new Error("Forbidden");
+  }
+  return session;
+}
+
+async function requireImportExportManager() {
+  const session = await requireAdmin();
+  if (!canManageImportExport(session.user)) {
     throw new Error("Forbidden");
   }
   return session;
@@ -347,6 +374,7 @@ function buildArticleContentPatch(
     categoryIds,
     tags,
     locales,
+    contentSource: "cms" as const,
   };
 }
 
@@ -400,6 +428,7 @@ export async function autoSaveArticleAction(
       tags,
       locales,
       authorId: session.user.id,
+      contentSource: "cms",
       publishedAt: null,
       ...(data.createdAt ? { createdAt: new Date(data.createdAt) } : {}),
     });
@@ -473,6 +502,7 @@ export async function saveArticleAction(
       tags,
       locales,
       authorId: session.user.id,
+      contentSource: "cms",
       publishedAt: data.publishedAt
         ? new Date(data.publishedAt)
         : data.status === "published"
@@ -515,6 +545,7 @@ export async function cloneArticleAction(
       featured: false,
       publishedAt: null,
       authorId: session.user.id,
+      contentSource: "cms",
       categoryIds: source.categoryIds ?? [],
       tags: source.tags ?? [],
       coverImageUrl: source.coverImageUrl ?? "",
@@ -2327,5 +2358,310 @@ export async function deletePageTemplateAction(
     return { ok: true };
   } catch (error) {
     return failAction(error, "Failed to delete template");
+  }
+}
+
+function normalizeGithubRepoUrlForSave(value: string): string {
+  return normalizeGithubRepoUrl(value);
+}
+
+export async function verifyImportExportSourceAction(
+  raw: unknown,
+): Promise<
+  | { ok: true; verify: ImportExportDirectionVerifyState }
+  | { ok: false; error: string; verify: ImportExportDirectionVerifyState }
+> {
+  try {
+    await requireImportExportManager();
+    const parsed = importExportVerifyRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid data",
+        verify: { status: "failed", message: "Invalid data", checkedAt: null },
+      };
+    }
+
+    const { direction, form } = parsed.data;
+    await connectDb();
+
+    const existing = await ImportExportSettings.findOne({
+      key: IMPORT_EXPORT_SETTINGS_KEY,
+    }).lean<ImportExportSettingsDocument | null>();
+
+    const isImport = direction === "import";
+    const source = isImport ? form.importSource : form.exportSource;
+    const githubPat = isImport
+      ? form.importGithubPat || existing?.importGithubPat || ""
+      : form.exportGithubPat || existing?.exportGithubPat || "";
+    const customPassword = isImport
+      ? form.importCustomPassword || existing?.importCustomPassword || ""
+      : form.exportCustomPassword || existing?.exportCustomPassword || "";
+
+    if (source === "github" && !githubPat) {
+      const error = "GitHub PAT is required to verify";
+      return {
+        ok: false,
+        error,
+        verify: { status: "failed", message: error, checkedAt: null },
+      };
+    }
+    if (source === "custom_url" && !customPassword) {
+      const error = "Password is required to verify";
+      return {
+        ok: false,
+        error,
+        verify: { status: "failed", message: error, checkedAt: null },
+      };
+    }
+
+    const result = await verifyImportExportSource({
+      source,
+      githubRepoUrl: isImport
+        ? form.importGithubRepoUrl
+        : form.exportGithubRepoUrl,
+      githubUsername: isImport
+        ? form.importGithubUsername
+        : form.exportGithubUsername,
+      githubPat,
+      githubBranch: isImport
+        ? form.importGithubBranch
+        : form.exportGithubBranch,
+      githubPath: isImport
+        ? form.importGithubPath
+        : form.exportGithubPath,
+      customUrl: isImport ? form.importCustomUrl : form.exportCustomUrl,
+      customUsername: isImport
+        ? form.importCustomUsername
+        : form.exportCustomUsername,
+      customPassword,
+    });
+
+    const checkedAt = new Date();
+    const verify: ImportExportDirectionVerifyState = result.ok
+      ? { status: "verified", message: "", checkedAt: checkedAt.toISOString() }
+      : {
+          status: "failed",
+          message: result.error,
+          checkedAt: checkedAt.toISOString(),
+        };
+
+    const statusField = isImport ? "importVerifyStatus" : "exportVerifyStatus";
+    const messageField = isImport
+      ? "importVerifyMessage"
+      : "exportVerifyMessage";
+    const checkedAtField = isImport ? "importVerifiedAt" : "exportVerifiedAt";
+
+    await ImportExportSettings.findOneAndUpdate(
+      { key: IMPORT_EXPORT_SETTINGS_KEY },
+      {
+        $set: {
+          key: IMPORT_EXPORT_SETTINGS_KEY,
+          [statusField]: verify.status,
+          [messageField]: verify.message,
+          [checkedAtField]: checkedAt,
+        },
+      },
+      { upsert: true, setDefaultsOnInsert: true },
+    );
+
+    revalidatePath("/admin/import-export", "page");
+
+    if (!result.ok) {
+      return { ok: false, error: result.error, verify };
+    }
+    return { ok: true, verify };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Verification failed";
+    return {
+      ok: false,
+      error: message,
+      verify: { status: "failed", message, checkedAt: null },
+    };
+  }
+}
+
+export async function saveImportExportSettingsAction(
+  raw: unknown,
+): Promise<
+  | { ok: true; data: ImportExportSettingsEditorData }
+  | { ok: false; error: string }
+> {
+  try {
+    await requireImportExportManager();
+    const parsed = importExportSaveRequestSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid data",
+      };
+    }
+
+    const { direction, form } = parsed.data;
+    const isImport = direction === "import";
+    await connectDb();
+
+    const existing = await ImportExportSettings.findOne({
+      key: IMPORT_EXPORT_SETTINGS_KEY,
+    }).lean<ImportExportSettingsDocument | null>();
+
+    if (isImport) {
+      if (
+        form.importSource === "github" &&
+        !form.importGithubPat &&
+        !existing?.importGithubPat
+      ) {
+        return { ok: false, error: "GitHub PAT is required for import" };
+      }
+      if (
+        form.importSource === "custom_url" &&
+        !form.importCustomPassword &&
+        !existing?.importCustomPassword
+      ) {
+        return { ok: false, error: "Password is required for import custom URL" };
+      }
+    } else {
+      if (
+        form.exportSource === "github" &&
+        !form.exportGithubPat &&
+        !existing?.exportGithubPat
+      ) {
+        return { ok: false, error: "GitHub PAT is required for export" };
+      }
+      if (
+        form.exportSource === "custom_url" &&
+        !form.exportCustomPassword &&
+        !existing?.exportCustomPassword
+      ) {
+        return { ok: false, error: "Password is required for export custom URL" };
+      }
+    }
+
+    const update: Record<string, unknown> = {
+      key: IMPORT_EXPORT_SETTINGS_KEY,
+    };
+
+    if (isImport) {
+      Object.assign(update, {
+        importSource: form.importSource,
+        importGithubRepoUrl: normalizeGithubRepoUrlForSave(form.importGithubRepoUrl),
+        importGithubBranch: normalizeGithubBranch(form.importGithubBranch),
+        importGithubPath: normalizeGithubPath(form.importGithubPath),
+        importGithubUsername: form.importGithubUsername.trim(),
+        importCustomUrl: form.importCustomUrl.trim(),
+        importCustomUsername: form.importCustomUsername.trim(),
+        importVerifyStatus: "unknown",
+        importVerifyMessage: "",
+        importVerifiedAt: null,
+      });
+      if (form.importGithubPat) {
+        update.importGithubPat = form.importGithubPat;
+      }
+      if (form.importCustomPassword) {
+        update.importCustomPassword = form.importCustomPassword;
+      }
+    } else {
+      Object.assign(update, {
+        exportSource: form.exportSource,
+        exportGithubRepoUrl: normalizeGithubRepoUrlForSave(form.exportGithubRepoUrl),
+        exportGithubBranch: normalizeGithubBranch(form.exportGithubBranch),
+        exportGithubPath: normalizeGithubPath(form.exportGithubPath),
+        exportGithubUsername: form.exportGithubUsername.trim(),
+        exportCustomUrl: form.exportCustomUrl.trim(),
+        exportCustomUsername: form.exportCustomUsername.trim(),
+        exportVerifyStatus: "unknown",
+        exportVerifyMessage: "",
+        exportVerifiedAt: null,
+      });
+      if (form.exportGithubPat) {
+        update.exportGithubPat = form.exportGithubPat;
+      }
+      if (form.exportCustomPassword) {
+        update.exportCustomPassword = form.exportCustomPassword;
+      }
+    }
+
+    await ImportExportSettings.findOneAndUpdate(
+      { key: IMPORT_EXPORT_SETTINGS_KEY },
+      { $set: update },
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
+    );
+
+    revalidatePath("/admin/import-export", "page");
+    const data = await getImportExportSettingsEditorData();
+    return { ok: true, data };
+  } catch (error) {
+    return failAction(error, "Failed to save import/export settings");
+  }
+}
+
+export type CmsExportActionResult =
+  | {
+      ok: true;
+      commitSha: string;
+      htmlUrl: string;
+      stats: {
+        categories: number;
+        articles: number;
+        mediaFiles: number;
+        markdownFiles: number;
+        totalFiles: number;
+      };
+    }
+  | { ok: false; error: string };
+
+export async function runCmsExportAction(): Promise<CmsExportActionResult> {
+  try {
+    await requireImportExportManager();
+    const { runCmsExportToGithub } = await import(
+      "@/lib/import-export/export/run-export"
+    );
+    const result = await runCmsExportToGithub();
+    revalidatePath("/admin/import-export", "page");
+    return {
+      ok: true,
+      commitSha: result.commitSha,
+      htmlUrl: result.htmlUrl,
+      stats: result.stats,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Export failed",
+    };
+  }
+}
+
+export type CmsImportActionResult =
+  | {
+      ok: true;
+      stats: {
+        categories: number;
+        articles: number;
+        mediaFiles: number;
+        skippedPairs: number;
+      };
+    }
+  | { ok: false; error: string };
+
+export async function runCmsImportAction(): Promise<CmsImportActionResult> {
+  try {
+    const session = await requireImportExportManager();
+    const { runCmsImportFromGithub } = await import(
+      "@/lib/import-export/import/run-import"
+    );
+    const result = await runCmsImportFromGithub({
+      fallbackUserId: session.user.id,
+    });
+    await refreshPortal();
+    revalidatePath("/admin/import-export", "page");
+    revalidatePath("/admin/articles", "page");
+    revalidatePath("/admin/categories", "page");
+    return { ok: true, stats: result.stats };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Import failed",
+    };
   }
 }

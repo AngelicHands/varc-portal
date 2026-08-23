@@ -1,4 +1,11 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
+import {
+  ARTICLE_CONTENT_SOURCES,
+  type ArticleContentSource,
+} from "@/lib/article-content-source";
+
+export type { ArticleContentSource };
+export { ARTICLE_CONTENT_SOURCES };
 
 const LocaleContentSchema = new Schema(
   {
@@ -38,6 +45,13 @@ const ArticleSchema = new Schema(
     },
     ogImageUrl: { type: String, default: "" },
     featured: { type: Boolean, default: false, index: true },
+    /** Where article content is authored: CMS UI or Git sync import. */
+    contentSource: {
+      type: String,
+      enum: ARTICLE_CONTENT_SOURCES,
+      default: "cms",
+      index: true,
+    },
     deletedAt: { type: Date, default: null, index: true },
     locales: {
       vi: { type: LocaleContentSchema, required: true },
