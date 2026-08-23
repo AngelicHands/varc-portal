@@ -54,11 +54,17 @@ type NavGroup = {
   items: NavItem[];
 };
 
-function Icon({ children }: { children: ReactNode }) {
+function Icon({
+  children,
+  className = "h-5 w-5 shrink-0",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-5 w-5 shrink-0"
+      className={className}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.75"
@@ -355,16 +361,12 @@ export function AdminSidebar({
         <button
           type="button"
           onClick={toggleExpanded}
-          className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 lg:inline-flex"
+          className="hidden h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-gray-200 text-gray-600 transition-colors duration-300 ease-in-out hover:bg-gray-50 lg:inline-flex"
           aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
           title={expanded ? "Collapse" : "Expand"}
         >
-          <Icon>
-            {expanded ? (
-              <path d="M15 6 9 12l6 6" />
-            ) : (
-              <path d="m9 6 6 6-6 6" />
-            )}
+          <Icon className={`transition-transform duration-300 ease-in-out motion-reduce:transition-none ${expanded ? "rotate-0" : "rotate-180"}`}>
+            <path d="M15 6 9 12l6 6" />
           </Icon>
         </button>
         <button
@@ -467,17 +469,19 @@ export function AdminSidebar({
         />
       </div>
 
-      {mobileOpen ? (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
-          aria-label="Close menu overlay"
-          onClick={() => setMobileOpen(false)}
-        />
-      ) : null}
+      <button
+        type="button"
+        aria-hidden={!mobileOpen}
+        tabIndex={mobileOpen ? 0 : -1}
+        className={`fixed inset-0 z-40 bg-black/30 transition-opacity duration-300 ease-in-out motion-reduce:transition-none lg:hidden ${
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        aria-label="Close menu overlay"
+        onClick={() => setMobileOpen(false)}
+      />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-gray-200 bg-white transition-[transform,width] duration-200 ease-out lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-gray-200 bg-white transition-[transform,width] duration-300 ease-in-out motion-reduce:transition-none lg:translate-x-0 ${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         } ${expanded ? "lg:w-64" : "lg:w-[4.5rem]"}`}
       >
@@ -485,7 +489,7 @@ export function AdminSidebar({
       </aside>
       {/* Reserve horizontal space so main content isn't under the fixed sidebar */}
       <div
-        className={`hidden shrink-0 lg:block ${
+        className={`hidden shrink-0 transition-[width] duration-300 ease-in-out motion-reduce:transition-none lg:block ${
           expanded ? "lg:w-64" : "lg:w-[4.5rem]"
         }`}
         aria-hidden

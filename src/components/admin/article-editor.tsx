@@ -25,7 +25,9 @@ import { notifyAction } from "@/components/admin/admin-toast";
 import {
   ARTICLE_ASIDE_PAD_COLLAPSED,
   ARTICLE_ASIDE_PAD_EXPANDED,
+  AccordionPanel,
   ArticleSectionAside,
+  CollapsibleSectionHeader,
   useArticleSectionAsideExpanded,
   type ArticleSideSectionId,
 } from "@/components/admin/article-section-aside";
@@ -134,7 +136,8 @@ export function ArticleEditor({
   const [form, setForm] = useState<ArticleFormValues>(initial);
   const [tab, setTab] = useState<"vi" | "en">("vi");
   const [sideSection, setSideSection] =
-    useState<ArticleSideSectionId | null>("category");
+    useState<ArticleSideSectionId | null>(null);
+  const [contentExpanded, setContentExpanded] = useState(true);
   const asideExpanded = useArticleSectionAsideExpanded();
   const titleInputRef = useRef<HTMLInputElement>(null);
   const contentFieldRef = useRef<HTMLDivElement>(null);
@@ -207,6 +210,7 @@ export function ArticleEditor({
       if (nextErrors.title || nextErrors.content) {
         setFieldErrors(nextErrors);
         setTab("vi");
+        setContentExpanded(true);
         setError("Fill in the required Vietnamese fields before publishing.");
         queueMicrotask(() => {
           if (nextErrors.title) {
@@ -506,16 +510,17 @@ export function ArticleEditor({
 
   return (
     <>
-      <div
-        className={`w-full min-w-0 transition-[padding] duration-200 ease-out ${
-          asideExpanded
-            ? ARTICLE_ASIDE_PAD_EXPANDED
-            : ARTICLE_ASIDE_PAD_COLLAPSED
-        }`}
-      >
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="text-2xl font-semibold">{heading}</h1>
+      <div className="max-w-full min-w-0 overflow-x-clip">
+        <div
+          className={`w-full min-w-0 transition-[padding] duration-300 ease-in-out motion-reduce:transition-none ${
+            asideExpanded
+              ? ARTICLE_ASIDE_PAD_EXPANDED
+              : ARTICLE_ASIDE_PAD_COLLAPSED
+          }`}
+        >
+          <div className="mb-4 flex flex-col gap-3 sm:mb-6 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
+            <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-3 sm:gap-y-1">
+              <h1 className="text-xl font-semibold sm:text-2xl">{heading}</h1>
               <ArticleAutosaveStatus
                 saveState={saveState}
                 lastSavedAt={lastSavedAt}
@@ -524,13 +529,13 @@ export function ArticleEditor({
                 onRetry={flushSave}
               />
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
               {resolvedArticleId ? (
                 <a
                   href={`/${tab}/news/preview/${resolvedArticleId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mr-1 inline-flex items-center gap-1.5 text-sm text-gray-700 underline-offset-2 hover:text-gray-900 hover:underline"
+                  className="inline-flex items-center gap-1.5 text-sm text-gray-700 underline-offset-2 hover:text-gray-900 hover:underline"
                   title="Opens the last saved version in a new tab"
                 >
                   <ExternalLinkIcon className="h-3.5 w-3.5" />
@@ -538,7 +543,7 @@ export function ArticleEditor({
                 </a>
               ) : (
                 <span
-                  className="mr-1 inline-flex items-center gap-1.5 text-sm text-gray-400"
+                  className="inline-flex items-center gap-1.5 text-sm text-gray-400"
                   title="Save the article first to preview"
                 >
                   <ExternalLinkIcon className="h-3.5 w-3.5" />
@@ -549,7 +554,7 @@ export function ArticleEditor({
                 type="button"
                 disabled={pending || undefined}
                 onClick={() => onSave("draft")}
-                className="inline-flex items-center gap-2 rounded border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50 sm:flex-none sm:px-4"
               >
                 <SaveDraftIcon />
                 Save draft
@@ -558,7 +563,7 @@ export function ArticleEditor({
                 type="button"
                 disabled={pending || undefined}
                 onClick={() => onSave("published")}
-                className="inline-flex items-center gap-2 rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50 sm:flex-none sm:px-4"
               >
                 <PublishIcon />
                 Publish
@@ -586,13 +591,42 @@ export function ArticleEditor({
           </div>
 
           {error ? (
-            <p className="mb-6 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:mb-6">
               {error}
             </p>
           ) : null}
 
-          <div className="min-w-0">
-            <div className="grid content-start gap-4 rounded-lg border border-gray-200 bg-white p-5">
+          <div className="min-w-0 max-w-full">
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+              <CollapsibleSectionHeader
+                open={contentExpanded}
+                onToggle={() => setContentExpanded((prev) => !prev)}
+                title="Article content"
+                subtitle={
+                  form.locales.vi.title.trim() ||
+                  form.locales.en.title.trim() ||
+                  "Title, slug, and post body"
+                }
+                icon={
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                }
+              />
+              <AccordionPanel
+                open={contentExpanded}
+                panelClassName="grid min-w-0 content-start gap-4 border-t border-gray-200 px-4 py-4 sm:px-5 sm:py-5"
+              >
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -620,7 +654,7 @@ export function ArticleEditor({
                   English
                 </button>
               </div>
-              <label className="block text-sm">
+              <label className="block min-w-0 text-sm">
                 <span className="mb-1 block font-medium">
                   Title ({tab.toUpperCase()})
                   {tab === "vi" ? (
@@ -634,7 +668,7 @@ export function ArticleEditor({
                   value={locale.title}
                   onChange={(e) => updateLocale(tab, "title", e.target.value)}
                   aria-invalid={tab === "vi" && Boolean(fieldErrors.title)}
-                  className={`w-full rounded border px-3 py-2 ${
+                  className={`w-full min-w-0 rounded border px-3 py-2 ${
                     tab === "vi" && fieldErrors.title
                       ? "border-red-500 bg-red-50 outline-none ring-2 ring-red-200"
                       : "border-gray-300"
@@ -644,9 +678,9 @@ export function ArticleEditor({
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.title}</p>
                 ) : null}
               </label>
-              <div className="text-sm">
+              <div className="min-w-0 text-sm">
                 <span className="mb-1 block font-medium">Slug (auto)</span>
-                <p className="rounded border border-dashed border-gray-300 bg-gray-50 px-3 py-2 font-mono text-gray-600">
+                <p className="break-all rounded border border-dashed border-gray-300 bg-gray-50 px-3 py-2 font-mono text-xs text-gray-600 sm:text-sm">
                   {previewSlug || "—"}
                 </p>
                 <p className="mt-1 text-xs text-gray-500">
@@ -654,7 +688,7 @@ export function ArticleEditor({
                   numeric suffix.
                 </p>
               </div>
-              <label className="block text-sm">
+              <label className="block min-w-0 text-sm">
                 <span className="mb-1 block font-medium">Excerpt</span>
                 <textarea
                   value={locale.excerpt}
@@ -662,10 +696,10 @@ export function ArticleEditor({
                     updateLocale(tab, "excerpt", e.target.value)
                   }
                   rows={2}
-                  className="w-full rounded border border-gray-300 px-3 py-2"
+                  className="w-full min-w-0 resize-y rounded border border-gray-300 px-3 py-2"
                 />
               </label>
-              <div className="block text-sm" ref={contentFieldRef}>
+              <div className="block min-w-0 max-w-full text-sm" ref={contentFieldRef}>
                 <span className="mb-1 block font-medium">
                   Content
                   {tab === "vi" ? (
@@ -698,15 +732,17 @@ export function ArticleEditor({
                   </p>
                 ) : null}
               </div>
+              </AccordionPanel>
             </div>
           </div>
-      </div>
+        </div>
 
-      <ArticleSectionAside
-        openSection={sideSection}
-        onOpenSectionChange={setSideSection}
-        panels={sidePanels}
-      />
+        <ArticleSectionAside
+          openSection={sideSection}
+          onOpenSectionChange={setSideSection}
+          panels={sidePanels}
+        />
+      </div>
       {modal}
     </>
   );

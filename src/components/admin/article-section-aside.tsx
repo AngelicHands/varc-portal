@@ -1,9 +1,10 @@
 "use client";
 
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 
 const STORAGE_KEY = "varc-article-section-aside-expanded";
 const ASIDE_EVENT = "varc-article-section-aside";
+const PANEL_TRANSITION = "duration-300 ease-in-out motion-reduce:transition-none";
 
 export const ARTICLE_ASIDE_WIDTH_EXPANDED = "w-72";
 export const ARTICLE_ASIDE_WIDTH_COLLAPSED = "w-[4.5rem]";
@@ -118,6 +119,76 @@ export function useArticleSectionAsideExpanded() {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
+function SectionChevron({ open }: { open: boolean }) {
+  return (
+    <Icon
+      className={`h-4 w-4 shrink-0 opacity-70 transition-transform ${PANEL_TRANSITION} ${
+        open ? "rotate-0" : "-rotate-90"
+      }`}
+    >
+      <path d="m6 10 6 6 6-6" />
+    </Icon>
+  );
+}
+
+export function AccordionPanel({
+  open,
+  panelClassName,
+  children,
+}: {
+  open: boolean;
+  panelClassName?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`grid transition-[grid-template-rows] ${PANEL_TRANSITION} ${
+        open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+      }`}
+    >
+      <div className="min-h-0 overflow-hidden">
+        <div className={panelClassName}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function CollapsibleSectionHeader({
+  open,
+  onToggle,
+  title,
+  subtitle,
+  icon,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  title: string;
+  subtitle?: string;
+  icon?: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className={`flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left text-sm transition-colors ${PANEL_TRANSITION} ${
+        open
+          ? "bg-gray-900 text-white"
+          : "bg-white text-gray-800 hover:bg-gray-50"
+      }`}
+    >
+      {icon}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-medium">{title}</span>
+        {subtitle && !open ? (
+          <span className="mt-0.5 block truncate text-xs opacity-70">{subtitle}</span>
+        ) : null}
+      </span>
+      <SectionChevron open={open} />
+    </button>
+  );
+}
+
 type Props = {
   openSection: ArticleSideSectionId | null;
   onOpenSectionChange: (section: ArticleSideSectionId | null) => void;
@@ -130,14 +201,27 @@ export function ArticleSectionAside({
   panels,
 }: Props) {
   const railExpanded = useArticleSectionAsideExpanded();
+  const sectionRefs = useRef<Partial<Record<ArticleSideSectionId, HTMLDivElement>>>(
+    {},
+  );
+  const desktopStackRef = useRef<HTMLDivElement>(null);
+  const mobileStackRef = useRef<HTMLDivElement>(null);
 
-  function toggleStack(id: ArticleSideSectionId) {
+  function openSectionOnly(id: ArticleSideSectionId) {
+    onOpenSectionChange(openSection === id ? null : id);
+  }
+
+  function toggleMobileStack(id: ArticleSideSectionId) {
+    openSectionOnly(id);
+  }
+
+  function toggleDesktopStack(id: ArticleSideSectionId) {
     if (!railExpanded) {
       setExpandedPreference(true);
       onOpenSectionChange(id);
       return;
     }
-    onOpenSectionChange(openSection === id ? null : id);
+    openSectionOnly(id);
   }
 
   function openFromCollapsed(id: ArticleSideSectionId) {
@@ -145,46 +229,108 @@ export function ArticleSectionAside({
     onOpenSectionChange(id);
   }
 
-  const renderStack = (keyPrefix: string) => (
-    <div className="flex min-h-0 flex-1 flex-col">
+  useEffect(() => {
+    if (!openSection) return;
+
+    const sectionEl = sectionRefs.current[openSection];
+    if (!sectionEl) return;
+
+    const scrollRoot =
+      window.matchMedia("(min-width: 1024px)").matches
+        ? desktopStackRef.current
+        : mobileStackRef.current;
+
+    if (scrollRoot && scrollRoot.scrollHeight > scrollRoot.clientHeight) {
+      const rootTop = scrollRoot.getBoundingClientRect().top;
+      const sectionTop = sectionEl.getBoundingClientRect().top;
+      scrollRoot.scrollTo({
+        top: scrollRoot.scrollTop + (sectionTop - rootTop),
+        behavior: "smooth",
+      });
+      return;
+    }
+
+    sectionEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [openSection, railExpanded]);
+
+  function renderSectionHeader(
+    item: (typeof ARTICLE_SIDE_SECTIONS)[number],
+    open: boolean,
+    onToggle: () => void,
+  ) {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className={`flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left text-sm transition-colors ${PANEL_TRANSITION} ${
+          open
+            ? "bg-gray-900 text-white"
+            : "bg-white text-gray-800 hover:bg-gray-50"
+        }`}
+      >
+        {item.icon}
+        <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
+        <SectionChevron open={open} />
+      </button>
+    );
+  }
+
+  const renderDesktopStack = () => (
+    <div
+      ref={desktopStackRef}
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+    >
       {ARTICLE_SIDE_SECTIONS.map((item) => {
         const open = openSection === item.id;
         return (
           <div
-            key={`${keyPrefix}-${item.id}`}
+            key={`desktop-${item.id}`}
+            ref={(node) => {
+              if (node) sectionRefs.current[item.id] = node;
+              else delete sectionRefs.current[item.id];
+            }}
             className={`flex min-h-0 flex-col border-b border-gray-200 last:border-b-0 ${
               open ? "min-h-0 flex-1" : "shrink-0"
             }`}
           >
-            <button
-              type="button"
-              onClick={() => toggleStack(item.id)}
-              aria-expanded={open}
-              className={`flex w-full cursor-pointer items-center gap-2.5 px-3 py-3 text-left text-sm transition ${
-                open
-                  ? "bg-gray-900 text-white"
-                  : "bg-white text-gray-800 hover:bg-gray-50"
-              }`}
+            {renderSectionHeader(item, open, () => toggleDesktopStack(item.id))}
+            <AccordionPanel
+              open={open}
+              panelClassName="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50/80 px-4 py-4"
             >
-              {item.icon}
-              <span className="min-w-0 flex-1 truncate font-medium">
-                {item.label}
-              </span>
-              <Icon className="h-4 w-4 shrink-0 opacity-70">
-                {open ? (
-                  <path d="m6 14 6-6 6 6" />
-                ) : (
-                  <path d="m6 10 6 6 6-6" />
-                )}
-              </Icon>
-            </button>
-            {open ? (
-              <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50/80 p-3">
-                <div className="mx-auto w-full max-w-full min-w-0">
-                  {panels[item.id]}
-                </div>
+              <div className="mx-auto w-full max-w-full min-w-0">
+                {panels[item.id]}
               </div>
-            ) : null}
+            </AccordionPanel>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderMobileStack = () => (
+    <div ref={mobileStackRef} className="flex max-h-[min(80vh,40rem)] flex-col overflow-y-auto overscroll-contain">
+      {ARTICLE_SIDE_SECTIONS.map((item) => {
+        const open = openSection === item.id;
+        return (
+          <div
+            key={`mobile-${item.id}`}
+            ref={(node) => {
+              if (node) sectionRefs.current[item.id] = node;
+              else delete sectionRefs.current[item.id];
+            }}
+            className="border-b border-gray-200 last:border-b-0"
+          >
+            {renderSectionHeader(item, open, () => toggleMobileStack(item.id))}
+            <AccordionPanel
+              open={open}
+              panelClassName="max-h-[min(70vh,28rem)] overflow-x-hidden overflow-y-auto bg-gray-50/80 px-4 py-4"
+            >
+              <div className="mx-auto w-full max-w-full min-w-0">
+                {panels[item.id]}
+              </div>
+            </AccordionPanel>
           </div>
         );
       })}
@@ -194,20 +340,20 @@ export function ArticleSectionAside({
   return (
     <>
       {/* Mobile: accordion under main content */}
-      <div className="mt-6 border-t border-gray-200 bg-white lg:hidden">
-        {renderStack("mobile")}
+      <div className="mt-6 min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white lg:hidden">
+        {renderMobileStack()}
       </div>
 
       {/* Desktop: fixed to the right screen edge */}
       <aside
-        className={`fixed inset-y-0 right-0 z-30 hidden h-[100dvh] flex-col border-l border-gray-200 bg-white transition-[width] duration-200 ease-out lg:flex ${
+        className={`fixed inset-y-0 right-0 z-40 hidden h-[100dvh] flex-col border-l border-gray-200 bg-white transition-[width] ${PANEL_TRANSITION} lg:flex ${
           railExpanded
             ? ARTICLE_ASIDE_WIDTH_EXPANDED
             : ARTICLE_ASIDE_WIDTH_COLLAPSED
         }`}
       >
         <div
-          className={`flex h-14 shrink-0 items-center border-b border-gray-200 px-3 ${
+          className={`flex h-14 shrink-0 items-center border-b border-gray-200 px-4 ${
             railExpanded ? "justify-between gap-2" : "justify-center"
           }`}
         >
@@ -219,26 +365,26 @@ export function ArticleSectionAside({
           <button
             type="button"
             onClick={() => setExpandedPreference(!railExpanded)}
-            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-gray-200 text-gray-600 transition-colors duration-300 ease-in-out hover:bg-gray-50"
             aria-label={railExpanded ? "Collapse details" : "Expand details"}
             title={railExpanded ? "Collapse" : "Expand"}
           >
-            <Icon>
-              {railExpanded ? (
-                <path d="m9 6 6 6-6 6" />
-              ) : (
-                <path d="M15 6 9 12l6 6" />
-              )}
+            <Icon
+              className={`transition-transform ${PANEL_TRANSITION} ${
+                railExpanded ? "rotate-0" : "rotate-180"
+              }`}
+            >
+              <path d="M15 6 9 12l6 6" />
             </Icon>
           </button>
         </div>
 
         {railExpanded ? (
-          renderStack("desktop")
+          renderDesktopStack()
         ) : (
           <nav
             aria-label="Article side sections"
-            className="space-y-1 overflow-y-auto p-2"
+            className="space-y-1 overflow-y-auto p-3"
           >
             {ARTICLE_SIDE_SECTIONS.map((item) => {
               const active = openSection === item.id;

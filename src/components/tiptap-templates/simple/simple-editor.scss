@@ -12,6 +12,11 @@
   background: var(--tt-bg-color, #fff);
   color: var(--tt-theme-text);
 
+  /* Stay above editor content, below admin layout sidebars (z-40+). */
+  .tiptap-toolbar[data-variant="fixed"] {
+    z-index: 10;
+  }
+
   .dark & {
     --tt-theme-text: var(--tt-gray-dark-900);
   }
@@ -25,7 +30,7 @@
   position: absolute;
   top: calc(var(--tt-toolbar-height) + 0.5rem);
   right: 0.5rem;
-  z-index: 51;
+  z-index: 20;
   max-height: calc(100% - var(--tt-toolbar-height) - 1rem);
 }
 

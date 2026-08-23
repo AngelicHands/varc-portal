@@ -54,7 +54,7 @@ export default async function AdminDashboardLayout({
             signOutAction={signOutAction}
           />
         </header>
-        <div className="w-full min-w-0 overflow-x-visible px-3 py-5 sm:px-4 sm:py-8 lg:px-6 xl:px-8">
+        <div className="w-full min-w-0 overflow-x-clip px-3 py-5 sm:px-4 sm:py-8 lg:px-6 xl:px-8">
           {children}
         </div>
       </div>
