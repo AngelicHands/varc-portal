@@ -16,7 +16,7 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm build && pnpm build:worker
+RUN pnpm build
 
 FROM node:22-alpine AS web-runner
 WORKDIR /app
@@ -34,15 +34,3 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 EXPOSE 3099
 CMD ["node", "server.js"]
-
-FROM node:22-alpine AS worker-runner
-WORKDIR /app
-ENV NODE_ENV=production
-
-RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
-
-COPY --from=deps-prod /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/dist/worker ./dist/worker
-
-USER nextjs
-CMD ["node", "dist/worker/run-backup-worker.js"]

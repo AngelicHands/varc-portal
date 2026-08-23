@@ -1,26 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: varc-portal-backup-worker
+  name: varc-portal-worker
   namespace: varc
   labels:
-    app: varc-portal-backup-worker
+    app: varc-portal-worker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: varc-portal-backup-worker
+      app: varc-portal-worker
   template:
     metadata:
       labels:
-        app: varc-portal-backup-worker
+        app: varc-portal-worker
     spec:
       imagePullSecrets:
         - name: ghcr-pull
       containers:
         - name: worker
-          image: ghcr.io/varc-vietnam/varc-portal-backup-worker:v1.0.22
+          image: ghcr.io/varc-vietnam/varc-portal-api:v1.0.22
           imagePullPolicy: Always
+          command: ["/app/varc-worker"]
           envFrom:
             - secretRef:
                 name: varc-portal-secrets

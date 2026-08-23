@@ -24,7 +24,7 @@ data:
   CF_MAIL_MAX: "500"
   CF_MAIL_RATE_LIMIT: "5"
   CF_MAIL_RATE_LIMIT_WINDOW: "1h"
-  # Email queue is processed by deploy/k8s/email-worker.yaml (standalone process).
+  # Email and backup queues are processed by deploy/k8s/worker.yaml (Go varc-worker).
   # Keep disabled on the web pod — Next standalone does not reliably run instrumentation.ts.
   EMAIL_WORKER_ENABLED: "0"
   EMAIL_WORKER_POLL_MS: "3000"

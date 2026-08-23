@@ -40,7 +40,6 @@ jobs:
         run: |
           OWNER_REPO="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "web=ghcr.io/${OWNER_REPO}" >> "$GITHUB_OUTPUT"
-          echo "worker=ghcr.io/${OWNER_REPO}-backup-worker" >> "$GITHUB_OUTPUT"
           echo "api=ghcr.io/${OWNER_REPO}-api" >> "$GITHUB_OUTPUT"
 
       - name: Verify GitHub Release exists
@@ -74,7 +73,6 @@ jobs:
           }
 
           check_image "${{ steps.image.outputs.web }}"
-          check_image "${{ steps.image.outputs.worker }}"
           check_image "${{ steps.image.outputs.api }}"
 
       - name: Checkout
@@ -106,12 +104,10 @@ jobs:
 
           TAG="${{ steps.version.outputs.tag }}"
           WEB_IMAGE="${{ steps.image.outputs.web }}:${TAG}"
-          WORKER_IMAGE="${{ steps.image.outputs.worker }}:${TAG}"
           API_IMAGE="${{ steps.image.outputs.api }}:${TAG}"
 
           update_file "deploy/k8s/deployment.yaml" "${WEB_IMAGE}"
-          update_file "deploy/k8s/backup-worker.yaml" "${WORKER_IMAGE}"
-          update_file "deploy/k8s/email-worker.yaml" "${WORKER_IMAGE}"
+          update_file "deploy/k8s/worker.yaml" "${API_IMAGE}"
           update_file "deploy/k8s/api-deployment.yaml" "${API_IMAGE}"
 
       - name: Commit and push
@@ -120,8 +116,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             deploy/k8s/deployment.yaml \
-            deploy/k8s/backup-worker.yaml \
-            deploy/k8s/email-worker.yaml \
+            deploy/k8s/worker.yaml \
             deploy/k8s/api-deployment.yaml
           if git diff --staged --quiet; then
             echo "Images already set to ${{ steps.version.outputs.tag }}; nothing to commit."
