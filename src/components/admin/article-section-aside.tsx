@@ -141,14 +141,8 @@ export function AccordionPanel({
   children: ReactNode;
 }) {
   return (
-    <div
-      className={`grid transition-[grid-template-rows] ${PANEL_TRANSITION} ${
-        open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-      }`}
-    >
-      <div className="min-h-0 overflow-hidden">
-        <div className={panelClassName}>{children}</div>
-      </div>
+    <div className="admin-accordion-panel" data-open={open ? "true" : "false"}>
+      <div className={panelClassName}>{children}</div>
     </div>
   );
 }

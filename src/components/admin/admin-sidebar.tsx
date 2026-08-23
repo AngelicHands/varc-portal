@@ -342,17 +342,32 @@ export function AdminSidebar({
 
   const showLabels = expanded || mobileOpen;
 
+  function onSidebarFooterClick() {
+    const desktop = window.matchMedia("(min-width: 1024px)").matches;
+    if (desktop) {
+      toggleExpanded();
+      return;
+    }
+    setMobileOpen(false);
+  }
+
+  const sidebarFooterLabel = mobileOpen
+    ? "Close menu"
+    : expanded
+      ? "Collapse sidebar"
+      : "Expand sidebar";
+
   const collapseToggleButton = (
     <button
       type="button"
-      onClick={toggleExpanded}
+      onClick={onSidebarFooterClick}
       className="flex w-full cursor-pointer items-center justify-center rounded-md py-2 text-gray-400 transition-colors duration-300 ease-in-out hover:bg-gray-50 hover:text-gray-600"
-      aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-      title={expanded ? "Collapse" : "Expand"}
+      aria-label={sidebarFooterLabel}
+      title={sidebarFooterLabel}
     >
       <Icon
         className={`h-4 w-4 transition-transform duration-300 ease-in-out motion-reduce:transition-none ${
-          expanded ? "rotate-0" : "rotate-180"
+          expanded || mobileOpen ? "rotate-0" : "rotate-180"
         }`}
       >
         <path d="M15 6 9 12l6 6" />
@@ -363,8 +378,8 @@ export function AdminSidebar({
   const nav = (
     <div className="flex h-full flex-col">
       <div
-        className={`flex h-14 items-center border-b border-gray-200 px-3 ${
-          showLabels ? "justify-between gap-2 lg:justify-start" : "justify-center lg:hidden"
+        className={`flex h-14 shrink-0 items-center border-b border-gray-200 px-3 ${
+          showLabels ? "justify-start" : "justify-center"
         }`}
       >
         {showLabels ? (
@@ -375,17 +390,20 @@ export function AdminSidebar({
           >
             VARC Admin
           </Link>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setMobileOpen(false)}
-          className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 lg:hidden"
-          aria-label="Close menu"
-        >
-          <Icon>
-            <path d="M6 6l12 12M18 6 6 18" />
-          </Icon>
-        </button>
+        ) : (
+          <Link
+            href="/admin"
+            title="VARC Admin"
+            className="flex items-center justify-center"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- dynamic favicon from site settings */}
+            <img
+              src="/api/favicon"
+              alt="VARC Admin"
+              className="h-8 w-8 object-contain"
+            />
+          </Link>
+        )}
       </div>
 
       <nav className="flex-1 space-y-4 overflow-y-auto p-2">
@@ -447,7 +465,7 @@ export function AdminSidebar({
         ))}
       </nav>
 
-      <div className="hidden shrink-0 border-t border-gray-200 lg:block">
+      <div className="shrink-0 border-t border-gray-200">
         {collapseToggleButton}
       </div>
     </div>
@@ -484,7 +502,7 @@ export function AdminSidebar({
         type="button"
         aria-hidden={!mobileOpen}
         tabIndex={mobileOpen ? 0 : -1}
-        className={`fixed inset-0 z-40 bg-black/30 transition-opacity duration-300 ease-in-out motion-reduce:transition-none lg:hidden ${
+        className={`admin-sidebar-overlay fixed inset-0 z-40 bg-black/30 lg:hidden ${
           mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         aria-label="Close menu overlay"
@@ -492,17 +510,16 @@ export function AdminSidebar({
       />
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-gray-200 bg-white transition-[transform,width] duration-300 ease-in-out motion-reduce:transition-none lg:translate-x-0 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        } ${expanded ? "lg:w-64" : "lg:w-[4.5rem]"}`}
+        data-mobile-open={mobileOpen ? "true" : "false"}
+        data-expanded={expanded ? "true" : "false"}
+        className="admin-sidebar-aside fixed inset-y-0 left-0 z-50 border-r border-gray-200 bg-white motion-reduce:transition-none"
       >
         {nav}
       </aside>
       {/* Reserve horizontal space so main content isn't under the fixed sidebar */}
       <div
-        className={`hidden shrink-0 transition-[width] duration-300 ease-in-out motion-reduce:transition-none lg:block ${
-          expanded ? "lg:w-64" : "lg:w-[4.5rem]"
-        }`}
+        data-expanded={expanded ? "true" : "false"}
+        className="admin-sidebar-spacer hidden motion-reduce:transition-none lg:block"
         aria-hidden
       />
     </>

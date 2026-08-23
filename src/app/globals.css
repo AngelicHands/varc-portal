@@ -591,3 +591,59 @@ body.ham-map-view main {
     animation: none;
   }
 }
+
+/* Firefox-safe slide/expand transitions (avoid grid-rows / arbitrary transition props). */
+.admin-sidebar-aside {
+  width: 16rem;
+  transform: translate3d(-100%, 0, 0);
+  transition: transform 300ms ease-in-out;
+}
+
+.admin-sidebar-aside[data-mobile-open="true"] {
+  transform: translate3d(0, 0, 0);
+}
+
+@media (min-width: 1024px) {
+  .admin-sidebar-aside {
+    width: 4.5rem;
+    transform: translate3d(0, 0, 0);
+    transition: width 300ms ease-in-out;
+  }
+
+  .admin-sidebar-aside[data-expanded="true"] {
+    width: 16rem;
+  }
+
+  .admin-sidebar-spacer {
+    flex-shrink: 0;
+    width: 4.5rem;
+    transition: width 300ms ease-in-out;
+  }
+
+  .admin-sidebar-spacer[data-expanded="true"] {
+    width: 16rem;
+  }
+}
+
+.admin-sidebar-overlay {
+  transition: opacity 300ms ease-in-out;
+}
+
+.admin-accordion-panel {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 300ms ease-in-out;
+}
+
+.admin-accordion-panel[data-open="true"] {
+  max-height: 100rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-sidebar-aside,
+  .admin-sidebar-spacer,
+  .admin-sidebar-overlay,
+  .admin-accordion-panel {
+    transition: none;
+  }
+}
