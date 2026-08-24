@@ -1,5 +1,4 @@
 import { Readable } from "node:stream";
-import { getMediaConfig } from "@/lib/media/config";
 import { getObjectStream } from "@/lib/media/storage";
 import { logServerError } from "@/lib/safe-error";
 
@@ -17,12 +16,8 @@ export async function GET(_request: Request, { params }: Params) {
       return new Response("Not found", { status: 404 });
     }
 
-    const config = getMediaConfig();
-    // Prefer CDN / MinIO public URL when not using local disk.
-    if (config.driver === "s3") {
-      return Response.redirect(`${config.publicUrl}/${key}`, 302);
-    }
-
+    // Always proxy through the app so `/media/{key}` works for private
+    // buckets (redirect to S3_PUBLIC_URL fails with AccessDenied).
     const { stream, contentType, size } = await getObjectStream(key);
     const webStream = Readable.toWeb(stream) as unknown as ReadableStream;
 

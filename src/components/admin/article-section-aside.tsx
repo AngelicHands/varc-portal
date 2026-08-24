@@ -155,16 +155,25 @@ function SectionChevron({ open }: { open: boolean }) {
 
 export function AccordionPanel({
   open,
+  fill = false,
   panelClassName,
   children,
 }: {
   open: boolean;
+  /** When true and open, grow to fill a flex parent so tall content scrolls. */
+  fill?: boolean;
   panelClassName?: string;
   children: ReactNode;
 }) {
   return (
-    <div className="admin-accordion-panel" data-open={open ? "true" : "false"}>
-      <div className={panelClassName}>{children}</div>
+    <div
+      className={`admin-accordion-panel${open && fill ? " min-h-0 flex-1" : ""}`}
+      data-open={open ? "true" : "false"}
+      data-fill={fill ? "true" : "false"}
+    >
+      <div className={`admin-accordion-panel-inner ${panelClassName ?? ""}`}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -263,7 +272,7 @@ function ArticleAsideDesktopStack({
   return (
     <div
       ref={stackRef}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden overscroll-contain"
     >
       {ARTICLE_SIDE_SECTIONS.map((item) => {
         const open = openSection === item.id;
@@ -282,7 +291,8 @@ function ArticleAsideDesktopStack({
             />
             <AccordionPanel
               open={open && railExpanded}
-              panelClassName="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50/80 px-4 py-4"
+              fill
+              panelClassName="overscroll-contain bg-gray-50/80 px-4 py-4"
             >
               <div className="w-full min-w-0">{panels[item.id]}</div>
             </AccordionPanel>
@@ -324,7 +334,7 @@ function ArticleAsideMobileStack({
             />
             <AccordionPanel
               open={open}
-              panelClassName="max-h-[min(70vh,28rem)] overflow-x-hidden overflow-y-auto bg-gray-50/80 px-4 py-4"
+              panelClassName="max-h-[min(70vh,28rem)] bg-gray-50/80 px-4 py-4"
             >
               <div className="mx-auto w-full max-w-full min-w-0">
                 {panels[item.id]}

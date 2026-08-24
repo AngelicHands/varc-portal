@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import { formatBytes, type AdminMediaItem } from "@/lib/media/types";
+import { canonicalMediaPath, formatBytes, type AdminMediaItem } from "@/lib/media/types";
 
 export type MediaPickerSelection = {
   id: string;
+  key: string;
   url: string;
   alt: string;
   originalName: string;
@@ -39,7 +40,8 @@ type ListResponse = {
 function toSelection(item: AdminMediaItem): MediaPickerSelection {
   return {
     id: item.id,
-    url: item.url,
+    key: item.key,
+    url: canonicalMediaPath(item.key),
     alt: item.alt || item.originalName,
     originalName: item.originalName,
     kind: item.kind,

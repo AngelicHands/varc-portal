@@ -57,6 +57,7 @@ export function PageGalleryField({ items, onChange }: Props) {
         const payload = (await response.json().catch(() => null)) as {
           items?: Array<{
             id: string;
+            key: string;
             url: string;
             alt: string;
             originalName: string;
@@ -73,6 +74,7 @@ export function PageGalleryField({ items, onChange }: Props) {
           .map((item) =>
             toGalleryItem({
               id: item.id,
+              key: item.key,
               url: item.url,
               alt: item.alt || item.originalName,
               originalName: item.originalName,

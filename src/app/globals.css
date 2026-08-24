@@ -629,14 +629,36 @@ body.ham-map-view main {
   transition: opacity 300ms ease-in-out;
 }
 
+/* Accordion expand/collapse. max-height:0 when closed hard-clips content
+   (0fr alone can still leak in flex layouts). Open fill panels scroll. */
 .admin-accordion-panel {
-  overflow: hidden;
+  display: grid;
+  grid-template-rows: 0fr;
   max-height: 0;
-  transition: max-height 300ms ease-in-out;
+  min-height: 0;
+  overflow: hidden;
+  transition:
+    grid-template-rows 300ms ease-in-out,
+    max-height 300ms ease-in-out;
 }
 
 .admin-accordion-panel[data-open="true"] {
+  grid-template-rows: 1fr;
   max-height: 100rem;
+}
+
+.admin-accordion-panel[data-open="true"][data-fill="true"] {
+  max-height: 100dvh;
+}
+
+.admin-accordion-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-accordion-panel[data-open="true"] .admin-accordion-panel-inner {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {

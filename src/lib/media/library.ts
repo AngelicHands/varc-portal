@@ -1,8 +1,12 @@
 import { connectDb } from "@/lib/db";
 import { deletedFilter, notDeletedFilter } from "@/lib/soft-delete";
 import { escapeRegex } from "@/lib/safe-url";
-import { Media, type MediaKind } from "@/models/Media";
-import type { AdminMediaItem } from "@/lib/media/types";
+import { Media } from "@/models/Media";
+import {
+  canonicalMediaPath,
+  type AdminMediaItem,
+  type MediaKind,
+} from "@/lib/media/types";
 
 export type { AdminMediaItem, MediaKind } from "@/lib/media/types";
 export { formatBytes } from "@/lib/media/types";
@@ -26,7 +30,7 @@ function toAdminItem(doc: MediaLean): AdminMediaItem {
   return {
     id: String(doc._id),
     key: doc.key,
-    url: doc.url,
+    url: canonicalMediaPath(doc.key),
     contentType: doc.contentType,
     kind: doc.kind,
     size: doc.size,

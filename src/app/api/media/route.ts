@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { connectDb } from "@/lib/db";
 import { getMediaConfig } from "@/lib/media/config";
+import { canonicalMediaPath } from "@/lib/media/types";
 import { buildObjectKey, putObject } from "@/lib/media/storage";
 import { logServerError, publicErrorMessage } from "@/lib/safe-error";
 import { canManageEditorial } from "@/lib/roles";
@@ -49,11 +50,12 @@ export async function POST(request: Request) {
     const key = buildObjectKey(originalName);
     const stored = await putObject(key, buffer, contentType);
     const kind = mediaKindFromContentType(contentType);
+    const url = canonicalMediaPath(stored.key);
 
     await connectDb();
     const doc = await Media.create({
       key: stored.key,
-      url: stored.url,
+      url,
       contentType: stored.contentType,
       kind,
       size: stored.size,
@@ -66,7 +68,7 @@ export async function POST(request: Request) {
       {
         id: String(doc._id),
         key: stored.key,
-        url: stored.url,
+        url,
         contentType: stored.contentType,
         kind,
         size: stored.size,
