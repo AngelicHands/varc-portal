@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { AdminAccountMenu } from "@/components/admin/admin-account-menu";
+import { AdminFunctionSearch } from "@/components/admin/admin-function-search";
 
 const STORAGE_KEY = "varc-admin-sidebar-expanded";
 const SIDEBAR_EVENT = "varc-admin-sidebar";
@@ -478,20 +479,26 @@ export function AdminSidebar({
 
   return (
     <>
-      <div className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-gray-200 bg-white px-4 lg:hidden">
+      <div className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-gray-200 bg-white px-3 sm:gap-3 sm:px-4 lg:hidden">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
-          className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
+          className="inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50"
           aria-label="Open menu"
         >
           <Icon>
             <path d="M4 7h16M4 12h16M4 17h16" />
           </Icon>
         </button>
-        <Link href="/admin" className="min-w-0 flex-1 font-semibold tracking-tight">
-          VARC Admin
-        </Link>
+        <AdminFunctionSearch
+          compact
+          showEditorial={showEditorial}
+          showImportExport={showImportExport}
+          showPages={showPages}
+          showSite={showSite}
+          showUsers={showUsers}
+          showRoles={showRoles}
+        />
         <AdminAccountMenu
           user={{
             name: userName ?? null,
