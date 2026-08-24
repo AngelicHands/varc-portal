@@ -18,8 +18,13 @@ import { ArticleBody } from "@/components/portal/article-body";
 import { PageEditButton } from "@/components/portal/page-edit-button";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { TemplateLayoutRenderer } from "@/components/portal/blocks/template-layout-renderer";
+import { AdminAuthorAvatar } from "@/components/admin/admin-author-avatar";
 import { newsHref } from "@/lib/locale-hrefs";
 import { formatDateUtc7 } from "@/lib/datetime-local";
+import { profileAvatarUrl } from "@/lib/gravatar";
+import { connectDb } from "@/lib/db";
+import { User } from "@/models/User";
+import mongoose from "mongoose";
 import {
   getPageTemplateByKey,
   parseLayout,
@@ -107,6 +112,34 @@ export default async function ArticlePage({ params }: Props) {
     />
   ) : null;
 
+  let authorDisplay: { label: string; avatarUrl: string | null } | null = null;
+  if (authorId && mongoose.isValidObjectId(authorId)) {
+    await connectDb();
+    const author = await User.findById(authorId)
+      .select("name callsign email image")
+      .lean<{
+        name?: string;
+        callsign?: string;
+        email?: string;
+        image?: string | null;
+      } | null>();
+    if (author) {
+      const label =
+        author.name?.trim() ||
+        author.callsign?.trim() ||
+        author.email?.trim() ||
+        "";
+      if (label) {
+        authorDisplay = {
+          label,
+          avatarUrl: profileAvatarUrl(author.image, author.email, 64, {
+            defaultImage: "404",
+          }),
+        };
+      }
+    }
+  }
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "NewsArticle",
@@ -117,7 +150,38 @@ export default async function ArticlePage({ params }: Props) {
     inLanguage: locale,
     image: article.coverImageUrl || undefined,
     mainEntityOfPage: `${siteUrl}${path}`,
+    author: authorDisplay
+      ? { "@type": "Person", name: authorDisplay.label }
+      : undefined,
   };
+
+  const byline = (
+    <div className="mt-4 flex items-center justify-between gap-4 text-sm text-muted">
+      {article.publishedAt ? (
+        <time dateTime={new Date(article.publishedAt).toISOString()}>
+          {formatDateUtc7(
+            article.publishedAt,
+            locale === "vi" ? "vi-VN" : "en-GB",
+            { month: "long" },
+          )}
+        </time>
+      ) : (
+        <span />
+      )}
+      {authorDisplay ? (
+        <div className="ml-auto flex min-w-0 items-center gap-2 text-right">
+          <AdminAuthorAvatar
+            src={authorDisplay.avatarUrl}
+            label={authorDisplay.label}
+            compact
+          />
+          <span className="min-w-0 truncate font-medium text-foreground">
+            {authorDisplay.label}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
 
   const articleTemplateKey = settings?.articleTemplateKey?.trim() || "article";
   // Non-default key opts into block template rendering for article routes.
@@ -211,18 +275,7 @@ export default async function ArticlePage({ params }: Props) {
         <h1 className="font-display text-4xl leading-tight text-foreground md:text-5xl">
           {content.title}
         </h1>
-        {article.publishedAt ? (
-          <time
-            dateTime={new Date(article.publishedAt).toISOString()}
-            className="mt-4 block text-sm text-muted"
-          >
-            {formatDateUtc7(
-              article.publishedAt,
-              locale === "vi" ? "vi-VN" : "en-GB",
-              { month: "long" },
-            )}
-          </time>
-        ) : null}
+        {byline}
         {content.excerpt ? (
           <p className="mt-4 text-lg text-muted">{content.excerpt}</p>
         ) : null}

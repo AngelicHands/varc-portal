@@ -1,4 +1,5 @@
 import Link from "next/link";
+import mongoose from "mongoose";
 import { listAllArticles, getLocaleContent, hasLocaleContent } from "@/lib/articles";
 import { listCategories, getCategoryLocale } from "@/lib/cms";
 import {
@@ -13,8 +14,12 @@ import { AdminLocaleStatus } from "@/components/admin/admin-locale-status";
 import { ActiveRowActions } from "@/components/admin/active-row-actions";
 import { TrashRowActions } from "@/components/admin/trash-row-actions";
 import { EmptyTrashButton } from "@/components/admin/empty-trash-button";
+import { AdminAuthorAvatar } from "@/components/admin/admin-author-avatar";
 import { requireEditorialPage } from "@/lib/admin-access";
 import { PORTAL_TIMEZONE, isFuturePublishAt } from "@/lib/datetime-local";
+import { connectDb } from "@/lib/db";
+import { profileAvatarUrl } from "@/lib/gravatar";
+import { User } from "@/models/User";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +86,43 @@ function statusLabel(
   return status;
 }
 
+type AuthorDisplay = {
+  label: string;
+  avatarUrl: string | null;
+};
+
+function formatAuthorLabel(author: {
+  name?: string | null;
+  callsign?: string | null;
+  email?: string | null;
+}) {
+  const name = author.name?.trim();
+  if (name) return name;
+  const callsign = author.callsign?.trim();
+  if (callsign) return callsign;
+  const email = author.email?.trim();
+  if (email) return email;
+  return "—";
+}
+
+function AuthorCell({
+  author,
+  compact = false,
+}: {
+  author: AuthorDisplay | null;
+  compact?: boolean;
+}) {
+  const label = author?.label ?? "—";
+  const avatarUrl = author?.avatarUrl ?? null;
+
+  return (
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <AdminAuthorAvatar src={avatarUrl} label={label} compact={compact} />
+      <span className="min-w-0 truncate">{label}</span>
+    </span>
+  );
+}
+
 export default async function AdminArticlesPage({ searchParams }: Props) {
   await requireEditorialPage();
   const now = new Date();
@@ -103,6 +145,39 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
       getCategoryLocale(category, "en").name;
     if (name) categoryNameById.set(String(category._id), name);
   }
+
+  const authorIds = [
+    ...new Set(
+      [...activeItems, ...trashItems]
+        .map((article) => String(article.authorId ?? ""))
+        .filter((id) => mongoose.isValidObjectId(id)),
+    ),
+  ];
+  await connectDb();
+  const authors = authorIds.length
+    ? await User.find({ _id: { $in: authorIds } })
+        .select("name callsign email image")
+        .lean<
+          Array<{
+            _id: mongoose.Types.ObjectId;
+            name?: string;
+            callsign?: string;
+            email?: string;
+            image?: string | null;
+          }>
+        >()
+    : [];
+  const authorById = new Map<string, AuthorDisplay>(
+    authors.map((author) => [
+      String(author._id),
+      {
+        label: formatAuthorLabel(author),
+        avatarUrl: profileAvatarUrl(author.image, author.email, 64, {
+          defaultImage: "404",
+        }),
+      },
+    ]),
+  );
 
   return (
     <div>
@@ -146,6 +221,8 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
                 .map((categoryId) => categoryNameById.get(String(categoryId)))
                 .filter(Boolean);
               const dateValue = trash ? article.deletedAt : article.updatedAt;
+              const author =
+                authorById.get(String(article.authorId ?? "")) ?? null;
 
               return (
                 <li
@@ -205,6 +282,9 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
                       viReady={hasLocaleContent(article, "vi")}
                       enReady={hasLocaleContent(article, "en")}
                     />
+                    <span className="min-w-0">
+                      <AuthorCell author={author} compact />
+                    </span>
                     {categoryNames.length > 0 ? (
                       <span className="min-w-0 truncate">
                         {categoryNames.join(", ")}
@@ -226,6 +306,7 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
               <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
                 <tr>
                   <th className="px-4 py-3 font-medium">Title (VI)</th>
+                  <th className="px-4 py-3 font-medium">Author</th>
                   <th className="px-4 py-3 font-medium">Category</th>
                   <th className="px-4 py-3 font-medium">Languages</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -244,6 +325,8 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
                       categoryNameById.get(String(categoryId)),
                     )
                     .filter(Boolean);
+                  const author =
+                    authorById.get(String(article.authorId ?? "")) ?? null;
                   return (
                     <tr
                       key={id}
@@ -267,6 +350,9 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
                             {vi.slug ? clipSlug(vi.slug, 15) : "—"}
                           </div>
                         </div>
+                      </td>
+                      <td className="relative z-10 pointer-events-none px-4 py-3 text-gray-600">
+                        <AuthorCell author={author} />
                       </td>
                       <td className="relative z-10 pointer-events-none px-4 py-3 text-gray-600">
                         {categoryNames.length > 0
