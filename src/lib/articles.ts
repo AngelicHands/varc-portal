@@ -110,6 +110,31 @@ function publishedLocaleFilter(locale: AppLocale, now = new Date()) {
   };
 }
 
+/** Runtime guard — public lists must never surface drafts or scheduled posts. */
+export function isArticlePubliclyVisible(
+  article: Pick<
+    ArticleDocument,
+    "status" | "publishedAt" | "deletedAt" | "locales"
+  >,
+  locale: AppLocale,
+  now = new Date(),
+): boolean {
+  if (article.deletedAt) return false;
+  if (article.status !== "published") return false;
+  if (!article.publishedAt) return false;
+  const publishedAt = new Date(article.publishedAt);
+  if (Number.isNaN(publishedAt.getTime()) || publishedAt > now) return false;
+  return hasLocaleContent(article as ArticleDocument, locale);
+}
+
+function filterPublicArticles(
+  items: ArticleDocument[],
+  locale: AppLocale,
+  now = new Date(),
+): ArticleDocument[] {
+  return items.filter((article) => isArticlePubliclyVisible(article, locale, now));
+}
+
 export async function listPublishedArticles(
   locale: AppLocale,
   page = 1,
@@ -134,6 +159,7 @@ export async function listPublishedArticles(
         };
       }
 
+      const now = new Date();
       const [items, total] = await Promise.all([
         Article.find(filter)
           .sort({ publishedAt: -1, createdAt: -1 })
@@ -142,9 +168,10 @@ export async function listPublishedArticles(
           .lean<ArticleDocument[]>(),
         Article.countDocuments(filter),
       ]);
+      const visible = filterPublicArticles(items, locale, now);
 
       return {
-        articles: items.map((article) => toPublicCard(article, locale)),
+        articles: visible.map((article) => toPublicCard(article, locale)),
         total,
         page,
         pageSize,
@@ -163,15 +190,18 @@ export async function listFeaturedArticles(locale: AppLocale, limit = 3) {
     [CmsCacheTags.articles],
     async () => {
       await connectDb();
+      const now = new Date();
       const items = await Article.find({
-        ...publishedLocaleFilter(locale),
+        ...publishedLocaleFilter(locale, now),
         featured: true,
       })
         .sort({ publishedAt: -1, createdAt: -1 })
         .limit(limit)
         .lean<ArticleDocument[]>();
 
-      return items.map((article) => toPublicCard(article, locale));
+      return filterPublicArticles(items, locale, now).map((article) =>
+        toPublicCard(article, locale),
+      );
     },
   );
 }

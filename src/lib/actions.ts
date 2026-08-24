@@ -370,9 +370,10 @@ function buildArticleContentPatch(
   locales: Awaited<ReturnType<typeof buildArticleLocales>>,
   categoryIds: mongoose.Types.ObjectId[],
   tags: string[],
+  options?: { featured?: boolean },
 ) {
   return {
-    featured: data.featured,
+    featured: options?.featured ?? data.featured,
     coverImageUrl: data.coverImageUrl.trim(),
     coverImageFocus: normalizeCoverFocus(data.coverImageFocus),
     ogImageUrl: data.ogImageUrl.trim(),
@@ -412,6 +413,11 @@ export async function autoSaveArticleAction(
       const existing = await Article.findOne({ _id: id, ...notDeletedFilter });
       if (!existing) return { ok: false, error: "Article not found" };
 
+      const wasPublic =
+        existing.status === "published" || Boolean(existing.featured);
+      const prevViSlug = existing.locales?.vi?.slug ?? "";
+      const prevEnSlug = existing.locales?.en?.slug ?? "";
+
       Object.assign(
         existing,
         buildArticleContentPatch(data, locales, categoryIds, tags),
@@ -420,6 +426,14 @@ export async function autoSaveArticleAction(
         existing.set("createdAt", new Date(data.createdAt));
       }
       await existing.save();
+
+      if (wasPublic || existing.status === "published" || existing.featured) {
+        await bustArticleCache({
+          id: String(existing._id),
+          viSlugs: [prevViSlug, locales.vi.slug],
+          enSlugs: [prevEnSlug, locales.en.slug],
+        });
+      }
       return { ok: true, id: String(existing._id), savedAt };
     }
 
@@ -473,15 +487,15 @@ export async function saveArticleAction(
       const prevEnSlug = existing.locales?.en?.slug ?? "";
 
       existing.status = data.status;
+      const featured = data.status === "published" ? data.featured : false;
       Object.assign(
         existing,
-        buildArticleContentPatch(data, locales, categoryIds, tags),
+        buildArticleContentPatch(data, locales, categoryIds, tags, { featured }),
       );
-      if (data.publishedAt) {
-        existing.publishedAt = new Date(data.publishedAt);
-      } else if (data.status === "published") {
-        // No date chosen → stamp the moment Publish was saved.
-        existing.publishedAt = new Date();
+      if (data.status === "published") {
+        existing.publishedAt = data.publishedAt
+          ? new Date(data.publishedAt)
+          : new Date();
       } else {
         existing.publishedAt = null;
       }
@@ -499,7 +513,7 @@ export async function saveArticleAction(
 
     const created = await Article.create({
       status: data.status,
-      featured: data.featured,
+      featured: data.status === "published" ? data.featured : false,
       coverImageUrl: data.coverImageUrl.trim(),
       coverImageFocus: normalizeCoverFocus(data.coverImageFocus),
       ogImageUrl: data.ogImageUrl.trim(),
@@ -508,10 +522,11 @@ export async function saveArticleAction(
       locales,
       authorId: session.user.id,
       contentSource: "cms",
-      publishedAt: data.publishedAt
-        ? new Date(data.publishedAt)
-        : data.status === "published"
-          ? new Date()
+      publishedAt:
+        data.status === "published"
+          ? data.publishedAt
+            ? new Date(data.publishedAt)
+            : new Date()
           : null,
       ...(data.createdAt ? { createdAt: new Date(data.createdAt) } : {}),
     });

@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import {
   getLocaleContent,
+  isArticlePubliclyVisible,
   listFeaturedArticles,
   listPublishedArticles,
   type PublicArticleCard,
@@ -166,7 +167,9 @@ async function resolveArticlesFromSource(
       const byId = new Map(docs.map((doc) => [String(doc._id), doc]));
       articles = ids
         .map((id) => byId.get(id))
-        .filter((doc): doc is ArticleDocument => Boolean(doc))
+        .filter((doc): doc is ArticleDocument =>
+          Boolean(doc && isArticlePubliclyVisible(doc, locale)),
+        )
         .map((doc) => articleToCard(doc, locale))
         .slice(0, limit);
     }
@@ -189,7 +192,9 @@ async function resolveArticlesFromSource(
         .sort({ publishedAt: -1 })
         .limit(limit)
         .lean<ArticleDocument[]>();
-      articles = docs.map((doc) => articleToCard(doc, locale));
+      articles = docs
+        .filter((doc) => isArticlePubliclyVisible(doc, locale))
+        .map((doc) => articleToCard(doc, locale));
     }
   } else {
     const listed = await listPublishedArticles(locale, 1, limit);
@@ -303,7 +308,7 @@ export async function resolveBlock(
         [`locales.${localeKey}.slug`]: { $nin: ["", null] },
         [`locales.${localeKey}.title`]: { $nin: ["", null] },
       }).lean<ArticleDocument | null>();
-      if (!doc) return { article: null };
+      if (!doc || !isArticlePubliclyVisible(doc, locale)) return { article: null };
       const showExcerpt = settingBoolDefaultTrue(settings, "showExcerpt");
       const card = articleToCard(doc, locale);
       return {

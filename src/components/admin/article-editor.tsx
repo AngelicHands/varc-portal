@@ -158,6 +158,7 @@ export function ArticleEditor({
 
   const resolvedArticleId = savedArticleId ?? articleId;
 
+  const isPublished = form.status === "published";
   const publishedIsScheduled = isFuturePublishAt(form.publishedAt, now);
 
   const previewSlug = useMemo(
@@ -202,7 +203,10 @@ export function ArticleEditor({
     return next;
   }
 
-  function onSave(status: "draft" | "published") {
+  function onSave(
+    status: "draft" | "published",
+    options?: { successMessage?: string },
+  ) {
     setError(null);
 
     if (status === "published") {
@@ -235,31 +239,48 @@ export function ArticleEditor({
       const nextPublishedAt =
         status === "published"
           ? form.publishedAt ?? nowIso()
-          : form.publishedAt;
-      const payload = {
+          : null;
+      const payload: ArticleFormValues = {
         ...form,
         status,
         publishedAt: nextPublishedAt,
+        featured: status === "published" ? form.featured : false,
       };
       const result = await saveArticleAction(resolvedArticleId ?? null, payload);
       const scheduled = isScheduledPublish(status, nextPublishedAt);
-      if (
-        !notifyAction(
-          result,
-          status === "published"
-            ? scheduled
-              ? "Article scheduled"
+      const defaultMessage =
+        status === "published"
+          ? scheduled
+            ? "Article scheduled"
+            : form.status === "published"
+              ? "Article updated"
               : "Article published"
-            : "Article saved",
-        )
+          : form.status === "published"
+            ? "Converted to draft"
+            : "Article saved";
+      if (
+        !notifyAction(result, options?.successMessage ?? defaultMessage)
       ) {
         setError(result.error);
         return;
       }
       syncSavedSnapshot(payload);
+      setForm(payload);
       router.push(`/admin/articles/${result.id}`);
       router.refresh();
     });
+  }
+
+  async function onConvertToDraft() {
+    const confirmed = await ask({
+      title: "Convert to draft",
+      message:
+        "This will unpublish the article and remove it from the public site, including the home page. Continue?",
+      confirmLabel: "Convert to draft",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+    onSave("draft", { successMessage: "Converted to draft" });
   }
 
   async function onDelete() {
@@ -550,15 +571,27 @@ export function ArticleEditor({
                   Preview
                 </span>
               )}
-              <button
-                type="button"
-                disabled={pending || undefined}
-                onClick={() => onSave("draft")}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50 sm:flex-none sm:px-4"
-              >
-                <SaveDraftIcon />
-                Save draft
-              </button>
+              {isPublished ? (
+                <button
+                  type="button"
+                  disabled={pending || undefined}
+                  onClick={() => void onConvertToDraft()}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 hover:bg-amber-100 disabled:opacity-50 sm:flex-none sm:px-4"
+                >
+                  <SaveDraftIcon />
+                  Convert to Draft
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={pending || undefined}
+                  onClick={() => onSave("draft")}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50 sm:flex-none sm:px-4"
+                >
+                  <SaveDraftIcon />
+                  Save draft
+                </button>
+              )}
               <button
                 type="button"
                 disabled={pending || undefined}
@@ -566,7 +599,11 @@ export function ArticleEditor({
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50 sm:flex-none sm:px-4"
               >
                 <PublishIcon />
-                Publish
+                {isPublished
+                  ? publishedIsScheduled
+                    ? "Update schedule"
+                    : "Update"
+                  : "Publish"}
               </button>
               {resolvedArticleId ? (
                 <>
