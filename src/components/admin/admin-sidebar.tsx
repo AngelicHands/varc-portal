@@ -133,18 +133,6 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
-        href: "/admin/backup",
-        label: "Backup/Restore",
-        flag: "site",
-        icon: (
-          <Icon>
-            <path d="M12 3v10" />
-            <path d="m8.5 9.5 3.5 3.5 3.5-3.5" />
-            <rect x="4" y="15" width="16" height="6" rx="1.5" />
-          </Icon>
-        ),
-      },
-      {
         href: "/admin/users",
         label: "Users",
         flag: "users",
@@ -219,17 +207,6 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
-        href: "/admin/pages",
-        label: "Pages",
-        flag: "pages",
-        icon: (
-          <Icon>
-            <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
-            <path d="M14 3v5h5" />
-          </Icon>
-        ),
-      },
-      {
         href: "/admin/callsigns",
         label: "Callsigns",
         flag: "site",
@@ -242,17 +219,6 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
-        href: "/admin/forms",
-        label: "Forms",
-        flag: "site",
-        icon: (
-          <Icon>
-            <rect x="4" y="5" width="16" height="14" rx="2" />
-            <path d="M8 9h8M8 13h5" />
-          </Icon>
-        ),
-      },
-      {
         href: "/admin/mailbox",
         label: "Mailbox",
         flag: "site",
@@ -260,6 +226,33 @@ const navGroups: NavGroup[] = [
           <Icon>
             <rect x="3" y="5" width="18" height="14" rx="2" />
             <path d="m3 7 9 6 9-6" />
+          </Icon>
+        ),
+      },
+    ],
+  },
+  {
+    id: "display",
+    label: "Display",
+    items: [
+      {
+        href: "/admin/menu",
+        label: "Menus",
+        flag: "site",
+        icon: (
+          <Icon>
+            <path d="M5 7h14M5 12h14M5 17h14" />
+          </Icon>
+        ),
+      },
+      {
+        href: "/admin/pages",
+        label: "Pages",
+        flag: "pages",
+        icon: (
+          <Icon>
+            <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+            <path d="M14 3v5h5" />
           </Icon>
         ),
       },
@@ -277,12 +270,31 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
-        href: "/admin/menu",
-        label: "Menus",
+        href: "/admin/forms",
+        label: "Forms",
         flag: "site",
         icon: (
           <Icon>
-            <path d="M5 7h14M5 12h14M5 17h14" />
+            <rect x="4" y="5" width="16" height="14" rx="2" />
+            <path d="M8 9h8M8 13h5" />
+          </Icon>
+        ),
+      },
+    ],
+  },
+  {
+    id: "advance",
+    label: "Advance",
+    items: [
+      {
+        href: "/admin/backup",
+        label: "Backup/Restore",
+        flag: "site",
+        icon: (
+          <Icon>
+            <path d="M12 3v10" />
+            <path d="m8.5 9.5 3.5 3.5 3.5-3.5" />
+            <rect x="4" y="15" width="16" height="6" rx="1.5" />
           </Icon>
         ),
       },

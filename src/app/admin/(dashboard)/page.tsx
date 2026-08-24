@@ -19,16 +19,18 @@ export const dynamic = "force-dynamic";
 
 function CardIcon({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-800">
+    <span
+      className="pointer-events-none absolute top-1/2 right-0 -translate-y-1/2 translate-x-3 text-gray-900/8"
+      aria-hidden
+    >
       <svg
         viewBox="0 0 24 24"
-        className="h-5 w-5"
+        className="h-28 w-28"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.75"
+        strokeWidth="1.25"
         strokeLinecap="round"
         strokeLinejoin="round"
-        aria-hidden
       >
         {children}
       </svg>
@@ -232,14 +234,14 @@ export default async function AdminDashboardPage() {
           <Link
             key={card.href}
             href={card.href}
-            className="rounded-lg border border-gray-200 bg-white p-5 transition hover:border-gray-400"
+            className="relative overflow-hidden rounded-lg border border-gray-200 bg-white p-5 transition hover:border-gray-400"
           >
-            <div className="flex items-start justify-between gap-3">
+            {card.icon}
+            <div className="relative z-10 pr-16">
               <p className="text-sm font-medium text-gray-500">{card.title}</p>
-              {card.icon}
+              <p className="mt-3 text-3xl font-semibold">{card.count}</p>
+              <p className="mt-2 text-sm text-gray-600">{card.hint}</p>
             </div>
-            <p className="mt-3 text-3xl font-semibold">{card.count}</p>
-            <p className="mt-2 text-sm text-gray-600">{card.hint}</p>
           </Link>
         ))}
       </div>

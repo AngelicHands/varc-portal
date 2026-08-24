@@ -65,13 +65,6 @@ export const adminNavGroups: AdminNavGroup[] = [
         keywords: ["configuration", "config", "general"],
       },
       {
-        href: "/admin/backup",
-        label: "Backup/Restore",
-        description: "Export, import, and restore site data and content.",
-        flag: "site",
-        keywords: ["export", "import", "restore", "database"],
-      },
-      {
         href: "/admin/users",
         label: "Users",
         description: "Manage member accounts, profiles, and access.",
@@ -120,13 +113,6 @@ export const adminNavGroups: AdminNavGroup[] = [
         keywords: ["images", "files", "gallery", "uploads"],
       },
       {
-        href: "/admin/pages",
-        label: "Pages",
-        description: "Build and edit static pages for the public site.",
-        flag: "pages",
-        keywords: ["static", "landing"],
-      },
-      {
         href: "/admin/callsigns",
         label: "Callsigns",
         description: "Manage ham radio operator callsign records.",
@@ -134,18 +120,31 @@ export const adminNavGroups: AdminNavGroup[] = [
         keywords: ["ham", "radio", "operators"],
       },
       {
-        href: "/admin/forms",
-        label: "Forms",
-        description: "Create forms and review submitted responses.",
-        flag: "site",
-        keywords: ["submissions", "surveys"],
-      },
-      {
         href: "/admin/mailbox",
         label: "Mailbox",
         description: "View inbound email and outgoing message jobs.",
         flag: "site",
         keywords: ["email", "messages", "inbox"],
+      },
+    ],
+  },
+  {
+    id: "display",
+    label: "Display",
+    items: [
+      {
+        href: "/admin/menu",
+        label: "Menus",
+        description: "Edit header, footer, and navigation menu links.",
+        flag: "site",
+        keywords: ["navigation", "header", "footer"],
+      },
+      {
+        href: "/admin/pages",
+        label: "Pages",
+        description: "Build and edit static pages for the public site.",
+        flag: "pages",
+        keywords: ["static", "landing"],
       },
       {
         href: "/admin/templates",
@@ -155,11 +154,24 @@ export const adminNavGroups: AdminNavGroup[] = [
         keywords: ["layouts", "design"],
       },
       {
-        href: "/admin/menu",
-        label: "Menus",
-        description: "Edit header, footer, and navigation menu links.",
+        href: "/admin/forms",
+        label: "Forms",
+        description: "Create forms and review submitted responses.",
         flag: "site",
-        keywords: ["navigation", "header", "footer"],
+        keywords: ["submissions", "surveys"],
+      },
+    ],
+  },
+  {
+    id: "advance",
+    label: "Advance",
+    items: [
+      {
+        href: "/admin/backup",
+        label: "Backup/Restore",
+        description: "Export, import, and restore site data and content.",
+        flag: "site",
+        keywords: ["export", "import", "restore", "database"],
       },
     ],
   },
