@@ -8,9 +8,9 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
-  S3Client,
 } from "@aws-sdk/client-s3";
 import { getMediaConfig } from "@/lib/media/config";
+import { createS3Client } from "@/lib/s3-client";
 
 export type BackupArtifactRead = {
   stream: Readable;
@@ -104,16 +104,8 @@ export function getBackupArtifactConfig(): ArtifactConfig {
   };
 }
 
-function createS3Client(config: Extract<ArtifactConfig, { driver: "s3" }>) {
-  return new S3Client({
-    region: config.region,
-    endpoint: config.endpoint,
-    forcePathStyle: config.forcePathStyle,
-    credentials: {
-      accessKeyId: config.accessKey,
-      secretAccessKey: config.secretKey,
-    },
-  });
+function createBackupS3Client(config: Extract<ArtifactConfig, { driver: "s3" }>) {
+  return createS3Client(config);
 }
 
 export function buildBackupArtifactKey(fileName: string, now = new Date()): string {
@@ -145,7 +137,7 @@ export async function putBackupArtifactStream(
     };
   }
 
-  const client = createS3Client(config);
+  const client = createBackupS3Client(config);
   await client.send(
     new PutObjectCommand({
       Bucket: config.bucket,
@@ -204,7 +196,7 @@ export async function getBackupArtifactStream(
     };
   }
 
-  const client = createS3Client(config);
+  const client = createBackupS3Client(config);
   const result = await client.send(
     new GetObjectCommand({
       Bucket: config.bucket,
@@ -239,7 +231,7 @@ export async function deleteBackupArtifact(key: string): Promise<void> {
     return;
   }
 
-  const client = createS3Client(config);
+  const client = createBackupS3Client(config);
   await client.send(
     new DeleteObjectCommand({
       Bucket: config.bucket,

@@ -25,19 +25,19 @@ func newS3Client(cfg config.StorageConfig) (*s3.Client, error) {
 	if region == "" {
 		region = "us-east-1"
 	}
-	resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		return aws.Endpoint{URL: cfg.S3Endpoint, SigningRegion: region}, nil
-	})
 	awsCfg, err := awsconfig.LoadDefaultConfig(context.Background(),
 		awsconfig.WithRegion(region),
 		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.S3AccessKey, cfg.S3SecretKey, "")),
-		awsconfig.WithEndpointResolverWithOptions(resolver),
 	)
 	if err != nil {
 		return nil, err
 	}
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(cfg.S3Endpoint)
 		o.UsePathStyle = cfg.S3ForcePath
+		// S3-compatible stores (e.g. MinIO) often reject default CRC32 checksum trailers.
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
+		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
 	})
 	return client, nil
 }
@@ -70,12 +70,18 @@ func putS3Object(cfg config.StorageConfig, key string, body io.Reader, contentTy
 	if err != nil {
 		return err
 	}
-	_, err = client.PutObject(context.Background(), &s3.PutObjectInput{
+	input := &s3.PutObjectInput{
 		Bucket:      aws.String(cfg.S3Bucket),
 		Key:         aws.String(key),
 		Body:        body,
 		ContentType: aws.String(contentType),
-	})
+	}
+	if stater, ok := body.(interface{ Stat() (os.FileInfo, error) }); ok {
+		if info, statErr := stater.Stat(); statErr == nil && info.Size() >= 0 {
+			input.ContentLength = aws.Int64(info.Size())
+		}
+	}
+	_, err = client.PutObject(context.Background(), input)
 	return err
 }
 
@@ -194,12 +200,18 @@ func putBackupArtifactStream(cfg config.WorkerConfig, key string, body io.Reader
 		return StoredArtifact{}, err
 	}
 	s3Key := art.S3Prefix + "/" + key
-	_, err = client.PutObject(context.Background(), &s3.PutObjectInput{
+	input := &s3.PutObjectInput{
 		Bucket:      aws.String(art.S3Bucket),
 		Key:         aws.String(s3Key),
 		Body:        body,
 		ContentType: aws.String(contentType),
-	})
+	}
+	if stater, ok := body.(interface{ Stat() (os.FileInfo, error) }); ok {
+		if info, statErr := stater.Stat(); statErr == nil && info.Size() >= 0 {
+			input.ContentLength = aws.Int64(info.Size())
+		}
+	}
+	_, err = client.PutObject(context.Background(), input)
 	if err != nil {
 		return StoredArtifact{}, err
 	}

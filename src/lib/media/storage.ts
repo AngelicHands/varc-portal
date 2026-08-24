@@ -8,9 +8,9 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
-  S3Client,
 } from "@aws-sdk/client-s3";
 import { getMediaConfig, type MediaConfig } from "@/lib/media/config";
+import { createS3Client } from "@/lib/s3-client";
 
 export type StoredObject = {
   key: string;
@@ -64,16 +64,8 @@ export function publicUrlForObjectKey(key: string): string {
     : s3PublicUrl(config, safeKey);
 }
 
-function createS3Client(config: Extract<MediaConfig, { driver: "s3" }>) {
-  return new S3Client({
-    region: config.region,
-    endpoint: config.endpoint,
-    forcePathStyle: config.forcePathStyle,
-    credentials: {
-      accessKeyId: config.accessKey,
-      secretAccessKey: config.secretKey,
-    },
-  });
+function createMediaS3Client(config: Extract<MediaConfig, { driver: "s3" }>) {
+  return createS3Client(config);
 }
 
 export async function putObject(
@@ -96,7 +88,7 @@ export async function putObject(
     };
   }
 
-  const client = createS3Client(config);
+  const client = createMediaS3Client(config);
   await client.send(
     new PutObjectCommand({
       Bucket: config.bucket,
@@ -135,7 +127,7 @@ export async function putObjectStream(
     };
   }
 
-  const client = createS3Client(config);
+  const client = createMediaS3Client(config);
   await client.send(
     new PutObjectCommand({
       Bucket: config.bucket,
@@ -183,7 +175,7 @@ export async function getObjectStream(key: string): Promise<MediaReadResult> {
   }
 
   // S3 objects are normally served from S3_PUBLIC_URL; this path is a fallback.
-  const client = createS3Client(config);
+  const client = createMediaS3Client(config);
   const result = await client.send(
     new GetObjectCommand({
       Bucket: config.bucket,
@@ -219,7 +211,7 @@ export async function deleteObject(key: string): Promise<void> {
     return;
   }
 
-  const client = createS3Client(config);
+  const client = createMediaS3Client(config);
   await client.send(
     new DeleteObjectCommand({
       Bucket: config.bucket,
