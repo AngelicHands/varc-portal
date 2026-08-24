@@ -12,6 +12,7 @@ export const operatorKindSchema = z.enum(["person", "org"]);
 
 const licenseSchema = z.object({
   id: z.string().optional(),
+  operatorName: z.string().trim().min(1, "Operator name is required").max(160),
   permitRaw: z.string().trim().max(80),
   permitType: permitTypeSchema.optional(),
   issuedAt: z.string().trim().max(10).nullable(),
@@ -19,7 +20,9 @@ const licenseSchema = z.object({
   notes: z.string().trim().max(500),
 });
 
-export const callsignFormSchema = z.object({
+export const callsignLicenseSchema = licenseSchema;
+
+export const callsignDetailsSchema = z.object({
   sign: z
     .string()
     .trim()
@@ -28,6 +31,9 @@ export const callsignFormSchema = z.object({
     .transform((value) => value.toUpperCase()),
   operatorName: z.string().trim().min(1, "Operator name is required").max(160),
   operatorKind: operatorKindSchema,
+});
+
+export const callsignFormSchema = callsignDetailsSchema.extend({
   licenses: z
     .array(licenseSchema)
     .min(1, "Add at least one license event")

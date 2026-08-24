@@ -147,6 +147,61 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
     }
   }
 
+  async function confirmDeleteAllJobs() {
+    const jobLabel = kind === "import" ? "import jobs" : "export jobs";
+    const confirmed = await ask({
+      title: `Delete all ${jobLabel}?`,
+      message: `Remove every ${jobLabel} except any currently running. This cannot be undone.`,
+      confirmLabel: "Delete all",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
+    setPending(true);
+    try {
+      await deleteAllJobs();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function deleteAllJobs() {
+    const response = await fetch(
+      `/api/admin/import-export/jobs?kind=${encodeURIComponent(kind)}`,
+      { method: "DELETE" },
+    );
+    const payload = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      deletedCount?: number;
+      keptRunning?: number;
+    };
+    if (!response.ok) {
+      notifyAction(
+        { ok: false, error: payload.error || "Failed to delete jobs" },
+        "",
+      );
+      return;
+    }
+
+    setPage(1);
+    setData((current) => ({
+      ...current,
+      jobs: current.jobs.filter((job) => job.status === "running"),
+      total: payload.keptRunning ?? 0,
+      page: 1,
+      totalPages: 1,
+    }));
+
+    const deleted = payload.deletedCount ?? 0;
+    const kept = payload.keptRunning ?? 0;
+    notifyAction(
+      { ok: true },
+      kept > 0
+        ? `Deleted ${deleted} job${deleted === 1 ? "" : "s"}; ${kept} running job${kept === 1 ? "" : "s"} kept`
+        : `Deleted ${deleted} job${deleted === 1 ? "" : "s"}`,
+    );
+  }
+
   async function deleteJob(jobId: string) {
     const response = await fetch(`/api/admin/import-export/jobs/${jobId}`, {
       method: "DELETE",
@@ -201,14 +256,24 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
               </p>
             ) : null}
           </div>
-          <button
-            type="button"
-            disabled={!canRun || pending || hasActive}
-            onClick={() => void onRunJob()}
-            className="shrink-0 rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
-          >
-            {runLabel}
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={total === 0 || pending}
+              onClick={() => void confirmDeleteAllJobs()}
+              className="rounded border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              Delete all
+            </button>
+            <button
+              type="button"
+              disabled={!canRun || pending || hasActive}
+              onClick={() => void onRunJob()}
+              className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
+            >
+              {runLabel}
+            </button>
+          </div>
         </div>
 
         {!settings.isConfigured ? (

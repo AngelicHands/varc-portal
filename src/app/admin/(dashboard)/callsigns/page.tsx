@@ -5,6 +5,11 @@ import {
   getCallsignImportSummary,
   listAdminCallsigns,
 } from "@/lib/callsigns-admin";
+import {
+  parseOperatorKindFilter,
+  parsePermitTypeFilter,
+} from "@/lib/callsigns-filters";
+import { CallsignListFilters } from "@/components/admin/callsign-list-filters";
 import { CallsignListToolbar } from "@/components/admin/callsign-list-toolbar";
 import { ActiveRowActions } from "@/components/admin/active-row-actions";
 import { formatDateUtc7 } from "@/lib/datetime-local";
@@ -12,15 +17,23 @@ import { formatDateUtc7 } from "@/lib/datetime-local";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    operatorKind?: string;
+    permitType?: string;
+  }>;
 };
 
 export default async function AdminCallsignsPage({ searchParams }: Props) {
   await requireSitePage();
-  const { q } = await searchParams;
-  const query = (q ?? "").trim();
+  const params = await searchParams;
+  const query = (params.q ?? "").trim();
+  const operatorKind = parseOperatorKindFilter(params.operatorKind);
+  const permitType = parsePermitTypeFilter(params.permitType);
+  const filtered =
+    Boolean(query) || operatorKind !== "all" || permitType !== "all";
   const [items, summary] = await Promise.all([
-    listAdminCallsigns(query),
+    listAdminCallsigns({ q: query, operatorKind, permitType }),
     getCallsignImportSummary(),
   ]);
 
@@ -37,28 +50,16 @@ export default async function AdminCallsignsPage({ searchParams }: Props) {
         <CallsignListToolbar lastImport={summary.lastImport} />
       </div>
 
-      <form method="get" className="flex flex-wrap items-end gap-3">
-        <label className="block min-w-56 flex-1 text-sm">
-          <span className="mb-1 block font-medium">Search</span>
-          <input
-            name="q"
-            defaultValue={query}
-            placeholder="XV2T or operator name"
-            className="w-full rounded border border-gray-300 px-3 py-2"
-          />
-        </label>
-        <button
-          type="submit"
-          className="rounded border border-gray-300 bg-white px-4 py-2 text-sm hover:bg-gray-50"
-        >
-          Search
-        </button>
-      </form>
+      <CallsignListFilters
+        q={query}
+        operatorKind={operatorKind}
+        permitType={permitType}
+      />
 
       {items.length === 0 ? (
         <p className="text-gray-600">
-          {query
-            ? "No callsigns match that search."
+          {filtered
+            ? "No callsigns match that search or filter."
             : "No callsigns yet. Import the Excel file or create one."}
         </p>
       ) : (

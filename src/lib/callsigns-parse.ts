@@ -187,6 +187,46 @@ export function licenseStatusFromExpiry(
   return end < now ? "expired" : "valid";
 }
 
+/** Both issue and expiry are set, and expiry is not before issue. */
+export function licenseHasValidDates(
+  issuedAt: string | null | undefined,
+  expiresAt: string | null | undefined,
+): boolean {
+  if (!issuedAt || !expiresAt) return false;
+  return expiresAt >= issuedAt;
+}
+
+/** License period covers today (inclusive). */
+export function isLicenseCurrentlyActive(
+  issuedAt: string | null | undefined,
+  expiresAt: string | null | undefined,
+  now = new Date(),
+): boolean {
+  if (!licenseHasValidDates(issuedAt, expiresAt)) return false;
+  const today = now.toISOString().slice(0, 10);
+  return issuedAt! <= today && expiresAt! >= today;
+}
+
+export function dayBeforeIso(iso: string): string {
+  const date = new Date(`${iso}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Only the latest license may be active (`valid`).
+ * Older events that would still look current are treated as past (`expired`).
+ */
+export function licenseStatusForRole(
+  expiresAt: string | null | undefined,
+  isLatest: boolean,
+  now = new Date(),
+): LicenseStatus {
+  const status = licenseStatusFromExpiry(expiresAt ?? null, now);
+  if (!isLatest && status === "valid") return "expired";
+  return status;
+}
+
 export function buildImportEvent(input: {
   stt: number;
   name: string;

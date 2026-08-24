@@ -5,6 +5,7 @@ import { notifyAction } from "@/components/admin/admin-toast";
 import type { AdminBackupJob } from "@/lib/backup/jobs";
 
 type Props = {
+  view: "settings" | "jobs";
   initialJobs: AdminBackupJob[];
   estimatedBytes: number;
   uniqueMediaFiles: number;
@@ -46,6 +47,7 @@ async function readActionPayload(response: Response): Promise<{ error?: string }
 }
 
 export function BackupManager({
+  view,
   initialJobs,
   estimatedBytes,
   uniqueMediaFiles,
@@ -216,6 +218,7 @@ export function BackupManager({
 
   return (
     <div className="space-y-8">
+      {view === "settings" ? (
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-lg border border-gray-200 bg-white p-5">
           <h2 className="text-lg font-semibold">Create Backup</h2>
@@ -337,7 +340,9 @@ export function BackupManager({
           </form>
         </section>
       </div>
+      ) : null}
 
+      {view === "jobs" ? (
       <section className="rounded-lg border border-gray-200 bg-white">
         <div className="border-b border-gray-200 px-5 py-4">
           <h2 className="text-lg font-semibold">Recent Jobs</h2>
@@ -424,6 +429,7 @@ export function BackupManager({
           </div>
         )}
       </section>
+      ) : null}
     </div>
   );
 }

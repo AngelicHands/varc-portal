@@ -3,13 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import {
+  CallsignExistsError,
   createAdminCallsign,
   deleteAdminCallsign,
-  updateAdminCallsign,
+  deleteAdminCallsignLicense,
+  saveAdminCallsignLicense,
+  updateAdminCallsignDetails,
 } from "@/lib/callsigns-admin";
 import { importCallsignPayload } from "@/lib/callsigns-import";
 import { parseCallsignXlsx } from "@/lib/callsigns-xlsx";
-import { callsignFormSchema } from "@/lib/validations/callsigns";
+import {
+  callsignDetailsSchema,
+  callsignFormSchema,
+  callsignLicenseSchema,
+} from "@/lib/validations/callsigns";
 import { canManageSite, isAdminRole } from "@/lib/roles";
 import { failAction } from "@/lib/safe-error";
 
@@ -75,6 +82,20 @@ export async function createCallsignAction(input: unknown) {
     await refreshCallsignPaths(created.sign);
     return { ok: true as const, sign: created.sign };
   } catch (error) {
+    if (
+      error instanceof CallsignExistsError ||
+      (error instanceof Error && error.name === "CallsignExistsError")
+    ) {
+      const sign =
+        error instanceof CallsignExistsError
+          ? error.sign
+          : error.message.replace(/^Callsign\s+/i, "").replace(/\s+already exists$/i, "");
+      return {
+        ok: false as const,
+        error: `Callsign ${sign} already exists. Open it to add or edit licenses.`,
+        existingSign: sign,
+      };
+    }
     return failAction(error, "Failed to create callsign");
   }
 }
@@ -82,18 +103,70 @@ export async function createCallsignAction(input: unknown) {
 export async function updateCallsignAction(sign: string, input: unknown) {
   try {
     await requireCallsignManager();
-    const parsed = callsignFormSchema.safeParse(input);
+    const parsed = callsignDetailsSchema.safeParse(input);
     if (!parsed.success) {
       return {
         ok: false as const,
         error: parsed.error.issues[0]?.message || "Invalid callsign",
       };
     }
-    const updated = await updateAdminCallsign(sign, parsed.data);
+    const updated = await updateAdminCallsignDetails(sign, parsed.data);
     await refreshCallsignPaths(updated.sign);
     return { ok: true as const, sign: updated.sign };
   } catch (error) {
     return failAction(error, "Failed to save callsign");
+  }
+}
+
+export async function saveCallsignLicenseAction(sign: string, input: unknown) {
+  try {
+    await requireCallsignManager();
+    const parsed = callsignLicenseSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false as const,
+        error: parsed.error.issues[0]?.message || "Invalid license event",
+      };
+    }
+    const result = await saveAdminCallsignLicense(sign, {
+      ...parsed.data,
+      issuedAt: parsed.data.issuedAt || null,
+      expiresAt: parsed.data.expiresAt || null,
+    });
+    await refreshCallsignPaths(result.sign);
+    return { ok: true as const, sign: result.sign, record: result.record };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message === "License event not found" ||
+        error.message === "Callsign not found" ||
+        error.message === "Operator name is required")
+    ) {
+      return { ok: false as const, error: error.message };
+    }
+    return failAction(error, "Failed to save license event");
+  }
+}
+
+export async function deleteCallsignLicenseAction(
+  sign: string,
+  licenseId: string,
+) {
+  try {
+    await requireCallsignManager();
+    const result = await deleteAdminCallsignLicense(sign, licenseId);
+    await refreshCallsignPaths(result.sign);
+    return { ok: true as const, sign: result.sign };
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message === "Keep at least one license event" ||
+        error.message === "License event not found" ||
+        error.message === "Callsign not found")
+    ) {
+      return { ok: false as const, error: error.message };
+    }
+    return failAction(error, "Failed to delete license event");
   }
 }
 

@@ -137,6 +137,22 @@ export async function deleteImportExportJob(id: string): Promise<boolean> {
   return result.deletedCount === 1;
 }
 
+export async function deleteImportExportJobs(
+  kind: ImportExportJobKind,
+): Promise<{ deletedCount: number; keptRunning: number }> {
+  await connectDb();
+  const filter = { kind, status: { $ne: "running" as const } };
+  const keptRunning = await ImportExportJob.countDocuments({
+    kind,
+    status: "running",
+  });
+  const result = await ImportExportJob.deleteMany(filter);
+  return {
+    deletedCount: result.deletedCount ?? 0,
+    keptRunning,
+  };
+}
+
 export async function getImportExportJobDocument(
   id: string,
 ): Promise<ImportExportJobDocument | null> {

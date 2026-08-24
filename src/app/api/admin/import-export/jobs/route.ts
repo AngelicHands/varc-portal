@@ -3,6 +3,7 @@ import { requireSiteAdminApi } from "@/lib/admin-api";
 import { canManageImportExport } from "@/lib/roles";
 import {
   createImportExportJob,
+  deleteImportExportJobs,
   hasActiveImportExportJob,
   listImportExportJobsPage,
   parseImportExportJobsPage,
@@ -63,6 +64,32 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: publicErrorMessage(error, "Failed to create job") },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  const session = await requireSiteAdminApi();
+  if (!session || !canManageImportExport(session.user)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const kind = url.searchParams.get("kind");
+  if (kind !== "import" && kind !== "export") {
+    return NextResponse.json({ error: "Invalid kind" }, { status: 400 });
+  }
+
+  try {
+    const result = await deleteImportExportJobs(kind);
+    if (result.deletedCount === 0 && result.keptRunning === 0) {
+      return NextResponse.json({ error: "No jobs to delete" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    return NextResponse.json(
+      { error: publicErrorMessage(error, "Failed to delete jobs") },
       { status: 500 },
     );
   }
