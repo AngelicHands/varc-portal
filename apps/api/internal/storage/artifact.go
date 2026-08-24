@@ -10,12 +10,36 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go/middleware"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 	"github.com/google/uuid"
 	"github.com/varc-vietnam/varc-portal/apps/api/internal/config"
 )
+
+// stripSDKHeaders removes SDK-specific headers that older MinIO builds include
+// in signed-header verification but strip from the forwarded request, causing
+// SignatureDoesNotMatch.
+type stripSDKHeaders struct{}
+
+func (*stripSDKHeaders) ID() string { return "StripSDKHeaders" }
+func (*stripSDKHeaders) HandleFinalize(ctx context.Context, in middleware.FinalizeInput, next middleware.FinalizeHandler) (middleware.FinalizeOutput, middleware.Metadata, error) {
+	if req, ok := in.Request.(*smithyhttp.Request); ok {
+		req.Header.Del("Amz-Sdk-Invocation-Id")
+		req.Header.Del("Amz-Sdk-Request")
+		req.Header.Del("Accept-Encoding")
+	}
+	return next.HandleFinalize(ctx, in)
+}
+
+func s3CompatibleAPIOption(stack *middleware.Stack) error {
+	stack.Finalize.Insert(&stripSDKHeaders{}, "Signing", middleware.Before)
+	_, err := stack.Finalize.Swap("ComputePayloadHash", &v4.ComputePayloadSHA256{})
+	return err
+}
 
 func newS3Client(cfg config.StorageConfig) (*s3.Client, error) {
 	if cfg.S3Endpoint == "" || cfg.S3AccessKey == "" || cfg.S3SecretKey == "" {
@@ -35,9 +59,9 @@ func newS3Client(cfg config.StorageConfig) (*s3.Client, error) {
 	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(cfg.S3Endpoint)
 		o.UsePathStyle = cfg.S3ForcePath
-		// S3-compatible stores (e.g. MinIO) often reject default CRC32 checksum trailers.
 		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 		o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+		o.APIOptions = append(o.APIOptions, s3CompatibleAPIOption)
 	})
 	return client, nil
 }
