@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -94,19 +95,43 @@ func putS3Object(cfg config.StorageConfig, key string, body io.Reader, contentTy
 	if err != nil {
 		return err
 	}
-	input := &s3.PutObjectInput{
-		Bucket:      aws.String(cfg.S3Bucket),
-		Key:         aws.String(key),
-		Body:        body,
-		ContentType: aws.String(contentType),
+	seekable, size, err := seekableBody(body)
+	if err != nil {
+		return err
 	}
-	if stater, ok := body.(interface{ Stat() (os.FileInfo, error) }); ok {
-		if info, statErr := stater.Stat(); statErr == nil && info.Size() >= 0 {
-			input.ContentLength = aws.Int64(info.Size())
-		}
+	input := &s3.PutObjectInput{
+		Bucket:        aws.String(cfg.S3Bucket),
+		Key:           aws.String(key),
+		Body:          seekable,
+		ContentType:   aws.String(contentType),
+		ContentLength: aws.Int64(size),
 	}
 	_, err = client.PutObject(context.Background(), input)
 	return err
+}
+
+func seekableBody(body io.Reader) (io.Reader, int64, error) {
+	if stater, ok := body.(interface{ Stat() (os.FileInfo, error) }); ok {
+		if info, err := stater.Stat(); err == nil && info.Size() >= 0 {
+			if seeker, ok := body.(io.Seeker); ok {
+				if _, err := seeker.Seek(0, io.SeekStart); err == nil {
+					return body, info.Size(), nil
+				}
+			}
+		}
+	}
+	if seeker, ok := body.(io.ReadSeeker); ok {
+		if size, err := seeker.Seek(0, io.SeekEnd); err == nil {
+			if _, err := seeker.Seek(0, io.SeekStart); err == nil {
+				return seeker, size, nil
+			}
+		}
+	}
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return nil, 0, err
+	}
+	return bytes.NewReader(data), int64(len(data)), nil
 }
 
 func deleteS3Object(cfg config.StorageConfig, key string) error {
