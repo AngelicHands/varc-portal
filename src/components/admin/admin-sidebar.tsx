@@ -7,6 +7,8 @@ import { AdminAccountMenu } from "@/components/admin/admin-account-menu";
 
 const STORAGE_KEY = "varc-admin-sidebar-expanded";
 const SIDEBAR_EVENT = "varc-admin-sidebar";
+const SIDEBAR_TOGGLE_TRANSITION =
+  "duration-300 ease-in-out motion-reduce:transition-none";
 
 function subscribeExpanded(onStoreChange: () => void) {
   window.addEventListener("storage", onStoreChange);
@@ -367,7 +369,7 @@ export function AdminSidebar({
 
   const showLabels = expanded || mobileOpen;
 
-  function onSidebarFooterClick() {
+  function onSidebarToggleClick() {
     const desktop = window.matchMedia("(min-width: 1024px)").matches;
     if (desktop) {
       toggleExpanded();
@@ -376,34 +378,16 @@ export function AdminSidebar({
     setMobileOpen(false);
   }
 
-  const sidebarFooterLabel = mobileOpen
+  const sidebarToggleLabel = mobileOpen
     ? "Close menu"
     : expanded
       ? "Collapse sidebar"
       : "Expand sidebar";
 
-  const collapseToggleButton = (
-    <button
-      type="button"
-      onClick={onSidebarFooterClick}
-      className="flex w-full cursor-pointer items-center justify-center rounded-md py-2 text-gray-400 transition-colors duration-300 ease-in-out hover:bg-gray-50 hover:text-gray-600"
-      aria-label={sidebarFooterLabel}
-      title={sidebarFooterLabel}
-    >
-      <Icon
-        className={`h-4 w-4 transition-transform duration-300 ease-in-out motion-reduce:transition-none ${
-          expanded || mobileOpen ? "rotate-0" : "rotate-180"
-        }`}
-      >
-        <path d="M15 6 9 12l6 6" />
-      </Icon>
-    </button>
-  );
-
   const nav = (
     <div className="flex h-full flex-col">
       <div
-        className={`flex h-14 shrink-0 items-center border-b border-gray-200 px-3 ${
+        className={`flex h-14 shrink-0 items-center border-x-0 border-b border-t-0 border-gray-200 px-3 ${
           showLabels ? "justify-start" : "justify-center"
         }`}
       >
@@ -431,7 +415,7 @@ export function AdminSidebar({
         )}
       </div>
 
-      <nav className="flex-1 space-y-4 overflow-y-auto p-2">
+      <nav className="flex-1 space-y-4 overflow-y-auto border-r border-gray-200 p-2">
         {visibleGroups.map((group) => (
           <div key={group.id} className="space-y-1">
             {group.label ? (
@@ -489,10 +473,6 @@ export function AdminSidebar({
           </div>
         ))}
       </nav>
-
-      <div className="shrink-0 border-t border-gray-200">
-        {collapseToggleButton}
-      </div>
     </div>
   );
 
@@ -537,8 +517,26 @@ export function AdminSidebar({
       <aside
         data-mobile-open={mobileOpen ? "true" : "false"}
         data-expanded={expanded ? "true" : "false"}
-        className="admin-sidebar-aside fixed inset-y-0 left-0 z-50 border-r border-gray-200 bg-white motion-reduce:transition-none"
+        className="admin-sidebar-aside fixed inset-y-0 left-0 z-50 bg-white motion-reduce:transition-none"
       >
+        <button
+          type="button"
+          onClick={onSidebarToggleClick}
+          className={`absolute top-1/2 right-0 z-10 flex h-9 w-9 translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 ${SIDEBAR_TOGGLE_TRANSITION} ${
+            mobileOpen ? "flex" : "hidden lg:flex"
+          }`}
+          aria-label={sidebarToggleLabel}
+          title={sidebarToggleLabel}
+        >
+          <Icon
+            className={`h-4 w-4 transition-transform ${SIDEBAR_TOGGLE_TRANSITION} ${
+              expanded || mobileOpen ? "rotate-0" : "rotate-180"
+            }`}
+          >
+            {/* Left-pointing chevron: collapse ← when expanded, expand → when collapsed */}
+            <path d="M15 6 9 12l6 6" />
+          </Icon>
+        </button>
         {nav}
       </aside>
       {/* Reserve horizontal space so main content isn't under the fixed sidebar */}

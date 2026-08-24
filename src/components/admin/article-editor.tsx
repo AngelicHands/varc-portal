@@ -320,7 +320,7 @@ export function ArticleEditor({
   const locale = form.locales[tab];
 
   const sidePanels = {
-    category: (
+    properties: (
       <div className="grid min-w-0 content-start gap-5">
         <label className="flex min-w-0 cursor-pointer items-start gap-3 rounded-md border border-gray-200 bg-white px-3 py-3 text-sm">
           <AdminCheckbox
@@ -773,13 +773,13 @@ export function ArticleEditor({
             </div>
           </div>
         </div>
-
-        <ArticleSectionAside
-          openSection={sideSection}
-          onOpenSectionChange={setSideSection}
-          panels={sidePanels}
-        />
       </div>
+
+      <ArticleSectionAside
+        openSection={sideSection}
+        onOpenSectionChange={setSideSection}
+        panels={sidePanels}
+      />
       {modal}
     </>
   );
