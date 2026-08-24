@@ -1,17 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useSyncExternalStore,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
-const STORAGE_KEY = "varc-article-section-aside-expanded";
+const STORAGE_KEY = "varc-article-section-aside-expanded-v2";
 const ASIDE_EVENT = "varc-article-section-aside";
 const PANEL_TRANSITION = "duration-300 ease-in-out motion-reduce:transition-none";
 
+/** Outer shell widths (animated). */
 export const ARTICLE_ASIDE_WIDTH_EXPANDED = "w-72";
 export const ARTICLE_ASIDE_WIDTH_COLLAPSED = "w-[4.5rem]";
+/** Inner content always stays this wide; outer overflow clips it. */
+export const ARTICLE_ASIDE_INNER_WIDTH = "w-72 shrink-0";
 export const ARTICLE_ASIDE_PAD_EXPANDED = "lg:pr-80";
 export const ARTICLE_ASIDE_PAD_COLLAPSED = "lg:pr-24";
 
-export type ArticleSideSectionId = "category" | "images" | "seo" | "datetime";
+export type ArticleSideSectionId = "properties" | "images" | "seo" | "datetime";
 
 type SectionItem = {
   id: ArticleSideSectionId;
@@ -44,8 +53,8 @@ function Icon({
 
 export const ARTICLE_SIDE_SECTIONS: SectionItem[] = [
   {
-    id: "category",
-    label: "Category",
+    id: "properties",
+    label: "Properties",
     icon: (
       <Icon>
         <path d="M4 7h6l2 2h8v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" />
@@ -94,12 +103,23 @@ function subscribe(onStoreChange: () => void) {
   };
 }
 
-function getSnapshot() {
+function isDesktopViewport() {
+  return window.matchMedia("(min-width: 1024px)").matches;
+}
+
+function readExpandedPreference(): boolean {
   try {
-    return window.localStorage.getItem(STORAGE_KEY) !== "0";
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (stored === null) return true;
+    return stored !== "0";
   } catch {
     return true;
   }
+}
+
+function getSnapshot() {
+  if (!isDesktopViewport()) return true;
+  return readExpandedPreference();
 }
 
 function getServerSnapshot() {
@@ -108,7 +128,9 @@ function getServerSnapshot() {
 
 function setExpandedPreference(next: boolean) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+    if (isDesktopViewport()) {
+      window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
+    }
   } catch {
     // ignore
   }
@@ -189,17 +211,145 @@ type Props = {
   panels: Record<ArticleSideSectionId, ReactNode>;
 };
 
+/**
+ * Icon sits in a fixed column matching the collapsed rail width so that when
+ * the outer shell clips to w-[4.5rem], only the icons remain visible.
+ */
+function AsideSectionHeader({
+  item,
+  open,
+  onToggle,
+}: {
+  item: (typeof ARTICLE_SIDE_SECTIONS)[number];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      title={item.label}
+      className={`flex w-full cursor-pointer items-stretch text-left text-sm transition-colors ${PANEL_TRANSITION} ${
+        open
+          ? "bg-gray-900 text-white"
+          : "bg-white text-gray-800 hover:bg-gray-50"
+      }`}
+    >
+      <span className="flex w-[4.5rem] shrink-0 items-center justify-center py-3.5">
+        {item.icon}
+      </span>
+      <span className="flex min-w-0 flex-1 items-center gap-3 py-3.5 pr-4">
+        <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
+        <SectionChevron open={open} />
+      </span>
+    </button>
+  );
+}
+
+function ArticleAsideDesktopStack({
+  stackRef,
+  openSection,
+  railExpanded,
+  onToggleSection,
+  panels,
+}: {
+  stackRef: RefObject<HTMLDivElement | null>;
+  openSection: ArticleSideSectionId | null;
+  railExpanded: boolean;
+  onToggleSection: (id: ArticleSideSectionId) => void;
+  panels: Record<ArticleSideSectionId, ReactNode>;
+}) {
+  return (
+    <div
+      ref={stackRef}
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
+    >
+      {ARTICLE_SIDE_SECTIONS.map((item) => {
+        const open = openSection === item.id;
+        return (
+          <div
+            key={`desktop-${item.id}`}
+            id={`article-aside-section-${item.id}`}
+            className={`flex min-h-0 flex-col border-b border-gray-200 last:border-b-0 ${
+              open && railExpanded ? "min-h-0 flex-1" : "shrink-0"
+            }`}
+          >
+            <AsideSectionHeader
+              item={item}
+              open={open}
+              onToggle={() => onToggleSection(item.id)}
+            />
+            <AccordionPanel
+              open={open && railExpanded}
+              panelClassName="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50/80 px-4 py-4"
+            >
+              <div className="w-full min-w-0">{panels[item.id]}</div>
+            </AccordionPanel>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ArticleAsideMobileStack({
+  stackRef,
+  openSection,
+  onToggleSection,
+  panels,
+}: {
+  stackRef: RefObject<HTMLDivElement | null>;
+  openSection: ArticleSideSectionId | null;
+  onToggleSection: (id: ArticleSideSectionId) => void;
+  panels: Record<ArticleSideSectionId, ReactNode>;
+}) {
+  return (
+    <div
+      ref={stackRef}
+      className="flex max-h-[min(80vh,40rem)] flex-col overflow-y-auto overscroll-contain"
+    >
+      {ARTICLE_SIDE_SECTIONS.map((item) => {
+        const open = openSection === item.id;
+        return (
+          <div
+            key={`mobile-${item.id}`}
+            id={`article-aside-section-${item.id}`}
+            className="border-b border-gray-200 last:border-b-0"
+          >
+            <AsideSectionHeader
+              item={item}
+              open={open}
+              onToggle={() => onToggleSection(item.id)}
+            />
+            <AccordionPanel
+              open={open}
+              panelClassName="max-h-[min(70vh,28rem)] overflow-x-hidden overflow-y-auto bg-gray-50/80 px-4 py-4"
+            >
+              <div className="mx-auto w-full max-w-full min-w-0">
+                {panels[item.id]}
+              </div>
+            </AccordionPanel>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ArticleSectionAside({
   openSection,
   onOpenSectionChange,
   panels,
 }: Props) {
   const railExpanded = useArticleSectionAsideExpanded();
-  const sectionRefs = useRef<Partial<Record<ArticleSideSectionId, HTMLDivElement>>>(
-    {},
-  );
   const desktopStackRef = useRef<HTMLDivElement>(null);
   const mobileStackRef = useRef<HTMLDivElement>(null);
+  const desktopDefaultAppliedRef = useRef(false);
+
+  function toggleRail() {
+    setExpandedPreference(!railExpanded);
+  }
 
   function openSectionOnly(id: ArticleSideSectionId) {
     onOpenSectionChange(openSection === id ? null : id);
@@ -218,15 +368,28 @@ export function ArticleSectionAside({
     openSectionOnly(id);
   }
 
-  function openFromCollapsed(id: ArticleSideSectionId) {
-    setExpandedPreference(true);
-    onOpenSectionChange(id);
-  }
+  useEffect(() => {
+    if (desktopDefaultAppliedRef.current) return;
+    if (!window.matchMedia("(min-width: 1024px)").matches) return;
+    desktopDefaultAppliedRef.current = true;
+
+    try {
+      if (window.localStorage.getItem(STORAGE_KEY) === null) {
+        setExpandedPreference(true);
+      }
+    } catch {
+      // ignore
+    }
+
+    onOpenSectionChange("properties");
+  }, [onOpenSectionChange]);
 
   useEffect(() => {
-    if (!openSection) return;
+    if (!openSection || !railExpanded) return;
 
-    const sectionEl = sectionRefs.current[openSection];
+    const sectionEl = document.getElementById(
+      `article-aside-section-${openSection}`,
+    );
     if (!sectionEl) return;
 
     const scrollRoot =
@@ -247,161 +410,61 @@ export function ArticleSectionAside({
     sectionEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [openSection, railExpanded]);
 
-  function renderSectionHeader(
-    item: (typeof ARTICLE_SIDE_SECTIONS)[number],
-    open: boolean,
-    onToggle: () => void,
-  ) {
-    return (
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className={`flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left text-sm transition-colors ${PANEL_TRANSITION} ${
-          open
-            ? "bg-gray-900 text-white"
-            : "bg-white text-gray-800 hover:bg-gray-50"
-        }`}
-      >
-        {item.icon}
-        <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
-        <SectionChevron open={open} />
-      </button>
-    );
-  }
-
-  const renderDesktopStack = () => (
-    <div
-      ref={desktopStackRef}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
-    >
-      {ARTICLE_SIDE_SECTIONS.map((item) => {
-        const open = openSection === item.id;
-        return (
-          <div
-            key={`desktop-${item.id}`}
-            ref={(node) => {
-              if (node) sectionRefs.current[item.id] = node;
-              else delete sectionRefs.current[item.id];
-            }}
-            className={`flex min-h-0 flex-col border-b border-gray-200 last:border-b-0 ${
-              open ? "min-h-0 flex-1" : "shrink-0"
-            }`}
-          >
-            {renderSectionHeader(item, open, () => toggleDesktopStack(item.id))}
-            <AccordionPanel
-              open={open}
-              panelClassName="min-h-0 flex-1 overflow-x-hidden overflow-y-auto bg-gray-50/80 px-4 py-4"
-            >
-              <div className="mx-auto w-full max-w-full min-w-0">
-                {panels[item.id]}
-              </div>
-            </AccordionPanel>
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const renderMobileStack = () => (
-    <div ref={mobileStackRef} className="flex max-h-[min(80vh,40rem)] flex-col overflow-y-auto overscroll-contain">
-      {ARTICLE_SIDE_SECTIONS.map((item) => {
-        const open = openSection === item.id;
-        return (
-          <div
-            key={`mobile-${item.id}`}
-            ref={(node) => {
-              if (node) sectionRefs.current[item.id] = node;
-              else delete sectionRefs.current[item.id];
-            }}
-            className="border-b border-gray-200 last:border-b-0"
-          >
-            {renderSectionHeader(item, open, () => toggleMobileStack(item.id))}
-            <AccordionPanel
-              open={open}
-              panelClassName="max-h-[min(70vh,28rem)] overflow-x-hidden overflow-y-auto bg-gray-50/80 px-4 py-4"
-            >
-              <div className="mx-auto w-full max-w-full min-w-0">
-                {panels[item.id]}
-              </div>
-            </AccordionPanel>
-          </div>
-        );
-      })}
-    </div>
-  );
-
   return (
     <>
       {/* Mobile: accordion under main content */}
       <div className="mt-6 min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white lg:hidden">
-        {renderMobileStack()}
+        <ArticleAsideMobileStack
+          stackRef={mobileStackRef}
+          openSection={openSection}
+          onToggleSection={toggleMobileStack}
+          panels={panels}
+        />
       </div>
 
-      {/* Desktop: fixed to the right screen edge */}
-      <aside
-        className={`fixed inset-y-0 right-0 z-40 hidden h-[100dvh] flex-col border-l border-gray-200 bg-white transition-[width] ${PANEL_TRANSITION} lg:flex ${
+      {/*
+        Desktop: outer shell animates width (no overflow clip here so the
+        toggle can overhang page content). An inner clip layer reveals the
+        fixed w-72 stack. z-40 sits above page chrome (z-20) but under
+        modals (z-60+ / z-70 / z-100).
+      */}
+      <div
+        className={`fixed top-14 right-0 bottom-0 z-40 hidden transition-[width] ${PANEL_TRANSITION} lg:block ${
           railExpanded
             ? ARTICLE_ASIDE_WIDTH_EXPANDED
             : ARTICLE_ASIDE_WIDTH_COLLAPSED
         }`}
       >
-        <div
-          className={`flex h-14 shrink-0 items-center border-b border-gray-200 px-4 ${
-            railExpanded ? "justify-between gap-2" : "justify-center"
-          }`}
+        <button
+          type="button"
+          onClick={toggleRail}
+          className={`absolute top-1/2 left-0 z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition-colors hover:bg-gray-50 ${PANEL_TRANSITION}`}
+          aria-label={railExpanded ? "Collapse details" : "Expand details"}
+          title={railExpanded ? "Collapse" : "Expand"}
         >
-          {railExpanded ? (
-            <p className="truncate text-sm font-semibold tracking-tight">
-              Details
-            </p>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setExpandedPreference(!railExpanded)}
-            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-gray-200 text-gray-600 transition-colors duration-300 ease-in-out hover:bg-gray-50"
-            aria-label={railExpanded ? "Collapse details" : "Expand details"}
-            title={railExpanded ? "Collapse" : "Expand"}
+          <Icon
+            className={`h-4 w-4 transition-transform ${PANEL_TRANSITION} ${
+              railExpanded ? "rotate-0" : "rotate-180"
+            }`}
           >
-            <Icon
-              className={`transition-transform ${PANEL_TRANSITION} ${
-                railExpanded ? "rotate-0" : "rotate-180"
-              }`}
-            >
-              <path d="M15 6 9 12l6 6" />
-            </Icon>
-          </button>
-        </div>
+            <path d="M9 6 15 12 9 18" />
+          </Icon>
+        </button>
 
-        {railExpanded ? (
-          renderDesktopStack()
-        ) : (
-          <nav
-            aria-label="Article side sections"
-            className="space-y-1 overflow-y-auto p-3"
+        <div className="h-full overflow-hidden bg-white">
+          <aside
+            className={`flex h-full flex-col ${ARTICLE_ASIDE_INNER_WIDTH}`}
           >
-            {ARTICLE_SIDE_SECTIONS.map((item) => {
-              const active = openSection === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  title={item.label}
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => openFromCollapsed(item.id)}
-                  className={`flex w-full cursor-pointer items-center justify-center rounded-md px-2.5 py-2.5 text-sm transition ${
-                    active
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-                  }`}
-                >
-                  {item.icon}
-                </button>
-              );
-            })}
-          </nav>
-        )}
-      </aside>
+            <ArticleAsideDesktopStack
+              stackRef={desktopStackRef}
+              openSection={openSection}
+              railExpanded={railExpanded}
+              onToggleSection={toggleDesktopStack}
+              panels={panels}
+            />
+          </aside>
+        </div>
+      </div>
     </>
   );
 }

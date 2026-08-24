@@ -9,6 +9,7 @@ import {
 } from "@/lib/roles";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminAccountMenu } from "@/components/admin/admin-account-menu";
+import { AdminFunctionSearch } from "@/components/admin/admin-function-search";
 import { AdminToaster } from "@/components/admin/admin-toast";
 
 export default async function AdminDashboardLayout({
@@ -47,15 +48,26 @@ export default async function AdminDashboardLayout({
         signOutAction={signOutAction}
       />
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 hidden h-14 items-center justify-end border-b border-gray-200 bg-white px-3 sm:px-4 lg:flex lg:px-6 xl:px-8">
-          <AdminAccountMenu
-            user={{
-              name: session?.user?.name ?? null,
-              email: session?.user?.email ?? null,
-              callsign,
-            }}
-            signOutAction={signOutAction}
+        <header className="sticky top-0 z-20 hidden h-14 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-4 border-x-0 border-b border-t-0 border-gray-200 bg-white px-3 sm:px-4 lg:grid lg:px-6 xl:px-8">
+          <div aria-hidden />
+          <AdminFunctionSearch
+            showEditorial={showEditorial}
+            showImportExport={showImportExport}
+            showPages={showPages}
+            showSite={showSite}
+            showUsers={showUsers}
+            showRoles={showRoles}
           />
+          <div className="flex justify-end">
+            <AdminAccountMenu
+              user={{
+                name: session?.user?.name ?? null,
+                email: session?.user?.email ?? null,
+                callsign,
+              }}
+              signOutAction={signOutAction}
+            />
+          </div>
         </header>
         <div className="w-full min-w-0 overflow-x-clip px-3 py-5 sm:px-4 sm:py-8 lg:px-6 xl:px-8">
           {children}
