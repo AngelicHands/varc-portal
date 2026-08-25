@@ -391,3 +391,37 @@ export function extractHlsVideos(html: string): ContentHlsVideo[] {
 export function extractFirstHlsVideo(html: string): ContentHlsVideo | null {
   return extractHlsVideos(html)[0] ?? null;
 }
+
+/**
+ * Set `poster` on every <video data-hls-src="src"> that is missing a poster.
+ * Returns the updated HTML (unchanged when nothing was written).
+ */
+export function setHlsVideoPoster(
+  html: string,
+  src: string,
+  posterUrl: string,
+): string {
+  const targetSrc = src.trim();
+  const poster = posterUrl.trim();
+  if (!html?.trim() || !targetSrc || !poster) return html;
+
+  return html.replace(/<video\b[^>]*>/gi, (tag) => {
+    const tagSrc = readHtmlAttr(tag, "data-hls-src");
+    if (tagSrc !== targetSrc) return tag;
+    const existing = readHtmlAttr(tag, "poster");
+    if (existing) return tag;
+
+    if (/\bposter\s*=/i.test(tag)) {
+      return tag.replace(
+        /\bposter\s*=\s*(?:\"[^\"]*\"|'[^']*')/i,
+        `poster="${escapeAttr(poster)}"`,
+      );
+    }
+    return tag.replace(/<video\b/i, `<video poster="${escapeAttr(poster)}"`);
+  });
+}
+
+/** True when HTML has at least one HLS video missing a poster. */
+export function htmlHasHlsVideoMissingPoster(html: string): boolean {
+  return extractHlsVideos(html).some((video) => video.src && !video.poster);
+}

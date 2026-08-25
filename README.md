@@ -171,8 +171,8 @@ Bump version, commit, then push a `v*` tag. The [Release](.github/workflows/rele
 - Publishes a GitHub Release (notes + standalone tarball)
 - Pushes container images to GHCR:
   - `ghcr.io/<owner>/varc-portal:vX.Y.Z` (web)
-  - `ghcr.io/<owner>/varc-portal-backup-worker:vX.Y.Z` (backup + email workers; same image)
-  - `ghcr.io/<owner>/varc-portal-api:vX.Y.Z` (Go QSO REST API)
+  - `ghcr.io/<owner>/varc-portal-api:vX.Y.Z` (Go QSO REST API + Go workers)
+  - `ghcr.io/<owner>/varc-portal-hls-poster:vX.Y.Z` (Node + ffmpeg HLS poster worker)
 
 ```bash
 VERSION=1.0.26
@@ -193,9 +193,11 @@ Deploy is **not** triggered by tags. After a release exists:
 3. The workflow verifies the GitHub Release + GHCR images, pins these manifests to `vX.Y.Z`, and pushes a `chore: deploy v…` commit:
    - `deploy/k8s/deployment.yaml` → web image
    - `deploy/k8s/api-deployment.yaml` → API image
-   - `deploy/k8s/backup-worker.yaml` → worker image
-   - `deploy/k8s/email-worker.yaml` → worker image (same tag; different command)
+   - `deploy/k8s/worker.yaml` → API image (Go email/backup/import-export workers)
+   - `deploy/k8s/hls-poster-worker.yaml` → HLS poster worker image (Node + ffmpeg)
 4. Argo CD syncs the new images from Git
+
+The HLS poster worker ships **ffmpeg inside its own image** (`Dockerfile` target `hls-poster-worker`: `apk add ffmpeg`). Do not put ffmpeg on the web or Go API images. After the first release that publishes `varc-portal-hls-poster`, set `replicas: 1` on `deploy/k8s/hls-poster-worker.yaml` to enable it.
 
 The API is exposed at **`https://api.hamvn.com`** via `deploy/k8s/ingress.yaml` (`varc-api` Ingress → `varc-api` Service → port 3100). Interactive docs: **https://api.hamvn.com/docs**. It shares `varc-portal-secrets` and `varc-portal-config` with the portal (MongoDB, Valkey, `API_TOKEN_PEPPER`, `API_PUBLIC_URL`, etc.).
 

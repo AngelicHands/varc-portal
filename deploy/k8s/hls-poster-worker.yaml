@@ -1,0 +1,42 @@
+# HLS poster backfill worker (Node + ffmpeg).
+# Image: ghcr.io/<owner>/varc-portal-hls-poster:vX.Y.Z
+# Built from Dockerfile target `hls-poster-worker` in the Release workflow.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: varc-portal-hls-poster-worker
+  namespace: varc
+  labels:
+    app: varc-portal-hls-poster-worker
+spec:
+  # Set to 1 after the first release that publishes the hls-poster image.
+  replicas: 0
+  selector:
+    matchLabels:
+      app: varc-portal-hls-poster-worker
+  template:
+    metadata:
+      labels:
+        app: varc-portal-hls-poster-worker
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      containers:
+        - name: hls-poster-worker
+          image: ghcr.io/varc-vietnam/varc-portal-hls-poster:v1.0.36
+          imagePullPolicy: Always
+          env:
+            - name: HLS_POSTER_WORKER_ENABLED
+              value: "1"
+          envFrom:
+            - secretRef:
+                name: varc-portal-secrets
+            - configMapRef:
+                name: varc-portal-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1024Mi

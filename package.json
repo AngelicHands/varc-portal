@@ -17,7 +17,9 @@
     "seed": "tsx --env-file=.env scripts/seed-admin.ts",
     "seed:templates": "tsx --env-file=.env scripts/seed-templates.ts",
     "import:callsigns": "tsx --env-file=.env scripts/import-callsigns.ts",
-    "worker": "./scripts/dev-worker.sh"
+    "worker": "./scripts/dev-worker.sh",
+    "worker:hls-poster": "tsx --env-file=.env scripts/run-hls-poster-worker.ts",
+    "backfill:hls-posters": "tsx --env-file=.env scripts/backfill-hls-posters.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1103.0",

@@ -122,6 +122,8 @@ export default async function proxy(req: NextRequest) {
       if (
         (pathMatches(pathname, "/admin/settings") ||
           pathMatches(pathname, "/admin/backup") ||
+          pathMatches(pathname, "/admin/background-jobs") ||
+          pathMatches(pathname, "/admin/hls-posters") ||
           pathMatches(pathname, "/admin/menu") ||
           pathMatches(pathname, "/admin/mailbox") ||
           pathMatches(pathname, "/admin/callsigns") ||

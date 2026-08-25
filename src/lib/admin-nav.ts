@@ -173,6 +173,23 @@ export const adminNavGroups: AdminNavGroup[] = [
         flag: "site",
         keywords: ["export", "import", "restore", "database"],
       },
+      {
+        href: "/admin/background-jobs",
+        label: "Background Jobs",
+        description:
+          "Queue and monitor background workers, starting with HLS poster jobs.",
+        flag: "site",
+        keywords: [
+          "background",
+          "jobs",
+          "worker",
+          "hls",
+          "poster",
+          "thumbnail",
+          "video",
+          "ffmpeg",
+        ],
+      },
     ],
   },
 ];

@@ -104,6 +104,7 @@ jobs:
           OWNER_REPO="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "web=ghcr.io/${OWNER_REPO}" >> "$GITHUB_OUTPUT"
           echo "api=ghcr.io/${OWNER_REPO}-api" >> "$GITHUB_OUTPUT"
+          echo "hls_poster=ghcr.io/${OWNER_REPO}-hls-poster" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -126,6 +127,18 @@ jobs:
             ${{ steps.image.outputs.web }}:${{ steps.version.outputs.version }}
           cache-from: type=gha,scope=web-image
           cache-to: type=gha,mode=max,scope=web-image
+
+      - name: Build and push HLS poster worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: hls-poster-worker
+          push: true
+          tags: |
+            ${{ steps.image.outputs.hls_poster }}:${{ steps.version.outputs.tag }}
+            ${{ steps.image.outputs.hls_poster }}:${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=hls-poster-image
+          cache-to: type=gha,mode=max,scope=hls-poster-image
 
       - name: Build and push API image
         uses: docker/build-push-action@v6

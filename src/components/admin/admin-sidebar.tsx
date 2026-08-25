@@ -298,6 +298,17 @@ const navGroups: NavGroup[] = [
           </Icon>
         ),
       },
+      {
+        href: "/admin/background-jobs",
+        label: "Background Jobs",
+        flag: "site",
+        icon: (
+          <Icon>
+            <rect x="3" y="5" width="18" height="14" rx="2" />
+            <path d="M10 9.5v5l4.5-2.5L10 9.5z" />
+          </Icon>
+        ),
+      },
     ],
   },
 ];

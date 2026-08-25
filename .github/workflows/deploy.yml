@@ -41,6 +41,7 @@ jobs:
           OWNER_REPO="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "web=ghcr.io/${OWNER_REPO}" >> "$GITHUB_OUTPUT"
           echo "api=ghcr.io/${OWNER_REPO}-api" >> "$GITHUB_OUTPUT"
+          echo "hls_poster=ghcr.io/${OWNER_REPO}-hls-poster" >> "$GITHUB_OUTPUT"
 
       - name: Verify GitHub Release exists
         env:
@@ -74,6 +75,7 @@ jobs:
 
           check_image "${{ steps.image.outputs.web }}"
           check_image "${{ steps.image.outputs.api }}"
+          check_image "${{ steps.image.outputs.hls_poster }}"
 
       - name: Checkout
         uses: actions/checkout@v5
@@ -105,10 +107,12 @@ jobs:
           TAG="${{ steps.version.outputs.tag }}"
           WEB_IMAGE="${{ steps.image.outputs.web }}:${TAG}"
           API_IMAGE="${{ steps.image.outputs.api }}:${TAG}"
+          HLS_POSTER_IMAGE="${{ steps.image.outputs.hls_poster }}:${TAG}"
 
           update_file "deploy/k8s/deployment.yaml" "${WEB_IMAGE}"
           update_file "deploy/k8s/worker.yaml" "${API_IMAGE}"
           update_file "deploy/k8s/api-deployment.yaml" "${API_IMAGE}"
+          update_file "deploy/k8s/hls-poster-worker.yaml" "${HLS_POSTER_IMAGE}"
 
       - name: Commit and push
         run: |
@@ -117,7 +121,8 @@ jobs:
           git add \
             deploy/k8s/deployment.yaml \
             deploy/k8s/worker.yaml \
-            deploy/k8s/api-deployment.yaml
+            deploy/k8s/api-deployment.yaml \
+            deploy/k8s/hls-poster-worker.yaml
           if git diff --staged --quiet; then
             echo "Images already set to ${{ steps.version.outputs.tag }}; nothing to commit."
             exit 0
