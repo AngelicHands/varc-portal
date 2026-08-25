@@ -20,13 +20,20 @@ export const ARTICLE_ASIDE_INNER_WIDTH = "w-72 shrink-0";
 export const ARTICLE_ASIDE_PAD_EXPANDED = "lg:pr-80";
 export const ARTICLE_ASIDE_PAD_COLLAPSED = "lg:pr-24";
 
-export type ArticleSideSectionId = "properties" | "images" | "seo" | "datetime";
+export type ArticleSideSectionId =
+  | "properties"
+  | "access"
+  | "images"
+  | "seo"
+  | "datetime";
 
-type SectionItem = {
-  id: ArticleSideSectionId;
+export type EditorSideSectionDef = {
+  id: string;
   label: string;
   icon: ReactNode;
 };
+
+type SectionItem = EditorSideSectionDef;
 
 function Icon({
   children,
@@ -62,6 +69,16 @@ export const ARTICLE_SIDE_SECTIONS: SectionItem[] = [
     ),
   },
   {
+    id: "access",
+    label: "Access",
+    icon: (
+      <Icon>
+        <path d="M12 3a4 4 0 0 1 4 4v2h1.5A1.5 1.5 0 0 1 19 10.5v8A1.5 1.5 0 0 1 17.5 20h-11A1.5 1.5 0 0 1 5 18.5v-8A1.5 1.5 0 0 1 6.5 9H8V7a4 4 0 0 1 4-4Z" />
+        <path d="M10 14h4" />
+      </Icon>
+    ),
+  },
+  {
     id: "images",
     label: "Images",
     icon: (
@@ -89,6 +106,55 @@ export const ARTICLE_SIDE_SECTIONS: SectionItem[] = [
       <Icon>
         <rect x="3" y="5" width="18" height="16" rx="2" />
         <path d="M8 3v4M16 3v4M3 11h18" />
+      </Icon>
+    ),
+  },
+];
+
+export type PageSideSectionId =
+  | "properties"
+  | "access"
+  | "images"
+  | "seo";
+
+export const PAGE_SIDE_SECTIONS: SectionItem[] = [
+  {
+    id: "properties",
+    label: "Properties",
+    icon: (
+      <Icon>
+        <path d="M4 7h6l2 2h8v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" />
+      </Icon>
+    ),
+  },
+  {
+    id: "access",
+    label: "Access",
+    icon: (
+      <Icon>
+        <path d="M12 3a4 4 0 0 1 4 4v2h1.5A1.5 1.5 0 0 1 19 10.5v8A1.5 1.5 0 0 1 17.5 20h-11A1.5 1.5 0 0 1 5 18.5v-8A1.5 1.5 0 0 1 6.5 9H8V7a4 4 0 0 1 4-4Z" />
+        <path d="M10 14h4" />
+      </Icon>
+    ),
+  },
+  {
+    id: "images",
+    label: "Images",
+    icon: (
+      <Icon>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <circle cx="9" cy="10" r="1.5" />
+        <path d="m21 16-4.5-4.5L8 20" />
+      </Icon>
+    ),
+  },
+  {
+    id: "seo",
+    label: "SEO",
+    icon: (
+      <Icon>
+        <circle cx="11" cy="11" r="6" />
+        <path d="m20 20-3.5-3.5" />
       </Icon>
     ),
   },
@@ -220,9 +286,11 @@ export function CollapsibleSectionHeader({
 }
 
 type Props = {
-  openSection: ArticleSideSectionId | null;
-  onOpenSectionChange: (section: ArticleSideSectionId | null) => void;
-  panels: Record<ArticleSideSectionId, ReactNode>;
+  openSection: string | null;
+  onOpenSectionChange: (section: string | null) => void;
+  panels: Record<string, ReactNode>;
+  sections?: SectionItem[];
+  defaultSection?: string;
 };
 
 /**
@@ -234,7 +302,7 @@ function AsideSectionHeader({
   open,
   onToggle,
 }: {
-  item: (typeof ARTICLE_SIDE_SECTIONS)[number];
+  item: SectionItem;
   open: boolean;
   onToggle: () => void;
 }) {
@@ -263,28 +331,30 @@ function AsideSectionHeader({
 
 function ArticleAsideDesktopStack({
   stackRef,
+  sections,
   openSection,
   railExpanded,
   onToggleSection,
   panels,
 }: {
   stackRef: RefObject<HTMLDivElement | null>;
-  openSection: ArticleSideSectionId | null;
+  sections: SectionItem[];
+  openSection: string | null;
   railExpanded: boolean;
-  onToggleSection: (id: ArticleSideSectionId) => void;
-  panels: Record<ArticleSideSectionId, ReactNode>;
+  onToggleSection: (id: string) => void;
+  panels: Record<string, ReactNode>;
 }) {
   return (
     <div
       ref={stackRef}
       className="flex min-h-0 flex-1 flex-col overflow-hidden overscroll-contain"
     >
-      {ARTICLE_SIDE_SECTIONS.map((item) => {
+      {sections.map((item) => {
         const open = openSection === item.id;
         return (
           <div
             key={`desktop-${item.id}`}
-            id={`article-aside-section-${item.id}`}
+            id={`editor-aside-section-${item.id}`}
             className={`flex min-h-0 flex-col border-b border-gray-200 last:border-b-0 ${
               open && railExpanded ? "min-h-0 flex-1" : "shrink-0"
             }`}
@@ -310,26 +380,28 @@ function ArticleAsideDesktopStack({
 
 function ArticleAsideMobileStack({
   stackRef,
+  sections,
   openSection,
   onToggleSection,
   panels,
 }: {
   stackRef: RefObject<HTMLDivElement | null>;
-  openSection: ArticleSideSectionId | null;
-  onToggleSection: (id: ArticleSideSectionId) => void;
-  panels: Record<ArticleSideSectionId, ReactNode>;
+  sections: SectionItem[];
+  openSection: string | null;
+  onToggleSection: (id: string) => void;
+  panels: Record<string, ReactNode>;
 }) {
   return (
     <div
       ref={stackRef}
       className="flex max-h-[min(80vh,40rem)] flex-col overflow-y-auto overscroll-contain"
     >
-      {ARTICLE_SIDE_SECTIONS.map((item) => {
+      {sections.map((item) => {
         const open = openSection === item.id;
         return (
           <div
             key={`mobile-${item.id}`}
-            id={`article-aside-section-${item.id}`}
+            id={`editor-aside-section-${item.id}`}
             className="border-b border-gray-200 last:border-b-0"
           >
             <AsideSectionHeader
@@ -356,6 +428,8 @@ export function ArticleSectionAside({
   openSection,
   onOpenSectionChange,
   panels,
+  sections = ARTICLE_SIDE_SECTIONS,
+  defaultSection = "properties",
 }: Props) {
   const railExpanded = useArticleSectionAsideExpanded();
   const desktopStackRef = useRef<HTMLDivElement>(null);
@@ -366,15 +440,15 @@ export function ArticleSectionAside({
     setExpandedPreference(!railExpanded);
   }
 
-  function openSectionOnly(id: ArticleSideSectionId) {
+  function openSectionOnly(id: string) {
     onOpenSectionChange(openSection === id ? null : id);
   }
 
-  function toggleMobileStack(id: ArticleSideSectionId) {
+  function toggleMobileStack(id: string) {
     openSectionOnly(id);
   }
 
-  function toggleDesktopStack(id: ArticleSideSectionId) {
+  function toggleDesktopStack(id: string) {
     if (!railExpanded) {
       setExpandedPreference(true);
       onOpenSectionChange(id);
@@ -396,14 +470,14 @@ export function ArticleSectionAside({
       // ignore
     }
 
-    onOpenSectionChange("properties");
-  }, [onOpenSectionChange]);
+    onOpenSectionChange(defaultSection);
+  }, [defaultSection, onOpenSectionChange]);
 
   useEffect(() => {
     if (!openSection || !railExpanded) return;
 
     const sectionEl = document.getElementById(
-      `article-aside-section-${openSection}`,
+      `editor-aside-section-${openSection}`,
     );
     if (!sectionEl) return;
 
@@ -431,6 +505,7 @@ export function ArticleSectionAside({
       <div className="mt-6 min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white lg:hidden">
         <ArticleAsideMobileStack
           stackRef={mobileStackRef}
+          sections={sections}
           openSection={openSection}
           onToggleSection={toggleMobileStack}
           panels={panels}
@@ -472,6 +547,7 @@ export function ArticleSectionAside({
           >
             <ArticleAsideDesktopStack
               stackRef={desktopStackRef}
+              sections={sections}
               openSection={openSection}
               railExpanded={railExpanded}
               onToggleSection={toggleDesktopStack}

@@ -72,9 +72,9 @@ export default async function EditPagePage({ params }: Props) {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold">Edit page</h1>
       <PageEditor
         pageId={id}
+        heading="Edit page"
         templates={templateOptions}
         defaultLayouts={defaultLayouts}
         articleOptions={articles.map((article) => ({

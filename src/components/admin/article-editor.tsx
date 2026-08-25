@@ -364,33 +364,6 @@ export function ArticleEditor({
           </span>
         </label>
 
-        <div className="min-w-0 border-t border-gray-100 pt-5">
-          <p className="mb-1 text-sm font-medium text-gray-900">
-            Who can view when published
-          </p>
-          <p className="mb-3 text-xs text-gray-600">
-            Restrict published access to signed-in users and/or roles.
-          </p>
-          <ContentAccessFields
-            compact
-            userOptions={userOptions}
-            roleOptions={roleOptions}
-            value={{
-              allowPublic: form.allowPublic ?? true,
-              allowedUserIds: form.allowedUserIds ?? [],
-              allowedRoleKeys: form.allowedRoleKeys ?? [],
-            }}
-            onChange={(access) =>
-              setForm((prev) => ({
-                ...prev,
-                allowPublic: access.allowPublic,
-                allowedUserIds: access.allowedUserIds,
-                allowedRoleKeys: access.allowedRoleKeys,
-              }))
-            }
-          />
-        </div>
-
         <div className="min-w-0">
           <p className="mb-1 text-sm font-medium text-gray-900">Categories</p>
           <p className="mb-3 text-xs text-gray-600">
@@ -414,6 +387,31 @@ export function ArticleEditor({
             onChange={(tags) => setForm((prev) => ({ ...prev, tags }))}
           />
         </div>
+      </div>
+    ),
+    access: (
+      <div className="grid min-w-0 content-start gap-4">
+        <p className="text-xs text-gray-500">
+          Restrict who can open this article when it is published.
+        </p>
+        <ContentAccessFields
+          compact
+          userOptions={userOptions}
+          roleOptions={roleOptions}
+          value={{
+            allowPublic: form.allowPublic ?? true,
+            allowedUserIds: form.allowedUserIds ?? [],
+            allowedRoleKeys: form.allowedRoleKeys ?? [],
+          }}
+          onChange={(access) =>
+            setForm((prev) => ({
+              ...prev,
+              allowPublic: access.allowPublic,
+              allowedUserIds: access.allowedUserIds,
+              allowedRoleKeys: access.allowedRoleKeys,
+            }))
+          }
+        />
       </div>
     ),
     images: (
@@ -825,7 +823,9 @@ export function ArticleEditor({
 
       <ArticleSectionAside
         openSection={sideSection}
-        onOpenSectionChange={setSideSection}
+        onOpenSectionChange={(section) =>
+          setSideSection(section as ArticleSideSectionId | null)
+        }
         panels={sidePanels}
       />
       {modal}

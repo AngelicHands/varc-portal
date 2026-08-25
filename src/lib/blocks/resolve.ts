@@ -512,7 +512,11 @@ export async function resolveBlock(
     }
     case "menu": {
       const location = source.menuLocation ?? "navigation";
-      const links = await listPublicMenuLinks(location, locale);
+      const links = await listPublicMenuLinks(
+        location,
+        locale,
+        options?.viewer,
+      );
       return { menuLinks: links };
     }
     case "spacer":

@@ -4,6 +4,11 @@ import {
   CmsCacheKeys,
   CmsCacheTags,
 } from "@/lib/cache/cms-cache";
+import {
+  canViewPublishedContent,
+  type ContentViewAccess,
+  type ContentViewer,
+} from "@/lib/content-access";
 import { buildParentMap, getItemDepth, MAX_MENU_DEPTH } from "@/lib/menu-tree";
 import {
   categoryIndentLabel,
@@ -241,6 +246,59 @@ export type PublicMenuLink = {
   children?: PublicMenuLink[];
 };
 
+/** Cached menu nodes carry page ACL for per-viewer filtering (stripped before render). */
+type CachedMenuLink = PublicMenuLink & {
+  pageAccess?: ContentViewAccess;
+};
+
+function stripMenuLinkAccess(link: CachedMenuLink): PublicMenuLink {
+  return {
+    id: link.id,
+    label: link.label,
+    kind: link.kind,
+    slug: link.slug,
+    linkLocale: link.linkLocale,
+    href: link.href,
+    openInNewTab: link.openInNewTab,
+    children: link.children?.map((child) =>
+      stripMenuLinkAccess(child as CachedMenuLink),
+    ),
+  };
+}
+
+function filterMenuLinksForViewer(
+  links: CachedMenuLink[],
+  viewer: ContentViewer,
+): PublicMenuLink[] {
+  const filtered: PublicMenuLink[] = [];
+
+  for (const link of links) {
+    const childSource = (link.children ?? []) as CachedMenuLink[];
+    const filteredChildren = childSource.length
+      ? filterMenuLinksForViewer(childSource, viewer)
+      : undefined;
+
+    if (
+      link.pageAccess &&
+      !canViewPublishedContent(link.pageAccess, viewer)
+    ) {
+      if (filteredChildren?.length) {
+        filtered.push(...filteredChildren);
+      }
+      continue;
+    }
+
+    filtered.push(
+      stripMenuLinkAccess({
+        ...link,
+        children: filteredChildren,
+      }),
+    );
+  }
+
+  return filtered;
+}
+
 export type AdminMenuItem = {
   id: string;
   location: MenuLocation;
@@ -407,19 +465,21 @@ export async function countMenuItems(options?: {
 export async function listPublicMenuLinks(
   location: MenuLocation,
   locale: AppLocale,
+  viewer?: ContentViewer,
 ): Promise<PublicMenuLink[]> {
   const loc = localeKey(locale);
-  return cacheAside(
+  const cached = await cacheAside(
     CmsCacheKeys.menu(location, loc),
     [CmsCacheTags.menus],
     async () => loadPublicMenuLinks(location, locale),
   );
+  return filterMenuLinksForViewer(cached, viewer ?? null);
 }
 
 async function loadPublicMenuLinks(
   location: MenuLocation,
   locale: AppLocale,
-): Promise<PublicMenuLink[]> {
+): Promise<CachedMenuLink[]> {
   await connectDb();
   const items = await MenuItem.find({ location, enabled: true, ...notDeletedFilter })
     .sort({ sortOrder: 1, updatedAt: -1 })
@@ -433,7 +493,6 @@ async function loadPublicMenuLinks(
         _id: { $in: pageIds },
         ...notDeletedFilter,
         status: "published",
-        allowPublic: { $ne: false },
       }).lean<PageDocument[]>()
     : [];
   const pageById = new Map(pages.map((page) => [String(page._id), page]));
@@ -451,7 +510,7 @@ async function loadPublicMenuLinks(
     categories.map((category) => [String(category._id), category]),
   );
 
-  function toLink(item: MenuItemDocument): PublicMenuLink | null {
+  function toLink(item: MenuItemDocument): CachedMenuLink | null {
     if (item.type === "custom") {
       const preferred = item.locales?.[localeKey(locale)];
       const fallback = item.locales?.[locale === "en" ? "vi" : "en"];
@@ -505,6 +564,11 @@ async function loadPublicMenuLinks(
       slug: fields.slug,
       linkLocale: fields.linkLocale,
       openInNewTab: Boolean(item.openInNewTab),
+      pageAccess: {
+        allowPublic: page.allowPublic,
+        allowedUserIds: page.allowedUserIds,
+        allowedRoleKeys: page.allowedRoleKeys,
+      },
     };
   }
 
@@ -519,9 +583,9 @@ async function loadPublicMenuLinks(
   function buildLinks(
     parentKey: string | null,
     depth: number,
-  ): PublicMenuLink[] {
+  ): CachedMenuLink[] {
     const docs = byParent.get(parentKey) ?? [];
-    const links: PublicMenuLink[] = [];
+    const links: CachedMenuLink[] = [];
     for (const doc of docs) {
       const link = toLink(doc);
       if (!link) continue;

@@ -162,21 +162,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       const email = token.email ? String(token.email).toLowerCase() : null;
-      const shouldRefreshUser =
-        Boolean(email) &&
-        (account?.provider === "google" ||
-          trigger === "signIn" ||
-          trigger === "update" ||
-          !token.role ||
-          !token.id ||
-          token.callsign === undefined);
 
-      if (email && shouldRefreshUser) {
+      // Always reload role/callsign from Mongo so admin role changes apply on
+      // the next request without requiring sign-out.
+      if (email) {
         await connectDb();
         await ensureDefaultRoles();
-        const dbUser = await User.findOne({ email }).select(
-          "role callsign",
-        );
+        const dbUser = await User.findOne({ email }).select("role callsign");
         if (dbUser) {
           token.id = String(dbUser._id);
           token.role = normalizeRoleKey(dbUser.role);
@@ -187,6 +179,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       } else if (token.role) {
         token.role = normalizeRoleKey(token.role as string);
       }
+
+      // Keep explicit session.update() refresh for other profile fields later.
+      void account;
+      void trigger;
 
       try {
         applyCapabilitiesToToken(

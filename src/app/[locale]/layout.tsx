@@ -8,6 +8,7 @@ import { portalLocaleFromHeaders } from "@/lib/portal-locale-server";
 import { getPublicSiteBranding, listPublicMenuLinks } from "@/lib/cms";
 import { getAccountProfile } from "@/lib/account";
 import { isAdminRole } from "@/lib/roles";
+import { contentViewerFromSession } from "@/lib/content-access";
 import { SiteFooter } from "@/components/portal/site-footer";
 import { SiteHeader } from "@/components/portal/site-header";
 import { LocaleAlternatesProvider } from "@/components/portal/locale-alternates";
@@ -66,10 +67,11 @@ export default async function LocaleLayout({ children, params }: Props) {
   setRequestLocale(locale);
   const messages = await getMessages();
   const appLocale = locale;
-  const [navItems, footerItems, session, branding] = await Promise.all([
-    listPublicMenuLinks("navigation", appLocale),
-    listPublicMenuLinks("footer", appLocale),
-    auth(),
+  const session = await auth();
+  const viewer = contentViewerFromSession(session);
+  const [navItems, footerItems, branding] = await Promise.all([
+    listPublicMenuLinks("navigation", appLocale, viewer),
+    listPublicMenuLinks("footer", appLocale, viewer),
     getPublicSiteBranding(appLocale),
   ]);
 
