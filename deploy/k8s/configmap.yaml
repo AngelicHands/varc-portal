@@ -41,8 +41,8 @@ data:
   # HLS poster backfill is a separate Node worker (pnpm worker:hls-poster).
   # Requires ffmpeg. Keep disabled on the Go worker pod.
   HLS_POSTER_WORKER_ENABLED: "0"
-  HLS_POSTER_WORKER_POLL_MS: "900000"
-  HLS_POSTER_WORKER_BATCH: "8"
+  HLS_POSTER_WORKER_POLL_MS: "300"
+  HLS_POSTER_WORKER_BATCH: "2"
   HLS_POSTER_SEEK_SECONDS: "1"
   # Cluster DNS service port is 80 (targetPort 3099 on the portal pod).
   PORTAL_INTERNAL_URL: "http://varc-portal"
