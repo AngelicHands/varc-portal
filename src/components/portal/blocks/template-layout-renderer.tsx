@@ -5,6 +5,7 @@ import { HomeLatestSpotlight } from "@/components/portal/home-latest-spotlight";
 import { HtmlContent } from "@/components/portal/html-content";
 import { MenuBlockNav } from "@/components/portal/menu-block-nav";
 import { PublicFormBlock } from "@/components/portal/public-form-block";
+import { VideosBlock } from "@/components/portal/videos-block";
 import { Link } from "@/i18n/navigation";
 import type { AppLocale } from "@/i18n/routing";
 import type { ResolvedBlockData } from "@/lib/blocks/resolve";
@@ -297,6 +298,27 @@ function BlockView({
           {labels.backHome || "Back to home"}
         </Link>
       );
+    case "videos": {
+      const videos = data.videos ?? [];
+      if (!videos.length) return null;
+      const variant =
+        settingString(block.settings, "variant") === "single"
+          ? "single"
+          : "grid";
+      const showTitle = settingBool(block.settings, "showTitle");
+      const contentLocale = locale === "en" ? "en" : "vi";
+      const localizedTitle =
+        data.sectionTitle ||
+        resolveBlockLocaleText(block.source, contentLocale).text;
+      return (
+        <VideosBlock
+          videos={videos}
+          variant={variant}
+          sectionTitle={showTitle ? localizedTitle : ""}
+          locale={locale}
+        />
+      );
+    }
     default:
       return null;
   }
@@ -307,6 +329,12 @@ function isFullBleedBlock(block: TemplateBlock): boolean {
   if (
     block.type === "articleList" &&
     settingString(block.settings, "variant") === "spotlight"
+  ) {
+    return true;
+  }
+  if (
+    block.type === "videos" &&
+    settingString(block.settings, "variant") === "single"
   ) {
     return true;
   }

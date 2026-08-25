@@ -48,6 +48,7 @@
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
+    "hls.js": "^1.7.1",
     "isomorphic-dompurify": "^3.21.0",
     "lodash.throttle": "^4.1.1",
     "maplibre-gl": "^6.4.1",

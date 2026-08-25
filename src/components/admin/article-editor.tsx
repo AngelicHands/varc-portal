@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { cloneArticleAction, deleteArticleAction, saveArticleAction } from "@/lib/actions";
 import { isEmptyHtml } from "@/lib/html";
@@ -28,9 +28,12 @@ import {
   AccordionPanel,
   ArticleSectionAside,
   CollapsibleSectionHeader,
+  setArticleSectionAsideExpanded,
   useArticleSectionAsideExpanded,
   type ArticleSideSectionId,
 } from "@/components/admin/article-section-aside";
+import { HlsVideoPropertiesPanel } from "@/components/admin/hls-video-properties-panel";
+import type { Editor } from "@tiptap/react";
 import {
   fromDatetimeLocalValue,
   isFuturePublishAt,
@@ -138,9 +141,16 @@ export function ArticleEditor({
   const [sideSection, setSideSection] =
     useState<ArticleSideSectionId | null>(null);
   const [contentExpanded, setContentExpanded] = useState(true);
+  const [contentEditor, setContentEditor] = useState<Editor | null>(null);
   const asideExpanded = useArticleSectionAsideExpanded();
   const titleInputRef = useRef<HTMLInputElement>(null);
   const contentFieldRef = useRef<HTMLDivElement>(null);
+
+  const onHlsVideoActiveChange = useCallback((active: boolean) => {
+    if (!active) return;
+    setArticleSectionAsideExpanded(true);
+    setSideSection("properties");
+  }, []);
 
   const {
     articleId: savedArticleId,
@@ -322,6 +332,11 @@ export function ArticleEditor({
   const sidePanels = {
     properties: (
       <div className="grid min-w-0 content-start gap-5">
+        <HlsVideoPropertiesPanel
+          editor={contentEditor}
+          onActiveChange={onHlsVideoActiveChange}
+        />
+
         <label className="flex min-w-0 cursor-pointer items-start gap-3 rounded-md border border-gray-200 bg-white px-3 py-3 text-sm">
           <AdminCheckbox
             className="mt-0.5"
@@ -758,6 +773,7 @@ export function ArticleEditor({
                     value={locale.content}
                     onChange={(html) => updateLocale(tab, "content", html)}
                     imageAltFallback={locale.title}
+                    onEditorReady={setContentEditor}
                     placeholder={
                       tab === "vi" ? "Nội dung bài viết…" : "Article content…"
                     }

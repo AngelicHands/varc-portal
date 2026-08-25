@@ -54,13 +54,19 @@ export function normalizeEditorHtml(content: string): string {
 export function sanitizeHtml(html: string): string {
   const clean = DOMPurify.sanitize(html, {
     USE_PROFILES: { html: true },
-    ADD_TAGS: ["figure", "figcaption", "colgroup", "col"],
+    ADD_TAGS: ["figure", "figcaption", "colgroup", "col", "video"],
     ADD_ATTR: [
       "target",
       "rel",
       "class",
       "data-size",
       "data-text-align",
+      "data-type",
+      "data-hls-src",
+      "controls",
+      "playsinline",
+      "preload",
+      "poster",
       "width",
       "height",
       "style",
@@ -311,4 +317,77 @@ export function extractContentImages(html: string): ContentImage[] {
   }
 
   return images;
+}
+
+export type ContentHlsVideo = {
+  id: string;
+  src: string;
+  poster: string;
+  title: string;
+};
+
+function readHtmlAttr(tag: string, name: string): string {
+  const re = new RegExp(
+    `\\b${name}\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')`,
+    "i",
+  );
+  const match = tag.match(re);
+  return (match?.[1] ?? match?.[2] ?? "").trim();
+}
+
+/** Collect unique HLS playlist URLs from article HTML (`data-hls-src`). */
+export function extractHlsVideos(html: string): ContentHlsVideo[] {
+  if (!html?.trim()) return [];
+
+  const videos: ContentHlsVideo[] = [];
+  const seen = new Set<string>();
+
+  // Prefer figure wrappers so we can read figcaption as title.
+  const figureRe =
+    /<figure\b[^>]*\bdata-type\s*=\s*["']hls-video["'][^>]*>[\s\S]*?<\/figure>/gi;
+  let figureMatch: RegExpExecArray | null;
+  while ((figureMatch = figureRe.exec(html)) !== null) {
+    const figureHtml = figureMatch[0];
+    const videoTag = figureHtml.match(/<video\b[^>]*>/i)?.[0];
+    if (!videoTag) continue;
+    const src = readHtmlAttr(videoTag, "data-hls-src");
+    if (!src || seen.has(src)) continue;
+    if (!/^https?:\/\//i.test(src) && !src.startsWith("/")) continue;
+    const caption =
+      figureHtml
+        .match(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i)?.[1]
+        ?.replace(/<[^>]*>/g, "")
+        .trim() || "";
+    seen.add(src);
+    videos.push({
+      id: `hls-${videos.length}`,
+      src,
+      poster: readHtmlAttr(videoTag, "poster"),
+      title: caption || readHtmlAttr(videoTag, "title"),
+    });
+  }
+
+  // Standalone video tags not already captured via figures.
+  const videoRe = /<video\b[^>]*>/gi;
+  let videoMatch: RegExpExecArray | null;
+  while ((videoMatch = videoRe.exec(html)) !== null) {
+    const tag = videoMatch[0];
+    const src = readHtmlAttr(tag, "data-hls-src");
+    if (!src || seen.has(src)) continue;
+    if (!/^https?:\/\//i.test(src) && !src.startsWith("/")) continue;
+    seen.add(src);
+    videos.push({
+      id: `hls-${videos.length}`,
+      src,
+      poster: readHtmlAttr(tag, "poster"),
+      title: readHtmlAttr(tag, "title"),
+    });
+  }
+
+  return videos;
+}
+
+/** First HLS playlist from HTML, if any. */
+export function extractFirstHlsVideo(html: string): ContentHlsVideo | null {
+  return extractHlsVideos(html)[0] ?? null;
 }

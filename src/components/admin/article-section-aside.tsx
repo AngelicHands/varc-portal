@@ -137,6 +137,11 @@ function setExpandedPreference(next: boolean) {
   window.dispatchEvent(new Event(ASIDE_EVENT));
 }
 
+/** Expand or collapse the article details rail (desktop). */
+export function setArticleSectionAsideExpanded(next: boolean) {
+  setExpandedPreference(next);
+}
+
 export function useArticleSectionAsideExpanded() {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { Editor } from "@tiptap/react";
 
 type Props = {
   value: string;
@@ -8,6 +9,8 @@ type Props = {
   placeholder?: string;
   /** Used as image alt when paste/upload does not provide one (e.g. article title). */
   imageAltFallback?: string;
+  /** TipTap editor instance for aside panels (e.g. HLS properties). */
+  onEditorReady?: (editor: Editor | null) => void;
 };
 
 const SimpleEditor = dynamic(
@@ -27,12 +30,18 @@ const SimpleEditor = dynamic(
   },
 );
 
-export function RichTextEditor({ value, onChange, imageAltFallback }: Props) {
+export function RichTextEditor({
+  value,
+  onChange,
+  imageAltFallback,
+  onEditorReady,
+}: Props) {
   return (
     <SimpleEditor
       content={value}
       onChange={onChange}
       imageAltFallback={imageAltFallback}
+      onEditorReady={onEditorReady}
     />
   );
 }

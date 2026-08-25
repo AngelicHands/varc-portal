@@ -13,6 +13,7 @@ import {
   type CoverFocusRect,
 } from "@/lib/cover-focus";
 import { ImageLightbox } from "@/components/portal/image-lightbox";
+import { useAttachHlsVideos } from "@/hooks/use-attach-hls-videos";
 
 type Props = {
   html: string;
@@ -114,6 +115,7 @@ export function ArticleBody({
     () => sanitizeHtml(normalizeEditorHtml(html)),
     [html],
   );
+  useAttachHlsVideos(contentRef, safe);
   const parsedImages = useMemo(
     () => mergeImages(coverImageUrl, extractContentImages(safe)),
     [coverImageUrl, safe],

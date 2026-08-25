@@ -42,6 +42,11 @@ function blockPreviewLabel(block: TemplateBlock): string {
     if (variant === "spotlight") return "Spotlight (1:3)";
     return "Article list (grid)";
   }
+  if (block.type === "videos") {
+    const variant = String(block.settings.variant ?? "grid");
+    if (variant === "single") return "Featured video";
+    return "Videos grid";
+  }
   if (block.type === "richText" || block.type === "html") {
     const html =
       block.source.locales?.vi?.html ||
@@ -1294,6 +1299,147 @@ function BlockInspector({
             }
             return null;
           })()}
+          {block.type === "articleList" ? (
+            <div>
+              <MultiCheck
+                label="Exclude categories"
+                options={categoryOptions}
+                values={block.source.excludeCategoryIds ?? []}
+                onChange={(excludeCategoryIds) =>
+                  onChange({
+                    ...block,
+                    source: { ...block.source, excludeCategoryIds },
+                  })
+                }
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Hide articles that belong to any selected category.
+              </p>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {block.type === "videos" ? (
+        <>
+          <label className="block">
+            <span className="mb-1 block text-xs text-gray-500">Display</span>
+            <select
+              value={String(block.settings.variant ?? "grid")}
+              onChange={(e) =>
+                onChange({
+                  ...block,
+                  settings: {
+                    ...block.settings,
+                    variant: e.target.value,
+                    ...(e.target.value === "single" ? { limit: 1 } : {}),
+                  },
+                  source: {
+                    ...block.source,
+                    mode: "category",
+                  },
+                })
+              }
+              className="w-full rounded border border-gray-300 px-2 py-1.5"
+            >
+              <option value="single">
+                Single (featured article in category)
+              </option>
+              <option value="grid">Grid (videos from category)</option>
+            </select>
+          </label>
+          {String(block.settings.variant ?? "grid") !== "single" ? (
+            <label className="block">
+              <span className="mb-1 block text-xs text-gray-500">Limit</span>
+              <input
+                type="number"
+                min={1}
+                max={24}
+                value={Number(block.settings.limit ?? 6)}
+                onChange={(e) =>
+                  onChange({
+                    ...block,
+                    settings: {
+                      ...block.settings,
+                      limit: Number(e.target.value) || 6,
+                    },
+                  })
+                }
+                className="w-full rounded border border-gray-300 px-2 py-1.5"
+              />
+            </label>
+          ) : (
+            <p className="text-xs text-gray-500">
+              Uses the newest featured article in the selected category that
+              contains an HLS video in its body.
+            </p>
+          )}
+          <MultiCheck
+            label="Categories"
+            options={categoryOptions}
+            values={block.source.categoryIds ?? []}
+            onChange={(categoryIds) =>
+              onChange({
+                ...block,
+                source: {
+                  ...block.source,
+                  mode: "category",
+                  categoryIds,
+                },
+              })
+            }
+          />
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={block.settings.showTitle === true}
+              onChange={(e) =>
+                onChange({
+                  ...block,
+                  settings: {
+                    ...block.settings,
+                    showTitle: e.target.checked,
+                  },
+                })
+              }
+            />
+            Show section title
+          </label>
+          {block.settings.showTitle === true ? (
+            <>
+              <div className="flex gap-1">
+                {(["vi", "en"] as const).map((locale) => (
+                  <button
+                    key={locale}
+                    type="button"
+                    onClick={() => setLocaleTab(locale)}
+                    className={`rounded px-2 py-1 text-xs ${
+                      localeTab === locale
+                        ? "bg-gray-900 text-white"
+                        : "border border-gray-300 text-gray-700"
+                    }`}
+                  >
+                    {locale.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-xs text-gray-500">
+                  Section title ({localeTab.toUpperCase()})
+                </span>
+                <input
+                  value={localeContent.text}
+                  onChange={(e) =>
+                    updateLocaleField(localeTab, "text", e.target.value)
+                  }
+                  placeholder={
+                    localeTab === "vi" ? "Tiêu đề mục…" : "Section title…"
+                  }
+                  className="w-full rounded border border-gray-300 px-2 py-1.5"
+                />
+              </label>
+            </>
+          ) : null}
         </>
       ) : null}
 

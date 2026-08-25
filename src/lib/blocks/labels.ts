@@ -15,6 +15,7 @@ export const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
   spacer: "Spacer",
   featuredSlider: "Featured slider",
   breadcrumb: "Breadcrumb",
+  videos: "Videos",
 };
 
 /** Palette entries shown in the template builder (can include presets). */
@@ -77,6 +78,26 @@ export const BLOCK_PALETTE: BlockPaletteItem[] = [
   },
   { id: "articleCard", type: "articleCard", label: "Article card" },
   { id: "categoryList", type: "categoryList", label: "Category list" },
+  {
+    id: "videosSingle",
+    type: "videos",
+    label: "Featured video",
+    description: "Large video from featured article in a category",
+    partial: {
+      source: { mode: "category", categoryIds: [] },
+      settings: { variant: "single", limit: 1 },
+    },
+  },
+  {
+    id: "videosGrid",
+    type: "videos",
+    label: "Videos grid",
+    description: "Grid of videos from a category",
+    partial: {
+      source: { mode: "category", categoryIds: [] },
+      settings: { variant: "grid", limit: 6 },
+    },
+  },
   { id: "menu", type: "menu", label: "Menu" },
   { id: "spacer", type: "spacer", label: "Spacer" },
 ];

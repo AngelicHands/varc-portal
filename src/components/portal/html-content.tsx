@@ -1,7 +1,11 @@
+"use client";
+
+import { useMemo, useRef } from "react";
 import {
   normalizeEditorHtml,
   sanitizeHtml,
 } from "@/lib/html";
+import { useAttachHlsVideos } from "@/hooks/use-attach-hls-videos";
 
 export function HtmlContent({
   html,
@@ -10,9 +14,16 @@ export function HtmlContent({
   html: string;
   className?: string;
 }) {
-  const safe = sanitizeHtml(normalizeEditorHtml(html));
+  const contentRef = useRef<HTMLDivElement>(null);
+  const safe = useMemo(
+    () => sanitizeHtml(normalizeEditorHtml(html)),
+    [html],
+  );
+  useAttachHlsVideos(contentRef, safe);
+
   return (
     <div
+      ref={contentRef}
       className={className}
       dangerouslySetInnerHTML={{ __html: safe }}
     />

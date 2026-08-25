@@ -33,12 +33,14 @@ import {
 // --- Tiptap Node ---
 import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node/image-upload-node-extension"
 import { ResizableImage } from "@/components/tiptap-node/image-node/resizable-image-extension"
+import { HlsVideo } from "@/components/tiptap-node/hls-video-node/hls-video-extension"
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
 import "@/components/tiptap-node/blockquote-node/blockquote-node.scss"
 import "@/components/tiptap-node/code-block-node/code-block-node.scss"
 import "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node.scss"
 import "@/components/tiptap-node/list-node/list-node.scss"
 import "@/components/tiptap-node/image-node/image-node.scss"
+import "@/components/tiptap-node/hls-video-node/hls-video-node.scss"
 import "@/components/tiptap-node/heading-node/heading-node.scss"
 import "@/components/tiptap-node/paragraph-node/paragraph-node.scss"
 
@@ -48,6 +50,7 @@ import { FontFamilyDropdown } from "@/components/tiptap-ui/font-family-dropdown"
 import { FileUploadButton } from "@/components/tiptap-ui/file-upload-button"
 import { ImageUploadButton } from "@/components/tiptap-ui/image-upload-button"
 import { MediaLibraryButton } from "@/components/tiptap-ui/media-library-button"
+import { HlsVideoButton } from "@/components/tiptap-ui/hls-video-button"
 import { ImageSizeMenu } from "@/components/tiptap-ui/image-size-menu"
 import {
   getTableControlState,
@@ -103,6 +106,8 @@ export type SimpleEditorProps = {
   onChange?: (html: string) => void
   /** Used as image alt when paste/upload does not provide one (e.g. article title). */
   imageAltFallback?: string
+  /** Called when the TipTap editor instance is created or destroyed. */
+  onEditorReady?: (editor: Editor | null) => void
 }
 
 const MainToolbarContent = ({
@@ -189,6 +194,7 @@ const MainToolbarContent = ({
         <ImageUploadButton text="Add" />
         <MediaLibraryButton text="Library" />
         <FileUploadButton text="File" />
+        <HlsVideoButton text="HLS" />
       </ToolbarGroup>
 
       <ToolbarSeparator />
@@ -280,6 +286,7 @@ function SimpleEditorClient({
   content = "",
   onChange,
   imageAltFallback = "",
+  onEditorReady,
 }: SimpleEditorProps) {
   const isMobile = useIsBreakpoint()
   const [mobileView, setMobileView] = useState<"main" | "highlighter" | "link">(
@@ -316,6 +323,7 @@ function SimpleEditorClient({
       TaskItem.configure({ nested: true }),
       Highlight.configure({ multicolor: true }),
       ResizableImage,
+      HlsVideo,
       Table.configure({
         resizable: true,
         renderWrapper: true,
@@ -357,6 +365,13 @@ function SimpleEditorClient({
       onChange?.(current.getHTML())
     },
   })
+
+  useEffect(() => {
+    onEditorReady?.(editor)
+    return () => {
+      onEditorReady?.(null)
+    }
+  }, [editor, onEditorReady])
 
   useEffect(() => {
     if (!editor) return

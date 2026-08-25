@@ -348,6 +348,23 @@ button:disabled,
   text-align: center;
 }
 
+.prose-article figure.content-hls,
+.prose-article-wide figure.content-hls {
+  display: block;
+  margin: 1.75rem 0;
+  max-width: 100%;
+}
+
+.prose-article .content-hls-video,
+.prose-article-wide .content-hls-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #0f172a;
+  border-radius: 0.25rem;
+}
+
 .prose-article-lightbox img {
   cursor: zoom-in;
 }

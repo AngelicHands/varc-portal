@@ -20,7 +20,7 @@ import {
   getPublishedFormById,
   type PublicFormDefinition,
 } from "@/lib/forms";
-import { excerptFromHtml, extractFirstImageUrl, sanitizeHtml } from "@/lib/html";
+import { excerptFromHtml, extractFirstImageUrl, extractFirstHlsVideo, sanitizeHtml } from "@/lib/html";
 import { notDeletedFilter } from "@/lib/soft-delete";
 import type { AppLocale } from "@/i18n/routing";
 import { Article, type ArticleDocument } from "@/models/Article";
@@ -46,6 +46,18 @@ export type ResolvedCategoryCard = {
   description: string;
 };
 
+export type ResolvedVideoItem = {
+  id: string;
+  src: string;
+  poster: string;
+  title: string;
+  articleId: string;
+  articleTitle: string;
+  articleSlug: string;
+  articleExcerpt: string;
+  publishedAt: string | null;
+};
+
 export type ResolvedBlockData = {
   html?: string;
   text?: string;
@@ -61,6 +73,7 @@ export type ResolvedBlockData = {
   spacerHeight?: number;
   /** Section title from block locales (article lists, etc.). */
   sectionTitle?: string;
+  videos?: ResolvedVideoItem[];
 };
 
 export function settingNumber(
@@ -146,24 +159,61 @@ async function resolveArticlesFromSource(
   const mode = source.mode ?? "latest";
   const showExcerpt = settingBoolDefaultTrue(settings, "showExcerpt");
   const localeKey = locale === "en" ? "en" : "vi";
+  const excludeCategoryIds = (source.excludeCategoryIds ?? []).filter((id) =>
+    mongoose.isValidObjectId(id),
+  );
+  const excludeObjectIds = toObjectIds(excludeCategoryIds);
+
+  function withExcludedCategories(
+    categoryFilter?: Record<string, unknown>,
+  ): Record<string, unknown> | undefined {
+    if (!excludeObjectIds.length && !categoryFilter) return undefined;
+    if (!excludeObjectIds.length) return categoryFilter;
+    if (!categoryFilter) return { $nin: excludeObjectIds };
+    return { ...categoryFilter, $nin: excludeObjectIds };
+  }
+
+  const basePublishedFilter: Record<string, unknown> = {
+    ...notDeletedFilter,
+    status: "published",
+    publishedAt: { $ne: null, $lte: new Date() },
+    [`locales.${localeKey}.slug`]: { $nin: ["", null] },
+    [`locales.${localeKey}.title`]: { $nin: ["", null] },
+  };
 
   let articles: PublicArticleCard[] = [];
 
   if (mode === "featured") {
-    articles = await listFeaturedArticles(locale, limit);
+    const categoryIdsFilter = withExcludedCategories();
+    if (categoryIdsFilter) {
+      const docs = await Article.find({
+        ...basePublishedFilter,
+        featured: true,
+        categoryIds: categoryIdsFilter,
+      })
+        .sort({ publishedAt: -1, createdAt: -1 })
+        .limit(limit)
+        .lean<ArticleDocument[]>();
+      articles = docs
+        .filter((doc) => isArticlePubliclyVisible(doc, locale))
+        .map((doc) => articleToCard(doc, locale));
+    } else {
+      articles = await listFeaturedArticles(locale, limit);
+    }
   } else if (mode === "ids") {
     const ids = (source.articleIds ?? []).filter((id) =>
       mongoose.isValidObjectId(id),
     );
     if (ids.length) {
-      const docs = await Article.find({
+      const filter: Record<string, unknown> = {
         _id: { $in: toObjectIds(ids) },
-        ...notDeletedFilter,
-        status: "published",
-        publishedAt: { $ne: null, $lte: new Date() },
-        [`locales.${localeKey}.slug`]: { $nin: ["", null] },
-        [`locales.${localeKey}.title`]: { $nin: ["", null] },
-      }).lean<ArticleDocument[]>();
+        ...basePublishedFilter,
+      };
+      const categoryIdsFilter = withExcludedCategories();
+      if (categoryIdsFilter) {
+        filter.categoryIds = categoryIdsFilter;
+      }
+      const docs = await Article.find(filter).lean<ArticleDocument[]>();
       const byId = new Map(docs.map((doc) => [String(doc._id), doc]));
       articles = ids
         .map((id) => byId.get(id))
@@ -180,14 +230,18 @@ async function resolveArticlesFromSource(
         : contextCategoryIds ?? []
     ).filter((id) => mongoose.isValidObjectId(id));
     if (categoryIds.length) {
-      const objectIds = toObjectIds(categoryIds);
+      const includeIds = toObjectIds(categoryIds);
+      // Drop exclude ids that are also included so the include set still wins.
+      const effectiveExclude = excludeObjectIds.filter(
+        (id) => !includeIds.some((include) => include.equals(id)),
+      );
+      const categoryFilter: Record<string, unknown> = { $in: includeIds };
+      if (effectiveExclude.length) {
+        categoryFilter.$nin = effectiveExclude;
+      }
       const docs = await Article.find({
-        ...notDeletedFilter,
-        status: "published",
-        publishedAt: { $ne: null, $lte: new Date() },
-        categoryIds: { $in: objectIds },
-        [`locales.${localeKey}.slug`]: { $nin: ["", null] },
-        [`locales.${localeKey}.title`]: { $nin: ["", null] },
+        ...basePublishedFilter,
+        categoryIds: categoryFilter,
       })
         .sort({ publishedAt: -1 })
         .limit(limit)
@@ -197,11 +251,111 @@ async function resolveArticlesFromSource(
         .map((doc) => articleToCard(doc, locale));
     }
   } else {
-    const listed = await listPublishedArticles(locale, 1, limit);
-    articles = listed.articles;
+    const categoryIdsFilter = withExcludedCategories();
+    if (categoryIdsFilter) {
+      const docs = await Article.find({
+        ...basePublishedFilter,
+        categoryIds: categoryIdsFilter,
+      })
+        .sort({ publishedAt: -1, createdAt: -1 })
+        .limit(limit)
+        .lean<ArticleDocument[]>();
+      articles = docs
+        .filter((doc) => isArticlePubliclyVisible(doc, locale))
+        .map((doc) => articleToCard(doc, locale));
+    } else {
+      const listed = await listPublishedArticles(locale, 1, limit);
+      articles = listed.articles;
+    }
   }
 
   return applyShowExcerpt(articles, showExcerpt);
+}
+
+async function resolveVideosFromCategory(
+  source: BlockSource,
+  settings: Record<string, unknown>,
+  locale: AppLocale,
+  contextCategoryIds?: string[],
+): Promise<ResolvedVideoItem[]> {
+  const variant = settingString(settings, "variant") || "grid";
+  const isSingle = variant === "single";
+  const limit = isSingle
+    ? 1
+    : Math.min(Math.max(settingNumber(settings, "limit", 6), 1), 24);
+  const localeKey = locale === "en" ? "en" : "vi";
+  const categoryIds = (
+    source.categoryIds?.length
+      ? source.categoryIds
+      : contextCategoryIds ?? []
+  ).filter((id) => mongoose.isValidObjectId(id));
+
+  if (!categoryIds.length) return [];
+
+  // Fetch more articles than the video limit so we can skip posts without HLS.
+  const fetchLimit = isSingle ? 12 : Math.min(limit * 4, 48);
+  const filter: Record<string, unknown> = {
+    ...notDeletedFilter,
+    status: "published",
+    publishedAt: { $ne: null, $lte: new Date() },
+    categoryIds: { $in: toObjectIds(categoryIds) },
+    [`locales.${localeKey}.slug`]: { $nin: ["", null] },
+    [`locales.${localeKey}.title`]: { $nin: ["", null] },
+  };
+  if (isSingle) {
+    filter.featured = true;
+  }
+
+  const docs = await Article.find(filter)
+    .sort({ publishedAt: -1, createdAt: -1 })
+    .limit(fetchLimit)
+    .lean<ArticleDocument[]>();
+
+  const videos: ResolvedVideoItem[] = [];
+  for (const doc of docs) {
+    if (!isArticlePubliclyVisible(doc, locale)) continue;
+    const content = getLocaleContent(doc, locale);
+    const fallback = getLocaleContent(doc, locale === "en" ? "vi" : "en");
+    const hls =
+      extractFirstHlsVideo(content.content) ||
+      extractFirstHlsVideo(fallback.content);
+    if (!hls) continue;
+
+    const title =
+      hls.title.trim() ||
+      content.title.trim() ||
+      fallback.title.trim() ||
+      "";
+    const poster =
+      hls.poster.trim() ||
+      (doc.coverImageUrl?.trim() ?? "") ||
+      extractFirstImageUrl(content.content) ||
+      extractFirstImageUrl(fallback.content) ||
+      "";
+
+    videos.push({
+      id: `${String(doc._id)}-${hls.id}`,
+      src: hls.src,
+      poster,
+      title,
+      articleId: String(doc._id),
+      articleTitle: content.title.trim() || fallback.title.trim() || title,
+      articleSlug: content.slug.trim() || fallback.slug.trim() || "",
+      articleExcerpt:
+        content.excerpt?.trim() ||
+        excerptFromHtml(content.content) ||
+        fallback.excerpt?.trim() ||
+        excerptFromHtml(fallback.content) ||
+        "",
+      publishedAt: doc.publishedAt
+        ? new Date(doc.publishedAt).toISOString()
+        : null,
+    });
+
+    if (videos.length >= limit) break;
+  }
+
+  return videos;
 }
 
 export function pageContextFromPage(
@@ -359,6 +513,16 @@ export async function resolveBlock(
       };
     case "breadcrumb":
       return {};
+    case "videos": {
+      const videos = await resolveVideosFromCategory(
+        source,
+        settings,
+        locale,
+        options?.categoryIds,
+      );
+      const sectionTitle = resolveBlockLocaleText(source, contentLocale).text;
+      return { videos, sectionTitle };
+    }
     default:
       return {};
   }

@@ -26,6 +26,7 @@ export const BLOCK_TYPES = [
   "spacer",
   "featuredSlider",
   "breadcrumb",
+  "videos",
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -77,6 +78,8 @@ const blockSourceSchema = z
     articleId: z.string().max(64).optional(),
     articleIds: z.array(z.string().max(64)).max(50).optional(),
     categoryIds: z.array(z.string().max(64)).max(50).optional(),
+    /** Omit articles that belong to any of these categories. */
+    excludeCategoryIds: z.array(z.string().max(64)).max(50).optional(),
     mode: z
       .enum(["latest", "featured", "category", "ids"])
       .optional(),
