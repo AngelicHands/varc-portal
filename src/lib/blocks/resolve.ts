@@ -143,6 +143,50 @@ function toObjectIds(ids: string[]): mongoose.Types.ObjectId[] {
     .map((id) => new mongoose.Types.ObjectId(id));
 }
 
+function validObjectIdStrings(ids: string[] | undefined): string[] {
+  return (ids ?? []).filter((id) => mongoose.isValidObjectId(id));
+}
+
+/**
+ * Include first (all categories if none selected), then exclude
+ * (exclude nothing if none selected).
+ */
+function applyCategoryIncludeExclude(
+  filter: Record<string, unknown>,
+  includeIds: mongoose.Types.ObjectId[],
+  excludeIds: mongoose.Types.ObjectId[],
+) {
+  if (includeIds.length && excludeIds.length) {
+    const existingAnd = Array.isArray(filter.$and) ? filter.$and : [];
+    filter.$and = [
+      ...existingAnd,
+      { categoryIds: { $in: includeIds } },
+      { categoryIds: { $nin: excludeIds } },
+    ];
+    return;
+  }
+  if (includeIds.length) {
+    filter.categoryIds = { $in: includeIds };
+    return;
+  }
+  if (excludeIds.length) {
+    filter.categoryIds = { $nin: excludeIds };
+  }
+}
+
+function includeCategoryObjectIds(
+  source: BlockSource,
+  mode: string,
+  contextCategoryIds?: string[],
+): mongoose.Types.ObjectId[] {
+  const selected = validObjectIdStrings(source.categoryIds);
+  if (selected.length) return toObjectIds(selected);
+  if (mode === "category") {
+    return toObjectIds(validObjectIdStrings(contextCategoryIds));
+  }
+  return [];
+}
+
 function isArticleVisibleToViewer(
   article: ArticleDocument,
   locale: AppLocale,
@@ -179,19 +223,14 @@ async function resolveArticlesFromSource(
   const mode = source.mode ?? "latest";
   const showExcerpt = settingBoolDefaultTrue(settings, "showExcerpt");
   const localeKey = locale === "en" ? "en" : "vi";
-  const excludeCategoryIds = (source.excludeCategoryIds ?? []).filter((id) =>
-    mongoose.isValidObjectId(id),
+  const includeObjectIds = includeCategoryObjectIds(
+    source,
+    mode,
+    contextCategoryIds,
   );
-  const excludeObjectIds = toObjectIds(excludeCategoryIds);
-
-  function withExcludedCategories(
-    categoryFilter?: Record<string, unknown>,
-  ): Record<string, unknown> | undefined {
-    if (!excludeObjectIds.length && !categoryFilter) return undefined;
-    if (!excludeObjectIds.length) return categoryFilter;
-    if (!categoryFilter) return { $nin: excludeObjectIds };
-    return { ...categoryFilter, $nin: excludeObjectIds };
-  }
+  const excludeObjectIds = toObjectIds(
+    validObjectIdStrings(source.excludeCategoryIds),
+  );
 
   const basePublishedFilter: Record<string, unknown> = {
     ...notDeletedFilter,
@@ -208,10 +247,7 @@ async function resolveArticlesFromSource(
       ...basePublishedFilter,
       featured: true,
     };
-    const categoryIdsFilter = withExcludedCategories();
-    if (categoryIdsFilter) {
-      filter.categoryIds = categoryIdsFilter;
-    }
+    applyCategoryIncludeExclude(filter, includeObjectIds, excludeObjectIds);
     docs = await Article.find(filter)
       .sort({ publishedAt: -1, createdAt: -1 })
       .limit(fetchLimit)
@@ -225,45 +261,16 @@ async function resolveArticlesFromSource(
         _id: { $in: toObjectIds(ids) },
         ...basePublishedFilter,
       };
-      const categoryIdsFilter = withExcludedCategories();
-      if (categoryIdsFilter) {
-        filter.categoryIds = categoryIdsFilter;
-      }
+      applyCategoryIncludeExclude(filter, includeObjectIds, excludeObjectIds);
       const found = await Article.find(filter).lean<ArticleDocument[]>();
       const byId = new Map(found.map((doc) => [String(doc._id), doc]));
       docs = ids
         .map((id) => byId.get(id))
         .filter((doc): doc is ArticleDocument => Boolean(doc));
     }
-  } else if (mode === "category") {
-    const categoryIds = (
-      source.categoryIds?.length
-        ? source.categoryIds
-        : contextCategoryIds ?? []
-    ).filter((id) => mongoose.isValidObjectId(id));
-    if (categoryIds.length) {
-      const includeIds = toObjectIds(categoryIds);
-      const effectiveExclude = excludeObjectIds.filter(
-        (id) => !includeIds.some((include) => include.equals(id)),
-      );
-      const categoryFilter: Record<string, unknown> = { $in: includeIds };
-      if (effectiveExclude.length) {
-        categoryFilter.$nin = effectiveExclude;
-      }
-      docs = await Article.find({
-        ...basePublishedFilter,
-        categoryIds: categoryFilter,
-      })
-        .sort({ publishedAt: -1 })
-        .limit(fetchLimit)
-        .lean<ArticleDocument[]>();
-    }
   } else {
     const filter: Record<string, unknown> = { ...basePublishedFilter };
-    const categoryIdsFilter = withExcludedCategories();
-    if (categoryIdsFilter) {
-      filter.categoryIds = categoryIdsFilter;
-    }
+    applyCategoryIncludeExclude(filter, includeObjectIds, excludeObjectIds);
     docs = await Article.find(filter)
       .sort({ publishedAt: -1, createdAt: -1 })
       .limit(fetchLimit)
@@ -291,13 +298,14 @@ async function resolveVideosFromCategory(
     ? 1
     : Math.min(Math.max(settingNumber(settings, "limit", 6), 1), 24);
   const localeKey = locale === "en" ? "en" : "vi";
-  const categoryIds = (
-    source.categoryIds?.length
-      ? source.categoryIds
-      : contextCategoryIds ?? []
-  ).filter((id) => mongoose.isValidObjectId(id));
-
-  if (!categoryIds.length) return [];
+  const includeObjectIds = includeCategoryObjectIds(
+    source,
+    source.mode ?? "category",
+    contextCategoryIds,
+  );
+  const excludeObjectIds = toObjectIds(
+    validObjectIdStrings(source.excludeCategoryIds),
+  );
 
   // Fetch more articles than the video limit so we can skip posts without HLS.
   const fetchLimit = isSingle ? 12 : Math.min(limit * 4, 48);
@@ -305,10 +313,10 @@ async function resolveVideosFromCategory(
     ...notDeletedFilter,
     status: "published",
     publishedAt: { $ne: null, $lte: new Date() },
-    categoryIds: { $in: toObjectIds(categoryIds) },
     [`locales.${localeKey}.slug`]: { $nin: ["", null] },
     [`locales.${localeKey}.title`]: { $nin: ["", null] },
   };
+  applyCategoryIncludeExclude(filter, includeObjectIds, excludeObjectIds);
   if (isSingle) {
     filter.featured = true;
   }

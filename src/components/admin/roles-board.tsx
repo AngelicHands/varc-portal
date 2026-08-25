@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { saveRoleAction } from "@/lib/actions";
 import type { PublicRole } from "@/lib/app-roles";
 import { notifyAction } from "@/components/admin/admin-toast";
+import { AdminCheckbox } from "@/components/admin/admin-checkbox";
 import {
   ROLE_PERMISSION_CATEGORIES,
   type RoleCapabilityFlags,
@@ -221,8 +222,7 @@ function RoleEditModal({
             />
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <AdminCheckbox
               checked={enabled}
               disabled={lockedEnable}
               onChange={(e) => setEnabled(e.target.checked)}
@@ -239,8 +239,7 @@ function RoleEditModal({
                     key={category.key}
                     className="flex items-start gap-2 text-sm"
                   >
-                    <input
-                      type="checkbox"
+                    <AdminCheckbox
                       className="mt-0.5"
                       checked={permissions[category.key]}
                       disabled={locked}

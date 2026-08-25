@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { importCallsignsExcelAction } from "@/lib/callsign-actions";
 import { notifyAction } from "@/components/admin/admin-toast";
+import { AdminCheckbox } from "@/components/admin/admin-checkbox";
 
 type Props = {
   lastImport: {
@@ -71,7 +72,7 @@ export function CallsignImportForm({ lastImport, onClose }: Props) {
         />
       </label>
       <label className="mt-3 flex items-start gap-2 text-sm text-gray-700">
-        <input type="checkbox" name="replace" className="mt-0.5" />
+        <AdminCheckbox name="replace" className="mt-0.5" />
         <span>
           Replace existing directory (deletes current callsigns, then imports
           the file)

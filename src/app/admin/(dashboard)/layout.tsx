@@ -34,7 +34,10 @@ export default async function AdminDashboardLayout({
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[var(--admin-bg)] text-[var(--admin-ink)] lg:flex">
+    <div
+      data-admin-shell
+      className="min-h-[100dvh] bg-[var(--admin-bg)] text-[var(--admin-ink)] lg:flex"
+    >
       <AdminSidebar
         showEditorial={showEditorial}
         showImportExport={showImportExport}

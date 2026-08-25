@@ -14,32 +14,30 @@ export default async function NewTemplatePage() {
   ]);
 
   return (
-    <div>
-      <h1 className="mb-6 text-2xl font-semibold">New template</h1>
-      <TemplateEditor
-        initial={{
-          name: "",
-          description: "",
-          key: "",
-          isSystem: false,
-          layout: emptyLayout(),
-        }}
-        articleOptions={articles.map((article) => ({
-          id: String(article._id),
-          label:
-            getLocaleContent(article, "vi").title ||
-            getLocaleContent(article, "en").title ||
-            String(article._id),
-        }))}
-        categoryOptions={categorySelectOptions(categories, "vi")}
-        formOptions={forms.map((form) => ({
-          id: form.id,
-          label:
-            form.status === "published"
-              ? `${form.label}`
-              : `${form.label} (draft)`,
-        }))}
-      />
-    </div>
+    <TemplateEditor
+      heading="New template"
+      initial={{
+        name: "",
+        description: "",
+        key: "",
+        isSystem: false,
+        layout: emptyLayout(),
+      }}
+      articleOptions={articles.map((article) => ({
+        id: String(article._id),
+        label:
+          getLocaleContent(article, "vi").title ||
+          getLocaleContent(article, "en").title ||
+          String(article._id),
+      }))}
+      categoryOptions={categorySelectOptions(categories, "vi")}
+      formOptions={forms.map((form) => ({
+        id: form.id,
+        label:
+          form.status === "published"
+            ? `${form.label}`
+            : `${form.label} (draft)`,
+      }))}
+    />
   );
 }

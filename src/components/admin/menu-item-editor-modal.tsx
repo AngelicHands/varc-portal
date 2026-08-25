@@ -8,6 +8,7 @@ import type { MenuItemFormValues } from "@/lib/validations/article";
 import type { MenuLocation } from "@/models/MenuItem";
 import { useConfirm } from "@/components/admin/use-confirm";
 import { notifyAction } from "@/components/admin/admin-toast";
+import { AdminCheckbox } from "@/components/admin/admin-checkbox";
 
 export type MenuParentOption = {
   id: string;
@@ -467,8 +468,7 @@ export function MenuItemEditorModal({
 
             <div className="flex flex-wrap gap-4 text-sm">
               <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <AdminCheckbox
                   checked={form.enabled}
                   onChange={(event) =>
                     setForm((prev) => ({
@@ -480,8 +480,7 @@ export function MenuItemEditorModal({
                 Enabled
               </label>
               <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <AdminCheckbox
                   checked={form.openInNewTab}
                   onChange={(event) =>
                     setForm((prev) => ({

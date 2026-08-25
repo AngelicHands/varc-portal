@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -14,11 +14,25 @@ import {
 import { TemplateLayoutBuilder } from "@/components/admin/template-builder/template-layout-builder";
 import { useConfirm } from "@/components/admin/use-confirm";
 import { notifyAction } from "@/components/admin/admin-toast";
+import {
+  ARTICLE_ASIDE_PAD_COLLAPSED,
+  ARTICLE_ASIDE_PAD_EXPANDED,
+  AccordionPanel,
+  ArticleSectionAside,
+  CollapsibleSectionHeader,
+  TEMPLATE_SIDE_SECTIONS,
+  setArticleSectionAsideExpanded,
+  useArticleSectionAsideExpanded,
+  type TemplateSideSectionId,
+} from "@/components/admin/article-section-aside";
+import { SaveDraftIcon, TrashIcon } from "@/components/admin/admin-action-icons";
+import { IconActionButton } from "@/components/admin/icon-action-button";
 
 type Option = { id: string; label: string; depth?: number };
 
 type Props = {
   templateId?: string;
+  heading?: string;
   initial: {
     name: string;
     description: string;
@@ -33,6 +47,7 @@ type Props = {
 
 export function TemplateEditor({
   templateId,
+  heading = "Edit template",
   initial,
   articleOptions,
   categoryOptions,
@@ -47,6 +62,20 @@ export function TemplateEditor({
   const [layout, setLayout] = useState<TemplateLayout>(
     initial.layout ?? emptyLayout(),
   );
+  const [sideSection, setSideSection] = useState<TemplateSideSectionId | null>(
+    null,
+  );
+  const [layoutExpanded, setLayoutExpanded] = useState(true);
+  const [inspectorHost, setInspectorHost] = useState<HTMLElement | null>(null);
+  const [layoutSelectionActive, setLayoutSelectionActive] = useState(false);
+  const asideExpanded = useArticleSectionAsideExpanded();
+
+  const onLayoutInspectorSelectionChange = useCallback((active: boolean) => {
+    setLayoutSelectionActive(active);
+    if (!active) return;
+    setArticleSectionAsideExpanded(true);
+    setSideSection("properties");
+  }, []);
 
   function onSave() {
     setError(null);
@@ -85,82 +114,163 @@ export function TemplateEditor({
     });
   }
 
+  const sidePanels: Record<TemplateSideSectionId, React.ReactNode> = {
+    properties: (
+      <div className="grid min-w-0 content-start gap-5">
+        <div className="min-w-0">
+          <p className="mb-2 text-xs font-semibold tracking-wide text-gray-500 uppercase">
+            {layoutSelectionActive ? "Layout inspector" : "Layout"}
+          </p>
+          <div ref={setInspectorHost} className="min-w-0" />
+          {!layoutSelectionActive ? (
+            <p className="mt-2 text-xs text-gray-500">
+              Select a section or block in the layout canvas to edit it here.
+            </p>
+          ) : null}
+        </div>
+
+        <div
+          className={`grid min-w-0 content-start gap-5 ${
+            layoutSelectionActive ? "border-t border-gray-200 pt-5" : ""
+          }`}
+        >
+          {!layoutSelectionActive ? (
+            <>
+              <label className="block min-w-0 text-sm">
+                <span className="mb-1 block font-medium">Name</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full min-w-0 rounded border border-gray-300 px-3 py-2"
+                />
+              </label>
+              <label className="block min-w-0 text-sm">
+                <span className="mb-1 block font-medium">Key</span>
+                <p className="rounded border border-dashed border-gray-300 bg-gray-50 px-3 py-2 font-mono text-sm text-gray-600">
+                  {initial.key || "(assigned on save)"}
+                  {initial.isSystem ? " · system" : ""}
+                </p>
+              </label>
+              <label className="block min-w-0 text-sm">
+                <span className="mb-1 block font-medium">Description</span>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={3}
+                  className="w-full min-w-0 resize-y rounded border border-gray-300 px-3 py-2"
+                />
+              </label>
+            </>
+          ) : null}
+        </div>
+      </div>
+    ),
+  };
+
   return (
     <>
-      <div className="space-y-6">
-        {error ? (
-          <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link
-            href="/admin/templates"
-            className="text-sm text-gray-600 hover:underline"
-          >
-            ← Templates
-          </Link>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={onSave}
-              className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
-            >
-              Save template
-            </button>
+      <div className="max-w-full min-w-0 overflow-x-clip">
+        <div
+          className={`w-full min-w-0 transition-[padding] duration-300 ease-in-out motion-reduce:transition-none ${
+            asideExpanded
+              ? ARTICLE_ASIDE_PAD_EXPANDED
+              : ARTICLE_ASIDE_PAD_COLLAPSED
+          }`}
+        >
+          <div className="mb-4 flex flex-col gap-3 sm:mb-6 lg:flex-row lg:items-start lg:justify-between lg:gap-4">
+            <div className="min-w-0">
+              <Link
+                href="/admin/templates"
+                className="mb-1 inline-block text-sm text-gray-600 hover:underline"
+              >
+                ← Templates
+              </Link>
+              <h1 className="text-xl font-semibold sm:text-2xl">{heading}</h1>
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:justify-end">
+              <button
+                type="button"
+                disabled={pending || undefined}
+                onClick={onSave}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50 sm:flex-none sm:px-4"
+              >
+                <SaveDraftIcon />
+                Save template
+              </button>
+              {templateId && !initial.isSystem ? (
+                <IconActionButton
+                  label="Delete template"
+                  variant="danger"
+                  disabled={pending}
+                  onClick={() => void onDelete()}
+                >
+                  <TrashIcon />
+                </IconActionButton>
+              ) : null}
+            </div>
           </div>
-        </div>
 
-        <div className="grid gap-4 rounded-lg border border-gray-200 bg-white p-5 md:grid-cols-2">
-          <label className="block text-sm md:col-span-2">
-            <span className="mb-1 block font-medium">Name</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium">Key</span>
-            <p className="rounded border border-dashed border-gray-300 bg-gray-50 px-3 py-2 font-mono text-sm text-gray-600">
-              {initial.key || "(assigned on save)"}
-              {initial.isSystem ? " · system" : ""}
+          {error ? (
+            <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:mb-6">
+              {error}
             </p>
-          </label>
-          <label className="block text-sm md:col-span-2">
-            <span className="mb-1 block font-medium">Description</span>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className="w-full rounded border border-gray-300 px-3 py-2"
-            />
-          </label>
-        </div>
+          ) : null}
 
-        <TemplateLayoutBuilder
-          layout={layout}
-          onChange={setLayout}
-          articleOptions={articleOptions}
-          categoryOptions={categoryOptions}
-          formOptions={formOptions}
-        />
-
-        {templateId && !initial.isSystem ? (
-          <div className="flex justify-end">
-            <button
-              type="button"
-              disabled={pending}
-              onClick={onDelete}
-              className="rounded border border-red-300 px-4 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
-            >
-              Delete template
-            </button>
+          <div className="grid min-w-0 max-w-full gap-6">
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+              <CollapsibleSectionHeader
+                open={layoutExpanded}
+                onToggle={() => setLayoutExpanded((prev) => !prev)}
+                title="Template layout"
+                subtitle={
+                  name.trim() || "Sections and blocks for this template"
+                }
+                icon={
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <rect x="14" y="14" width="7" height="7" rx="1" />
+                  </svg>
+                }
+              />
+              <AccordionPanel
+                open={layoutExpanded}
+                panelClassName="border-t border-gray-200 px-4 py-4 sm:px-5 sm:py-5"
+              >
+                <TemplateLayoutBuilder
+                  layout={layout}
+                  onChange={setLayout}
+                  articleOptions={articleOptions}
+                  categoryOptions={categoryOptions}
+                  formOptions={formOptions}
+                  inspectorPlacement="external"
+                  inspectorHost={inspectorHost}
+                  onInspectorSelectionChange={onLayoutInspectorSelectionChange}
+                />
+              </AccordionPanel>
+            </div>
           </div>
-        ) : null}
+        </div>
       </div>
+
+      <ArticleSectionAside
+        sections={TEMPLATE_SIDE_SECTIONS}
+        openSection={sideSection}
+        onOpenSectionChange={(section) =>
+          setSideSection(section as TemplateSideSectionId | null)
+        }
+        panels={sidePanels}
+      />
       {modal}
     </>
   );

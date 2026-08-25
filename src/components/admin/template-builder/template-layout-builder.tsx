@@ -1,6 +1,14 @@
 "use client";
 
-import { useMemo, useRef, useState, type DragEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   createBlock,
   createSection,
@@ -22,6 +30,7 @@ import {
 } from "@/lib/blocks/labels";
 import { MediaPickerModal } from "@/components/admin/media-picker-modal";
 import { PageGalleryField } from "@/components/admin/page-gallery-field";
+import { AdminCheckbox } from "@/components/admin/admin-checkbox";
 import type { PageGalleryItemValues } from "@/lib/validations/article";
 
 type Option = { id: string; label: string; depth?: number };
@@ -68,6 +77,15 @@ type Props = {
   articleOptions?: Option[];
   categoryOptions?: Option[];
   formOptions?: Option[];
+  /**
+   * `inline` (default): inspector column beside the canvas (template editor).
+   * `external`: render inspector into `inspectorHost` (page editor Properties rail).
+   */
+  inspectorPlacement?: "inline" | "external";
+  /** DOM host for the external inspector (callback-ref element from the sidebar). */
+  inspectorHost?: HTMLElement | null;
+  /** Fired when a section/block is selected or cleared (external placement). */
+  onInspectorSelectionChange?: (active: boolean) => void;
 };
 
 type DragPayload =
@@ -162,12 +180,20 @@ export function TemplateLayoutBuilder({
   articleOptions = [],
   categoryOptions = [],
   formOptions = [],
+  inspectorPlacement = "inline",
+  inspectorHost = null,
+  onInspectorSelectionChange,
 }: Props) {
   const [selection, setSelection] = useState<BuilderSelection | null>(null);
   const [drag, setDrag] = useState<DragPayload | null>(null);
   const dragRef = useRef<DragPayload | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const externalInspector = inspectorPlacement === "external";
+
+  useEffect(() => {
+    onInspectorSelectionChange?.(selection != null);
+  }, [selection, onInspectorSelectionChange]);
 
   const selectedBlock = useMemo(() => {
     if (!selection || selection.kind !== "block") return null;
@@ -361,8 +387,57 @@ export function TemplateLayoutBuilder({
   const isDraggingBlock = drag?.kind === "block" || drag?.kind === "palette";
   const isDraggingSection = drag?.kind === "section";
 
+  const inspectorBody: ReactNode =
+    selection?.kind === "section" && selectedSection ? (
+      <SectionInspector
+        section={selectedSection.section}
+        onChange={(section) => patchSelectedSection(() => section)}
+      />
+    ) : selection?.kind === "block" && selectedBlock ? (
+      <BlockInspector
+        block={selectedBlock.block}
+        articleOptions={articleOptions}
+        categoryOptions={categoryOptions}
+        formOptions={formOptions}
+        onChange={(block) => patchSelected(() => block)}
+        onPickImage={() => setMediaOpen(true)}
+        onRemove={() => {
+          onChange(
+            updateSection(layout, selectedBlock.sectionId, (section) => ({
+              ...section,
+              blocks: section.blocks.filter(
+                (b) => b.id !== selectedBlock.block.id,
+              ),
+            })),
+          );
+          setSelection(null);
+        }}
+      />
+    ) : externalInspector ? null : (
+      <p className="text-sm text-gray-500">
+        Select a section or block to edit.
+      </p>
+    );
+
+  const inspectorPanel: ReactNode = (
+    <div className="space-y-3">
+      {!externalInspector ? (
+        <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
+          Inspector
+        </p>
+      ) : null}
+      {inspectorBody}
+    </div>
+  );
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[200px_minmax(0,1fr)_280px]">
+    <div
+      className={`grid gap-4 ${
+        externalInspector
+          ? "lg:grid-cols-[200px_minmax(0,1fr)]"
+          : "lg:grid-cols-[200px_minmax(0,1fr)_280px]"
+      }`}
+    >
       <aside className="space-y-2 rounded-lg border border-gray-200 bg-white p-3">
         <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
           Blocks
@@ -688,41 +763,13 @@ export function TemplateLayoutBuilder({
         ) : null}
       </div>
 
-      <aside className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
-        <p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">
-          Inspector
-        </p>
-        {selection?.kind === "section" && selectedSection ? (
-          <SectionInspector
-            section={selectedSection.section}
-            onChange={(section) => patchSelectedSection(() => section)}
-          />
-        ) : selection?.kind === "block" && selectedBlock ? (
-          <BlockInspector
-            block={selectedBlock.block}
-            articleOptions={articleOptions}
-            categoryOptions={categoryOptions}
-            formOptions={formOptions}
-            onChange={(block) => patchSelected(() => block)}
-            onPickImage={() => setMediaOpen(true)}
-            onRemove={() => {
-              onChange(
-                updateSection(layout, selectedBlock.sectionId, (section) => ({
-                  ...section,
-                  blocks: section.blocks.filter(
-                    (b) => b.id !== selectedBlock.block.id,
-                  ),
-                })),
-              );
-              setSelection(null);
-            }}
-          />
-        ) : (
-          <p className="text-sm text-gray-500">
-            Select a section or block to edit.
-          </p>
-        )}
-      </aside>
+      {!externalInspector ? (
+        <aside className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
+          {inspectorPanel}
+        </aside>
+      ) : inspectorHost && inspectorBody
+        ? createPortal(inspectorPanel, inspectorHost)
+        : null}
 
       <MediaPickerModal
         open={mediaOpen}
@@ -957,8 +1004,7 @@ function BlockInspector({
       {block.type === "heading" ? (
         <>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <AdminCheckbox
               checked={block.settings.bindPageTitle === true}
               onChange={(e) =>
                 onChange({
@@ -1069,8 +1115,7 @@ function BlockInspector({
       {block.type === "gallery" ? (
         <>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <AdminCheckbox
               checked={block.settings.usePageGallery === true}
               onChange={(e) =>
                 onChange({
@@ -1177,8 +1222,7 @@ function BlockInspector({
             />
           </label>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <AdminCheckbox
               checked={block.settings.showExcerpt !== false}
               onChange={(e) =>
                 onChange({
@@ -1211,8 +1255,7 @@ function BlockInspector({
                 </select>
               </label>
               <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
+                <AdminCheckbox
                   checked={block.settings.showTitle === true}
                   onChange={(e) =>
                     onChange({
@@ -1267,56 +1310,41 @@ function BlockInspector({
             const mode =
               block.source.mode ??
               (block.type === "featuredSlider" ? "featured" : "latest");
-            if (mode === "category") {
-              return (
-                <MultiCheck
-                  label="Categories"
-                  options={categoryOptions}
-                  values={block.source.categoryIds ?? []}
-                  onChange={(categoryIds) =>
+            return (
+              <>
+                {mode === "ids" ? (
+                  <MultiCheck
+                    label="Articles"
+                    options={articleOptions}
+                    values={block.source.articleIds ?? []}
+                    onChange={(articleIds) =>
+                      onChange({
+                        ...block,
+                        source: { ...block.source, articleIds },
+                      })
+                    }
+                  />
+                ) : null}
+                <CategoryIncludeExcludeFields
+                  categoryOptions={categoryOptions}
+                  categoryIds={block.source.categoryIds ?? []}
+                  excludeCategoryIds={block.source.excludeCategoryIds ?? []}
+                  onCategoryIdsChange={(categoryIds) =>
                     onChange({
                       ...block,
                       source: { ...block.source, categoryIds },
                     })
                   }
-                />
-              );
-            }
-            if (mode === "ids") {
-              return (
-                <MultiCheck
-                  label="Articles"
-                  options={articleOptions}
-                  values={block.source.articleIds ?? []}
-                  onChange={(articleIds) =>
+                  onExcludeCategoryIdsChange={(excludeCategoryIds) =>
                     onChange({
                       ...block,
-                      source: { ...block.source, articleIds },
+                      source: { ...block.source, excludeCategoryIds },
                     })
                   }
                 />
-              );
-            }
-            return null;
+              </>
+            );
           })()}
-          {block.type === "articleList" ? (
-            <div>
-              <MultiCheck
-                label="Exclude categories"
-                options={categoryOptions}
-                values={block.source.excludeCategoryIds ?? []}
-                onChange={(excludeCategoryIds) =>
-                  onChange({
-                    ...block,
-                    source: { ...block.source, excludeCategoryIds },
-                  })
-                }
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Hide articles that belong to any selected category.
-              </p>
-            </div>
-          ) : null}
         </>
       ) : null}
 
@@ -1374,11 +1402,11 @@ function BlockInspector({
               contains an HLS video in its body.
             </p>
           )}
-          <MultiCheck
-            label="Categories"
-            options={categoryOptions}
-            values={block.source.categoryIds ?? []}
-            onChange={(categoryIds) =>
+          <CategoryIncludeExcludeFields
+            categoryOptions={categoryOptions}
+            categoryIds={block.source.categoryIds ?? []}
+            excludeCategoryIds={block.source.excludeCategoryIds ?? []}
+            onCategoryIdsChange={(categoryIds) =>
               onChange({
                 ...block,
                 source: {
@@ -1388,10 +1416,19 @@ function BlockInspector({
                 },
               })
             }
+            onExcludeCategoryIdsChange={(excludeCategoryIds) =>
+              onChange({
+                ...block,
+                source: {
+                  ...block.source,
+                  mode: "category",
+                  excludeCategoryIds,
+                },
+              })
+            }
           />
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <AdminCheckbox
               checked={block.settings.showTitle === true}
               onChange={(e) =>
                 onChange({
@@ -1541,13 +1578,49 @@ function BlockInspector({
   );
 }
 
+function CategoryIncludeExcludeFields({
+  categoryOptions,
+  categoryIds,
+  excludeCategoryIds,
+  onCategoryIdsChange,
+  onExcludeCategoryIdsChange,
+}: {
+  categoryOptions: Option[];
+  categoryIds: string[];
+  excludeCategoryIds: string[];
+  onCategoryIdsChange: (values: string[]) => void;
+  onExcludeCategoryIdsChange: (values: string[]) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <MultiCheck
+        label="Include categories"
+        labelClassName="mb-1 text-xs font-semibold text-gray-900"
+        options={categoryOptions}
+        values={categoryIds}
+        onChange={onCategoryIdsChange}
+      />
+      <div className="border-t border-gray-200" role="separator" />
+      <MultiCheck
+        label="Exclude categories"
+        labelClassName="mb-1 text-xs font-semibold text-gray-900"
+        options={categoryOptions}
+        values={excludeCategoryIds}
+        onChange={onExcludeCategoryIdsChange}
+      />
+    </div>
+  );
+}
+
 function MultiCheck({
   label,
+  labelClassName = "mb-1 text-xs text-gray-500",
   options,
   values,
   onChange,
 }: {
   label: string;
+  labelClassName?: string;
   options: Option[];
   values: string[];
   onChange: (values: string[]) => void;
@@ -1555,7 +1628,7 @@ function MultiCheck({
   const set = new Set(values);
   return (
     <div>
-      <p className="mb-1 text-xs text-gray-500">{label}</p>
+      <p className={labelClassName}>{label}</p>
       <div className="max-h-40 space-y-1 overflow-y-auto rounded border border-gray-200 p-2">
         {options.length === 0 ? (
           <p className="text-xs text-gray-400">No options</p>
@@ -1568,8 +1641,7 @@ function MultiCheck({
                 paddingLeft: `${Math.min(opt.depth ?? 0, 3) * 0.75}rem`,
               }}
             >
-              <input
-                type="checkbox"
+              <AdminCheckbox
                 checked={set.has(opt.id)}
                 onChange={(e) => {
                   const next = new Set(values);

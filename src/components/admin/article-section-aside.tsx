@@ -69,16 +69,6 @@ export const ARTICLE_SIDE_SECTIONS: SectionItem[] = [
     ),
   },
   {
-    id: "access",
-    label: "Access",
-    icon: (
-      <Icon>
-        <path d="M12 3a4 4 0 0 1 4 4v2h1.5A1.5 1.5 0 0 1 19 10.5v8A1.5 1.5 0 0 1 17.5 20h-11A1.5 1.5 0 0 1 5 18.5v-8A1.5 1.5 0 0 1 6.5 9H8V7a4 4 0 0 1 4-4Z" />
-        <path d="M10 14h4" />
-      </Icon>
-    ),
-  },
-  {
     id: "images",
     label: "Images",
     icon: (
@@ -109,6 +99,16 @@ export const ARTICLE_SIDE_SECTIONS: SectionItem[] = [
       </Icon>
     ),
   },
+  {
+    id: "access",
+    label: "Access",
+    icon: (
+      <Icon>
+        <path d="M12 3a4 4 0 0 1 4 4v2h1.5A1.5 1.5 0 0 1 19 10.5v8A1.5 1.5 0 0 1 17.5 20h-11A1.5 1.5 0 0 1 5 18.5v-8A1.5 1.5 0 0 1 6.5 9H8V7a4 4 0 0 1 4-4Z" />
+        <path d="M10 14h4" />
+      </Icon>
+    ),
+  },
 ];
 
 export type PageSideSectionId =
@@ -124,16 +124,6 @@ export const PAGE_SIDE_SECTIONS: SectionItem[] = [
     icon: (
       <Icon>
         <path d="M4 7h6l2 2h8v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" />
-      </Icon>
-    ),
-  },
-  {
-    id: "access",
-    label: "Access",
-    icon: (
-      <Icon>
-        <path d="M12 3a4 4 0 0 1 4 4v2h1.5A1.5 1.5 0 0 1 19 10.5v8A1.5 1.5 0 0 1 17.5 20h-11A1.5 1.5 0 0 1 5 18.5v-8A1.5 1.5 0 0 1 6.5 9H8V7a4 4 0 0 1 4-4Z" />
-        <path d="M10 14h4" />
       </Icon>
     ),
   },
@@ -155,6 +145,30 @@ export const PAGE_SIDE_SECTIONS: SectionItem[] = [
       <Icon>
         <circle cx="11" cy="11" r="6" />
         <path d="m20 20-3.5-3.5" />
+      </Icon>
+    ),
+  },
+  {
+    id: "access",
+    label: "Access",
+    icon: (
+      <Icon>
+        <path d="M12 3a4 4 0 0 1 4 4v2h1.5A1.5 1.5 0 0 1 19 10.5v8A1.5 1.5 0 0 1 17.5 20h-11A1.5 1.5 0 0 1 5 18.5v-8A1.5 1.5 0 0 1 6.5 9H8V7a4 4 0 0 1 4-4Z" />
+        <path d="M10 14h4" />
+      </Icon>
+    ),
+  },
+];
+
+export type TemplateSideSectionId = "properties";
+
+export const TEMPLATE_SIDE_SECTIONS: SectionItem[] = [
+  {
+    id: "properties",
+    label: "Properties",
+    icon: (
+      <Icon>
+        <path d="M4 7h6l2 2h8v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" />
       </Icon>
     ),
   },

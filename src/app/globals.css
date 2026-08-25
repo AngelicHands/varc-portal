@@ -530,6 +530,16 @@ button:disabled,
   outline-color: #b91c1c;
 }
 
+/* Admin shell: never use browser-blue checkboxes as a fallback. */
+[data-admin-shell] input[type="checkbox"] {
+  accent-color: #111827;
+}
+
+[data-admin-shell] input[type="checkbox"]:focus-visible {
+  outline: 2px solid #111827;
+  outline-offset: 2px;
+}
+
 body.ham-map-view header[data-site-header],
 body.ham-map-view footer[data-site-footer] {
   display: none;

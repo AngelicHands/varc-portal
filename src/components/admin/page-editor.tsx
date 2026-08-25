@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deletePageAction, savePageAction } from "@/lib/actions";
@@ -26,6 +26,7 @@ import {
   ArticleSectionAside,
   CollapsibleSectionHeader,
   PAGE_SIDE_SECTIONS,
+  setArticleSectionAsideExpanded,
   useArticleSectionAsideExpanded,
   type PageSideSectionId,
 } from "@/components/admin/article-section-aside";
@@ -105,8 +106,17 @@ export function PageEditor({
   const [layoutExpanded, setLayoutExpanded] = useState(
     () => form.layoutOverride != null,
   );
+  const [inspectorHost, setInspectorHost] = useState<HTMLElement | null>(null);
+  const [layoutSelectionActive, setLayoutSelectionActive] = useState(false);
   const asideExpanded = useArticleSectionAsideExpanded();
   const customize = form.layoutOverride != null;
+
+  const onLayoutInspectorSelectionChange = useCallback((active: boolean) => {
+    setLayoutSelectionActive(active);
+    if (!active) return;
+    setArticleSectionAsideExpanded(true);
+    setSideSection("properties");
+  }, []);
 
   const previewSlug = useMemo(
     () => (form.locales[tab].title ? makeSlug(form.locales[tab].title) : ""),
@@ -184,6 +194,29 @@ export function PageEditor({
   const sidePanels: Record<PageSideSectionId, React.ReactNode> = {
     properties: (
       <div className="grid min-w-0 content-start gap-5">
+        {customize ? (
+          <div className="min-w-0">
+            <p className="mb-2 text-xs font-semibold tracking-wide text-gray-500 uppercase">
+              {layoutSelectionActive ? "Layout inspector" : "Layout"}
+            </p>
+            <div ref={setInspectorHost} className="min-w-0" />
+            {!layoutSelectionActive ? (
+              <p className="mt-2 text-xs text-gray-500">
+                Select a section or block in the layout canvas to edit it here.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div
+          className={`grid min-w-0 content-start gap-5 ${
+            customize && layoutSelectionActive
+              ? "border-t border-gray-200 pt-5"
+              : ""
+          }`}
+        >
+          {!customize || !layoutSelectionActive ? (
+            <>
         <label className="block min-w-0 text-sm">
           <span className="mb-1 block font-medium">Template</span>
           <select
@@ -262,6 +295,8 @@ export function PageEditor({
             .
           </span>
         </label>
+            </>
+          ) : null}
 
         <label className="flex min-w-0 cursor-pointer items-start gap-3 rounded-md border border-gray-200 bg-white px-3 py-3 text-sm">
           <AdminCheckbox
@@ -271,6 +306,7 @@ export function PageEditor({
               if (e.target.checked) {
                 const existing = form.layoutOverride as TemplateLayout | null;
                 setLayoutExpanded(true);
+                setLayoutSelectionActive(false);
                 setForm((prev) => ({
                   ...prev,
                   layoutOverride: existing
@@ -278,6 +314,7 @@ export function PageEditor({
                     : layoutFromTemplate(form.templateKey, defaultLayouts),
                 }));
               } else {
+                setLayoutSelectionActive(false);
                 setForm((prev) => ({ ...prev, layoutOverride: null }));
               }
             }}
@@ -291,6 +328,7 @@ export function PageEditor({
             </span>
           </span>
         </label>
+        </div>
       </div>
     ),
     access: (
@@ -591,6 +629,11 @@ export function PageEditor({
                     articleOptions={articleOptions}
                     categoryOptions={categoryOptions}
                     formOptions={formOptions}
+                    inspectorPlacement="external"
+                    inspectorHost={inspectorHost}
+                    onInspectorSelectionChange={
+                      onLayoutInspectorSelectionChange
+                    }
                   />
                 </AccordionPanel>
               </div>

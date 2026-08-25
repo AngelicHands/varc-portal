@@ -25,6 +25,7 @@ import {
   type ImportExportVerifyStatus,
 } from "@/lib/validations/import-export";
 import { notifyAction } from "@/components/admin/admin-toast";
+import { AdminCheckbox } from "@/components/admin/admin-checkbox";
 
 type Props = {
   initialData: ImportExportSettingsEditorData;
@@ -405,8 +406,7 @@ function SourcePanel({
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+          <AdminCheckbox
             suppressHydrationWarning
             checked={scheduleEnabled}
             onChange={(e) => onScheduleEnabledChange(e.target.checked)}

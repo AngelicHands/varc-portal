@@ -35,6 +35,7 @@ import {
 import { makeSlug } from "@/lib/slug";
 import { notifyAction, notifyError } from "@/components/admin/admin-toast";
 import { useConfirm } from "@/components/admin/use-confirm";
+import { AdminCheckbox } from "@/components/admin/admin-checkbox";
 import { PublicFormBlock } from "@/components/portal/public-form-block";
 import type { PublicFormDefinition } from "@/lib/forms";
 import enMessages from "../../../messages/en.json";
@@ -1219,8 +1220,7 @@ export function FormDefinitionEditor({
                               key={style}
                               className="inline-flex items-center gap-2 text-sm"
                             >
-                              <input
-                                type="checkbox"
+                              <AdminCheckbox
                                 checked={field.typingStyle.includes(style)}
                                 onChange={() =>
                                   setField(field.id, (current) => ({
@@ -1234,7 +1234,6 @@ export function FormDefinitionEditor({
                                       : [...current.typingStyle, style],
                                   }))
                                 }
-                                className="rounded border-gray-300"
                               />
                               <span className="capitalize">{style}</span>
                             </label>
@@ -1452,8 +1451,7 @@ export function FormDefinitionEditor({
                     ) : null}
 
                     <label className="flex items-center gap-2 pt-7 text-sm">
-                      <input
-                        type="checkbox"
+                      <AdminCheckbox
                         checked={field.required}
                         onChange={(e) =>
                           setField(field.id, (current) => ({
@@ -1521,8 +1519,7 @@ export function FormDefinitionEditor({
                     {field.type === "checkbox" &&
                     (field.options?.length ?? 0) === 0 ? (
                       <label className="flex items-center gap-2 md:col-span-2">
-                        <input
-                          type="checkbox"
+                        <AdminCheckbox
                           checked={Boolean(field.checked)}
                           onChange={(e) =>
                             setField(field.id, (current) => ({
@@ -1530,7 +1527,6 @@ export function FormDefinitionEditor({
                               checked: e.target.checked,
                             }))
                           }
-                          className="form-choice-input"
                         />
                         <span className="text-sm">Checked by default</span>
                       </label>
