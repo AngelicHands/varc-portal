@@ -10,7 +10,7 @@ metadata:
     app: varc-portal-hls-poster-worker
 spec:
   # Set to 1 after the first release that publishes the hls-poster image.
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: varc-portal-hls-poster-worker
