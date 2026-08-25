@@ -14,16 +14,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and publish release
+  # Fast gate: version alignment + lint + Go tests. Everything else waits on this.
+  verify:
+    name: Verify
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 15
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      web: ${{ steps.image.outputs.web }}
+      api: ${{ steps.image.outputs.api }}
+      hls_poster: ${{ steps.image.outputs.hls_poster }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
       - name: Extract version
         id: version
@@ -51,6 +55,14 @@ jobs:
             exit 1
           fi
 
+      - name: Set image names
+        id: image
+        run: |
+          OWNER_REPO="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "web=ghcr.io/${OWNER_REPO}" >> "$GITHUB_OUTPUT"
+          echo "api=ghcr.io/${OWNER_REPO}-api" >> "$GITHUB_OUTPUT"
+          echo "hls_poster=ghcr.io/${OWNER_REPO}-hls-poster" >> "$GITHUB_OUTPUT"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
@@ -76,6 +88,28 @@ jobs:
         run: go test ./...
         working-directory: apps/api
 
+  # Host standalone tarball (independent of Docker image builds).
+  package:
+    name: Package standalone
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Build
         run: pnpm build
         env:
@@ -89,6 +123,7 @@ jobs:
 
       - name: Package standalone build
         run: |
+          VERSION="${{ needs.verify.outputs.version }}"
           mkdir -p dist
           cp -R .next/standalone dist/varc-portal
           mkdir -p dist/varc-portal/.next
@@ -96,15 +131,43 @@ jobs:
           if [[ -d public ]]; then
             cp -R public dist/varc-portal/public
           fi
-          tar -czf "dist/varc-portal-${{ steps.version.outputs.version }}-standalone.tar.gz" -C dist varc-portal
+          tar -czf "dist/varc-portal-${VERSION}-standalone.tar.gz" -C dist varc-portal
 
-      - name: Set image names
-        id: image
-        run: |
-          OWNER_REPO="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          echo "web=ghcr.io/${OWNER_REPO}" >> "$GITHUB_OUTPUT"
-          echo "api=ghcr.io/${OWNER_REPO}-api" >> "$GITHUB_OUTPUT"
-          echo "hls_poster=ghcr.io/${OWNER_REPO}-hls-poster" >> "$GITHUB_OUTPUT"
+      - name: Upload standalone artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-tarball
+          path: dist/varc-portal-${{ needs.verify.outputs.version }}-standalone.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  # Three GHCR images in parallel (each builds in its own Dockerfile/stage).
+  docker:
+    name: Docker (${{ matrix.name }})
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: web
+            context: .
+            target: web-runner
+            image: ${{ needs.verify.outputs.web }}
+            cache_scope: web-image
+          - name: hls-poster
+            context: .
+            target: hls-poster-worker
+            image: ${{ needs.verify.outputs.hls_poster }}
+            cache_scope: hls-poster-image
+          - name: api
+            context: apps/api
+            image: ${{ needs.verify.outputs.api }}
+            cache_scope: api-image
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -116,45 +179,39 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push web image
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          target: web-runner
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
           push: true
           tags: |
-            ${{ steps.image.outputs.web }}:${{ steps.version.outputs.tag }}
-            ${{ steps.image.outputs.web }}:${{ steps.version.outputs.version }}
-          cache-from: type=gha,scope=web-image
-          cache-to: type=gha,mode=max,scope=web-image
+            ${{ matrix.image }}:${{ needs.verify.outputs.tag }}
+            ${{ matrix.image }}:${{ needs.verify.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
 
-      - name: Build and push HLS poster worker image
-        uses: docker/build-push-action@v6
+  release:
+    name: GitHub Release
+    needs: [verify, package, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
         with:
-          context: .
-          target: hls-poster-worker
-          push: true
-          tags: |
-            ${{ steps.image.outputs.hls_poster }}:${{ steps.version.outputs.tag }}
-            ${{ steps.image.outputs.hls_poster }}:${{ steps.version.outputs.version }}
-          cache-from: type=gha,scope=hls-poster-image
-          cache-to: type=gha,mode=max,scope=hls-poster-image
+          fetch-depth: 0
 
-      - name: Build and push API image
-        uses: docker/build-push-action@v6
+      - name: Download standalone artifact
+        uses: actions/download-artifact@v4
         with:
-          context: apps/api
-          push: true
-          tags: |
-            ${{ steps.image.outputs.api }}:${{ steps.version.outputs.tag }}
-            ${{ steps.image.outputs.api }}:${{ steps.version.outputs.version }}
-          cache-from: type=gha,scope=api-image
-          cache-to: type=gha,mode=max,scope=api-image
+          name: standalone-tarball
+          path: dist
 
       - name: Resolve previous release tag
         id: prev
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
+          TAG="${{ needs.verify.outputs.tag }}"
           PREV="$(git describe --tags --abbrev=0 --match 'v*.*.*' "${TAG}^" 2>/dev/null || true)"
           if [[ -z "${PREV}" ]]; then
             PREV="$(git tag --list 'v*.*.*' --sort=-v:refname | grep -vxF "${TAG}" | head -n1 || true)"
@@ -164,7 +221,7 @@ jobs:
 
       - name: Build release notes
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
+          TAG="${{ needs.verify.outputs.tag }}"
           PREV="${{ steps.prev.outputs.tag }}"
 
           list_commits() {
@@ -199,13 +256,13 @@ jobs:
         if: ${{ steps.prev.outputs.tag != '' }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: VARC Portal ${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.verify.outputs.tag }}
+          name: VARC Portal ${{ needs.verify.outputs.version }}
           body_path: release-notes.md
           generate_release_notes: true
           previous_tag: ${{ steps.prev.outputs.tag }}
           files: |
-            dist/varc-portal-${{ steps.version.outputs.version }}-standalone.tar.gz
+            dist/varc-portal-${{ needs.verify.outputs.version }}-standalone.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -213,11 +270,11 @@ jobs:
         if: ${{ steps.prev.outputs.tag == '' }}
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: VARC Portal ${{ steps.version.outputs.version }}
+          tag_name: ${{ needs.verify.outputs.tag }}
+          name: VARC Portal ${{ needs.verify.outputs.version }}
           body_path: release-notes.md
           generate_release_notes: true
           files: |
-            dist/varc-portal-${{ steps.version.outputs.version }}-standalone.tar.gz
+            dist/varc-portal-${{ needs.verify.outputs.version }}-standalone.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
