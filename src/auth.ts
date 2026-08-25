@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
+import { cache } from "react";
 import { authConfig } from "@/auth.config";
 import { connectDb } from "@/lib/db";
 import {
@@ -43,6 +44,8 @@ declare module "next-auth/jwt" {
     id?: string;
     role?: Role;
     callsign?: string;
+    /** Epoch ms when role/callsign were last loaded from Mongo. */
+    roleSyncedAt?: number;
     canAccessAdmin?: boolean;
     canManageContent?: boolean;
     canManagePages?: boolean;
@@ -51,6 +54,9 @@ declare module "next-auth/jwt" {
     canManageRoles?: boolean;
   }
 }
+
+/** How often to refresh role/callsign from Mongo (admin role changes). */
+const ROLE_SYNC_TTL_MS = 5 * 60 * 1000;
 
 function applyCapabilitiesToToken(token: JWT, caps: RoleCapabilityFlags) {
   token.canAccessAdmin = caps.canAccessAdmin;
@@ -64,7 +70,7 @@ function applyCapabilitiesToToken(token: JWT, caps: RoleCapabilityFlags) {
 const googleClientId = getGoogleClientId();
 const googleClientSecret = getGoogleClientSecret();
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const nextAuth = NextAuth({
   ...authConfig,
   providers: [
     Credentials({
@@ -137,6 +143,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         await existing.save();
         user.id = String(existing._id);
         user.role = role;
+        user.callsign = existing.callsign?.trim() ?? "";
         return true;
       }
 
@@ -149,51 +156,66 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       });
       user.id = String(created._id);
       user.role = "reader";
+      user.callsign = "";
       return true;
     },
-    async jwt({ token, user, account, trigger }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.role = normalizeRoleKey(user.role as string | undefined);
         if (user.email) token.email = String(user.email).toLowerCase();
         if (typeof user.callsign === "string") {
           token.callsign = user.callsign.trim();
+        } else if (token.callsign === undefined) {
+          token.callsign = "";
         }
+        token.roleSyncedAt = Date.now();
       }
 
       const email = token.email ? String(token.email).toLowerCase() : null;
+      const syncedAt =
+        typeof token.roleSyncedAt === "number" ? token.roleSyncedAt : 0;
+      // Skip Mongo on the sign-in jwt pass (user payload already applied).
+      // Refresh on session.update() or when the TTL expires.
+      const shouldSyncRole =
+        Boolean(email) &&
+        !user &&
+        (trigger === "update" || Date.now() - syncedAt > ROLE_SYNC_TTL_MS);
 
-      // Always reload role/callsign from Mongo so admin role changes apply on
-      // the next request without requiring sign-out.
-      if (email) {
+      let roleChanged = Boolean(user);
+      // Refresh role/callsign from Mongo on a TTL so admin role changes apply
+      // without a Mongo round-trip on every request.
+      if (email && shouldSyncRole) {
         await connectDb();
-        await ensureDefaultRoles();
         const dbUser = await User.findOne({ email }).select("role callsign");
         if (dbUser) {
+          const nextRole = normalizeRoleKey(dbUser.role);
+          roleChanged = nextRole !== token.role;
           token.id = String(dbUser._id);
-          token.role = normalizeRoleKey(dbUser.role);
+          token.role = nextRole;
           token.callsign = dbUser.callsign?.trim() ?? "";
         } else if (token.callsign === undefined) {
           token.callsign = "";
         }
+        token.roleSyncedAt = Date.now();
       } else if (token.role) {
         token.role = normalizeRoleKey(token.role as string);
       }
 
-      // Keep explicit session.update() refresh for other profile fields later.
-      void account;
-      void trigger;
-
-      try {
-        applyCapabilitiesToToken(
-          token,
-          await getRoleCapabilities(token.role as string | undefined),
-        );
-      } catch {
-        applyCapabilitiesToToken(
-          token,
-          defaultCapabilitiesFor(token.role as string | undefined),
-        );
+      // Capabilities are already on the JWT; only refresh when role may change.
+      const capsMissing = typeof token.canAccessAdmin !== "boolean";
+      if (roleChanged || capsMissing || trigger === "update") {
+        try {
+          applyCapabilitiesToToken(
+            token,
+            await getRoleCapabilities(token.role as string | undefined),
+          );
+        } catch {
+          applyCapabilitiesToToken(
+            token,
+            defaultCapabilitiesFor(token.role as string | undefined),
+          );
+        }
       }
 
       return token;
@@ -218,3 +240,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+const { handlers, signIn, signOut } = nextAuth;
+
+/** Deduplicate auth() within a single RSC request (layout + page). */
+const auth = cache(nextAuth.auth);
+
+export { handlers, auth, signIn, signOut };

@@ -6,14 +6,11 @@ import { auth } from "@/auth";
 import { routing } from "@/i18n/routing";
 import { portalLocaleFromHeaders } from "@/lib/portal-locale-server";
 import { getPublicSiteBranding, listPublicMenuLinks } from "@/lib/cms";
-import { getAccountProfile } from "@/lib/account";
 import { isAdminRole } from "@/lib/roles";
 import { contentViewerFromSession } from "@/lib/content-access";
 import { SiteFooter } from "@/components/portal/site-footer";
 import { SiteHeader } from "@/components/portal/site-header";
 import { LocaleAlternatesProvider } from "@/components/portal/locale-alternates";
-
-export const dynamic = "force-dynamic";
 
 type Props = {
   children: React.ReactNode;
@@ -34,6 +31,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const siteTitle = branding.siteTitle;
   const description = branding.metaDescription || branding.tagline;
   const suffix = `${siteName} | ${siteTitle}`;
+  // Point at the media URL directly — avoid /api/favicon on every document load.
+  const iconUrl = branding.faviconUrl.trim() || "/api/favicon";
 
   return {
     title: {
@@ -44,9 +43,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     description,
     icons: {
-      icon: [{ url: "/api/favicon" }],
-      shortcut: [{ url: "/api/favicon" }],
-      apple: [{ url: "/api/favicon" }],
+      icon: [{ url: iconUrl }],
+      shortcut: [{ url: iconUrl }],
+      apple: [{ url: iconUrl }],
     },
     openGraph: {
       title: suffix,
@@ -65,9 +64,10 @@ export default async function LocaleLayout({ children, params }: Props) {
 
   const locale = await portalLocaleFromHeaders(localeParam);
   setRequestLocale(locale);
-  const messages = await getMessages();
   const appLocale = locale;
-  const session = await auth();
+
+  // Parallelize independent shell work; auth is React.cache'd for page reuse.
+  const [messages, session] = await Promise.all([getMessages(), auth()]);
   const viewer = contentViewerFromSession(session);
   const [navItems, footerItems, branding] = await Promise.all([
     listPublicMenuLinks("navigation", appLocale, viewer),
@@ -75,15 +75,13 @@ export default async function LocaleLayout({ children, params }: Props) {
     getPublicSiteBranding(appLocale),
   ]);
 
-  const profile = session?.user
-    ? await getAccountProfile(session.user.id, session.user.email)
-    : null;
+  // Prefer JWT callsign — avoid a Mongo profile round-trip on every nav.
   const user = session?.user
     ? {
         name: session.user.name ?? null,
         email: session.user.email ?? null,
         isAdmin: isAdminRole(session.user),
-        callsign: profile?.callsign?.trim() ?? "",
+        callsign: session.user.callsign?.trim() ?? "",
       }
     : null;
 

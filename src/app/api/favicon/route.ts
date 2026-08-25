@@ -1,19 +1,29 @@
 import { NextResponse } from "next/server";
 import { getPublicSiteBranding } from "@/lib/cms";
 
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+/** Allow CDN/browser caching of the redirect target resolution. */
+export const revalidate = 3600;
+
+const CACHE_HEADERS = {
+  // Edge can cache the redirect; browsers follow to /media (immutable).
+  "Cache-Control":
+    "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+} as const;
 
 /**
- * Resolves the CMS favicon and returns the image bytes (or redirects as a
- * last resort). Used by metadata and by the /favicon.ico → /api/favicon
- * redirect so browsers never see a baked-in Next.js icon.
+ * Resolves the CMS favicon URL and redirects to it.
+ * Prefer pointing metadata `icons` at `branding.faviconUrl` directly so browsers
+ * never hit this route on normal navigations.
  */
 export async function GET(request: Request) {
   const branding = await getPublicSiteBranding("vi");
   const favicon = branding.faviconUrl.trim();
   if (!favicon) {
-    return new NextResponse(null, { status: 204 });
+    return new NextResponse(null, {
+      status: 204,
+      headers: CACHE_HEADERS,
+    });
   }
 
   const target =
@@ -21,30 +31,8 @@ export async function GET(request: Request) {
       ? favicon
       : new URL(favicon, request.url).toString();
 
-  try {
-    const upstream = await fetch(target, {
-      // Favicon changes are rare; short cache is enough for CMS updates.
-      next: { revalidate: 300 },
-      headers: { Accept: "image/*,*/*" },
-    });
-    if (!upstream.ok) {
-      return NextResponse.redirect(target, 307);
-    }
-
-    const contentType =
-      upstream.headers.get("content-type")?.split(";")[0]?.trim() ||
-      "image/png";
-    const body = await upstream.arrayBuffer();
-
-    return new NextResponse(body, {
-      status: 200,
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "public, max-age=300, must-revalidate",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
-  } catch {
-    return NextResponse.redirect(target, 307);
-  }
+  return NextResponse.redirect(target, {
+    status: 307,
+    headers: CACHE_HEADERS,
+  });
 }
