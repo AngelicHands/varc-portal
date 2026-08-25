@@ -37,6 +37,7 @@ export async function GET(request: Request) {
 
     const records = qsos.map((qso) => ({
       workedCallsign: qso.workedCallsign,
+      workedName: qso.workedName,
       qsoAt: qso.qsoAt,
       band: qso.band,
       freqMhz: qso.freqMhz,

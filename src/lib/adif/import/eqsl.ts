@@ -4,6 +4,7 @@ import {
   adifField,
   adifNotesFromRecord,
   adifQsoAtFromRecord,
+  adifWorkedNameFromRecord,
   normalizeAdifBand,
   normalizeAdifCallsign,
   normalizeAdifFreq,
@@ -47,6 +48,7 @@ export function mapEqslAdifRecord(
       qso_sent: false,
       grid: adifField(record, "gridsquare", "grid").toUpperCase(),
       notes,
+      workedName: adifWorkedNameFromRecord(record),
     },
     source,
     {

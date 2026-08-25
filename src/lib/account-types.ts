@@ -42,6 +42,8 @@ export type AccountProfileDto = {
 export type QsoListItemDto = {
   id: string;
   workedCallsign: string;
+  /** Contact display name (ADIF NAME and/or portal account name). */
+  workedName: string;
   qsoAt: string;
   band: string;
   freqMhz: number | null;

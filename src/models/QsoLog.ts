@@ -10,6 +10,8 @@ const QsoLogSchema = new Schema(
       index: true,
     },
     workedCallsign: { type: String, required: true, trim: true, uppercase: true },
+    /** Contact display name from ADIF NAME / portal lookup. */
+    workedName: { type: String, default: "", trim: true },
     qsoAt: { type: Date, required: true, index: true },
     band: { type: String, required: true, trim: true },
     freqMhz: { type: Number, default: null },

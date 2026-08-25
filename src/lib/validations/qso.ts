@@ -251,6 +251,52 @@ export const QSO_MODES = [
 
 export type QsoMode = (typeof QSO_MODES)[number];
 
+/**
+ * Standard WSJT-X dial frequencies (MHz) for FT8 / FT4 by band.
+ * Bands without a common default are omitted.
+ */
+const FT8_FREQ_MHZ_BY_BAND: Partial<Record<QsoBand, string>> = {
+  "160m": "1.840",
+  "80m": "3.573",
+  "60m": "5.357",
+  "40m": "7.074",
+  "30m": "10.136",
+  "20m": "14.074",
+  "17m": "18.100",
+  "15m": "21.074",
+  "12m": "24.915",
+  "10m": "28.074",
+  "6m": "50.313",
+  "2m": "144.174",
+  "70cm": "432.065",
+};
+
+const FT4_FREQ_MHZ_BY_BAND: Partial<Record<QsoBand, string>> = {
+  "160m": "1.840",
+  "80m": "3.575",
+  "60m": "5.357",
+  "40m": "7.048",
+  "30m": "10.140",
+  "20m": "14.080",
+  "17m": "18.104",
+  "15m": "21.140",
+  "12m": "24.919",
+  "10m": "28.180",
+  "6m": "50.318",
+  "2m": "144.170",
+  "70cm": "432.065",
+};
+
+/** Suggested FT8/FT4 frequency for a band, or null if unknown / not digital. */
+export function suggestedFreqMhzForModeBand(
+  mode: string,
+  band: string,
+): string | null {
+  if (mode === "FT8") return FT8_FREQ_MHZ_BY_BAND[band as QsoBand] ?? null;
+  if (mode === "FT4") return FT4_FREQ_MHZ_BY_BAND[band as QsoBand] ?? null;
+  return null;
+}
+
 /** Decimal frequency in MHz (e.g. 14.074). No range validation. */
 export const FREQ_MHZ_PATTERN = /^\d+(\.\d+)?$/;
 
@@ -314,6 +360,12 @@ export const qsoFormSchema = z.object({
     .string()
     .trim()
     .max(2000)
+    .optional()
+    .transform((value) => value || ""),
+  workedName: z
+    .string()
+    .trim()
+    .max(128)
     .optional()
     .transform((value) => value || ""),
 });

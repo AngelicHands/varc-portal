@@ -7,12 +7,16 @@ import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
 import { connectDb } from "@/lib/db";
 import { enqueueQsoConfirmationRequest } from "@/lib/qso-confirmation";
 import { getQsoEmailLimit } from "@/lib/qso-email-limit";
-import { requireUserCallsign, listUserQsosPage, toQsoListItemDto } from "@/lib/qso";
+import { requireUserCallsign, listUserQsosPage, lookupWorkedName, toQsoListItemDto } from "@/lib/qso";
 import { revalidateLogbook } from "@/lib/qso-revalidate";
 import { canViewHamLogbook } from "@/lib/ham-privacy";
 import { canManageUsers, isAdminRole } from "@/lib/roles";
 import { failAction } from "@/lib/safe-error";
-import { qsoInputSchema } from "@/lib/validations/qso";
+import {
+  isValidCallsign,
+  normalizeProfileCallsign,
+  qsoInputSchema,
+} from "@/lib/validations/qso";
 import { QsoLog } from "@/models/QsoLog";
 import { User } from "@/models/User";
 
@@ -62,9 +66,14 @@ export async function createQsoAction(raw: unknown) {
     const callsignCheck = await requireUserCallsign(session.user.id);
     if (!callsignCheck.ok) return callsignCheck;
 
+    const workedName =
+      parsed.data.workedName?.trim() ||
+      (await lookupWorkedName(parsed.data.workedCallsign));
+
     const created = await QsoLog.create({
       userId: new mongoose.Types.ObjectId(session.user.id),
       ...parsed.data,
+      workedName,
       qso_confirmed: false,
       source: "portal",
     });
@@ -142,6 +151,10 @@ export async function updateQsoAction(id: string, raw: unknown) {
     existing.qso_sent = parsed.data.qso_sent;
     existing.grid = parsed.data.grid;
     existing.notes = parsed.data.notes;
+    existing.workedName =
+      parsed.data.workedName?.trim() ||
+      existing.workedName ||
+      (await lookupWorkedName(parsed.data.workedCallsign));
     await existing.save();
 
     const callsignCheck = await requireUserCallsign(session.user.id);
@@ -275,6 +288,10 @@ export async function loadQsoLogbookPageAction(input: {
   page?: string | number;
   pageSize?: string | number;
   search?: string;
+  band?: string;
+  mode?: string;
+  status?: string;
+  source?: string;
   sortKey?: string;
   sortDir?: string;
 }) {
@@ -312,6 +329,10 @@ export async function loadQsoLogbookPageAction(input: {
       page: input.page,
       pageSize: input.pageSize,
       search: input.search,
+      band: input.band,
+      mode: input.mode,
+      status: input.status,
+      source: input.source,
       sortKey: input.sortKey,
       sortDir: input.sortDir,
     });
@@ -319,5 +340,38 @@ export async function loadQsoLogbookPageAction(input: {
     return { ok: true as const, page };
   } catch (error) {
     return failAction(error, "Failed to load logbook");
+  }
+}
+
+/**
+ * Returns a worked station's home grid when that user has published their
+ * location (profile public + location shared).
+ */
+export async function lookupSharedHomeGridAction(rawCallsign: string) {
+  try {
+    const session = await requireLogbookSession();
+    if (!session) {
+      return { ok: false as const, grid: null as string | null };
+    }
+
+    const callsign = normalizeProfileCallsign(rawCallsign);
+    if (!isValidCallsign(callsign)) {
+      return { ok: true as const, grid: null as string | null };
+    }
+
+    await connectDb();
+    const user = await User.findOne({
+      callsign,
+      isProfilePublic: { $ne: false },
+      isLocationPublic: true,
+      homeGrid: { $gt: "" },
+    })
+      .select("homeGrid")
+      .lean<{ homeGrid?: string } | null>();
+
+    const grid = user?.homeGrid?.trim().toUpperCase() || null;
+    return { ok: true as const, grid };
+  } catch (error) {
+    return failAction(error, "Failed to look up location");
   }
 }

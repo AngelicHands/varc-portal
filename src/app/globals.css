@@ -696,3 +696,47 @@ body.ham-map-view main {
     transition: none;
   }
 }
+
+/* QSO map mobile gear chrome: stagger in from the gear (right → left). */
+@keyframes ham-map-chrome-in {
+  from {
+    opacity: 0;
+    transform: translateX(0.45rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ham-map-chrome-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ham-map-chrome-in {
+  animation: ham-map-chrome-in 0.32s ease-in backwards;
+}
+
+.ham-map-chrome-in-down {
+  animation: ham-map-chrome-in-down 0.34s ease-in backwards;
+}
+
+@media (min-width: 768px) {
+  .md\:ham-map-chrome-in-none {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ham-map-chrome-in,
+  .ham-map-chrome-in-down {
+    animation: none !important;
+  }
+}

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PortalDialog } from "@/components/portal/portal-dialog";
 import { usePortalConfirm } from "@/components/portal/use-confirm";
+import { useSharedHomeGridAutofill } from "@/hooks/use-shared-home-grid-autofill";
 import type { QsoListItemDto } from "@/lib/account-types";
 import { hamPublicPath } from "@/lib/ham-reserved";
 import {
@@ -31,19 +32,27 @@ import type {
   QsoLogbookPageResult,
   QsoLogbookSortDir,
   QsoLogbookSortKey,
+  QsoLogbookStatusFilter,
 } from "@/lib/qso-logbook-query";
 import {
   QSO_LOGBOOK_DEFAULT_PAGE_SIZE,
   QSO_LOGBOOK_PAGE_SIZES,
+  hasQsoLogbookFilters,
+  parseQsoLogbookBandFilter,
+  parseQsoLogbookModeFilter,
   parseQsoLogbookPageSize,
   parseQsoLogbookSortDir,
   parseQsoLogbookSortKey,
+  parseQsoLogbookSourceFilter,
+  parseQsoLogbookStatusFilter,
 } from "@/lib/qso-logbook-query";
+import { QSO_SOURCES } from "@/lib/qso-source";
 import {
   QSO_BANDS,
   QSO_MODES,
   isValidFreqMhzInput,
   normalizeFreqMhzInput,
+  suggestedFreqMhzForModeBand,
   type QsoInputValues,
   type QsoMode,
 } from "@/lib/validations/qso";
@@ -171,6 +180,66 @@ function DeleteIcon() {
   );
 }
 
+function PlusIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className="h-4 w-4"
+    >
+      <path d="M10 4v12" />
+      <path d="M4 10h12" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className="h-4 w-4"
+    >
+      <path d="M10 3v10" />
+      <path d="m6.5 9.5 3.5 3.5 3.5-3.5" />
+      <path d="M4 16h12" />
+    </svg>
+  );
+}
+
+function UploadIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      className="h-4 w-4"
+    >
+      <path d="M10 13V3" />
+      <path d="m6.5 6.5 3.5-3.5 3.5 3.5" />
+      <path d="M4 16h12" />
+    </svg>
+  );
+}
+
+const btnPrimaryClass =
+  "inline-flex items-center justify-center gap-1.5 rounded-md bg-foreground px-2.5 py-2 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-60 sm:px-3";
+const btnSecondaryClass =
+  "inline-flex items-center justify-center gap-1.5 rounded-md border border-foreground/20 bg-background px-2.5 py-2 text-sm font-medium text-foreground transition hover:bg-foreground/5 disabled:opacity-60 sm:px-3";
+const btnDangerClass =
+  "inline-flex items-center justify-center gap-1.5 rounded-md border border-foreground/20 bg-background px-2.5 py-2 text-sm font-medium text-foreground transition hover:bg-foreground/5 disabled:opacity-60 sm:px-3";
+const btnLabelClass = "hidden sm:inline";
+const filterSelectClass =
+  "w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm text-foreground";
+
 function emptyForm(
   zone: QsoTimeZoneMode = "utc",
   workedCallsign = "",
@@ -188,6 +257,7 @@ function emptyForm(
     qso_sent: true,
     grid: "",
     notes: "",
+    workedName: "",
   };
 }
 
@@ -207,6 +277,7 @@ function formFromItem(
     qso_sent: item.qso_sent,
     grid: item.grid,
     notes: item.notes,
+    workedName: item.workedName,
   };
 }
 
@@ -229,6 +300,10 @@ function buildLogbookHref(
     page: number;
     pageSize: number;
     search: string;
+    band: string;
+    mode: string;
+    status: QsoLogbookStatusFilter;
+    source: string;
     sortKey: SortKey;
     sortDir: SortDir;
   },
@@ -238,6 +313,10 @@ function buildLogbookHref(
   if (params.page > 1) sp.set("page", String(params.page));
   if (params.pageSize !== 20) sp.set("pageSize", String(params.pageSize));
   if (params.search) sp.set("q", params.search);
+  if (params.band) sp.set("band", params.band);
+  if (params.mode) sp.set("mode", params.mode);
+  if (params.status !== "all") sp.set("status", params.status);
+  if (params.source) sp.set("source", params.source);
   if (params.sortKey !== "qsoAt") sp.set("sort", params.sortKey);
   const defaultDir = params.sortKey === "qsoAt" ? "desc" : "asc";
   if (params.sortDir !== defaultDir) sp.set("dir", params.sortDir);
@@ -272,17 +351,38 @@ export function QsoLogbook({
     searchParams.get("pageSize") ?? QSO_LOGBOOK_DEFAULT_PAGE_SIZE,
   );
   const search = (searchParams.get("q") ?? "").trim().slice(0, 80);
+  const bandFilter = parseQsoLogbookBandFilter(
+    searchParams.get("band") ?? undefined,
+  );
+  const modeFilter = parseQsoLogbookModeFilter(
+    searchParams.get("mode") ?? undefined,
+  );
+  const statusFilter = parseQsoLogbookStatusFilter(
+    searchParams.get("status") ?? undefined,
+  );
+  const sourceFilter = parseQsoLogbookSourceFilter(
+    searchParams.get("source") ?? undefined,
+  );
   const sortKey = parseQsoLogbookSortKey(searchParams.get("sort") ?? undefined);
   const sortDir = parseQsoLogbookSortDir(
     searchParams.get("dir") ?? undefined,
     sortKey,
   );
+  const filtersActive = hasQsoLogbookFilters({
+    search,
+    band: bandFilter,
+    mode: modeFilter,
+    status: statusFilter,
+    source: sourceFilter,
+  });
 
   const [pageData, setPageData] = useState<QsoLogbookPageResult | null>(
     initialPage,
   );
   const [listError, setListError] = useState<string | null>(null);
   const [listLoading, setListLoading] = useState(!initialPage);
+  const [searchInput, setSearchInput] = useState(search);
+  const [searchUrlSnapshot, setSearchUrlSnapshot] = useState(search);
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<FormState>(() => emptyForm("utc"));
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -323,6 +423,11 @@ export function QsoLogbook({
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const rangeEnd = Math.min(page * pageSize, total);
 
+  if (search !== searchUrlSnapshot) {
+    setSearchUrlSnapshot(search);
+    setSearchInput(search);
+  }
+
   useEffect(() => {
     const seq = ++fetchSeqRef.current;
     let cancelled = false;
@@ -336,6 +441,10 @@ export function QsoLogbook({
         page,
         pageSize,
         search,
+        band: bandFilter,
+        mode: modeFilter,
+        status: statusFilter,
+        source: sourceFilter,
         sortKey,
         sortDir,
       }).then((result) => {
@@ -354,17 +463,33 @@ export function QsoLogbook({
     return () => {
       cancelled = true;
     };
-  }, [logbookUserId, page, pageSize, search, sortKey, sortDir]);
+  }, [
+    logbookUserId,
+    page,
+    pageSize,
+    search,
+    bandFilter,
+    modeFilter,
+    statusFilter,
+    sourceFilter,
+    sortKey,
+    sortDir,
+  ]);
 
-  async function reloadList() {
+  async function reloadList(overrides?: { page?: number }) {
     const seq = ++fetchSeqRef.current;
+    const nextPage = overrides?.page ?? page;
     setListLoading(true);
     setListError(null);
     const result = await loadQsoLogbookPageAction({
       userId: logbookUserId,
-      page,
+      page: nextPage,
       pageSize,
       search,
+      band: bandFilter,
+      mode: modeFilter,
+      status: statusFilter,
+      source: sourceFilter,
       sortKey,
       sortDir,
     });
@@ -383,6 +508,10 @@ export function QsoLogbook({
       page: number;
       pageSize: number;
       search: string;
+      band: string;
+      mode: string;
+      status: QsoLogbookStatusFilter;
+      source: string;
       sortKey: SortKey;
       sortDir: SortDir;
     }>,
@@ -391,6 +520,10 @@ export function QsoLogbook({
       page: updates.page ?? page,
       pageSize: updates.pageSize ?? pageSize,
       search: updates.search ?? search,
+      band: updates.band ?? bandFilter,
+      mode: updates.mode ?? modeFilter,
+      status: updates.status ?? statusFilter,
+      source: updates.source ?? sourceFilter,
       sortKey: updates.sortKey ?? sortKey,
       sortDir: updates.sortDir ?? sortDir,
     });
@@ -400,6 +533,7 @@ export function QsoLogbook({
   }
 
   function onSearchChange(value: string) {
+    setSearchInput(value);
     if (searchTimerRef.current != null) {
       window.clearTimeout(searchTimerRef.current);
     }
@@ -419,6 +553,30 @@ export function QsoLogbook({
       }
       return next;
     });
+  }
+
+  useSharedHomeGridAutofill(
+    form.workedCallsign,
+    (grid) => {
+      clearFieldErrors("grid");
+      setForm((prev) => ({ ...prev, grid }));
+    },
+    !editingId,
+  );
+
+  function applyModeBandFreq(next: {
+    mode?: QsoMode;
+    band?: QsoInputValues["band"];
+  }) {
+    const mode = next.mode ?? form.mode;
+    const band = next.band ?? form.band;
+    const suggested = suggestedFreqMhzForModeBand(mode, band);
+    if (!suggested) {
+      setForm((prev) => ({ ...prev, ...next }));
+      return;
+    }
+    clearFieldErrors("freqMhz");
+    setForm((prev) => ({ ...prev, ...next, freqMhz: suggested }));
   }
 
   function openCreateModal() {
@@ -530,6 +688,7 @@ export function QsoLogbook({
       qso_sent: form.qso_sent,
       grid: form.grid,
       notes: form.notes,
+      workedName: form.workedName,
     };
 
     setIsSubmitting(true);
@@ -663,14 +822,18 @@ export function QsoLogbook({
       setImportSummary(
         t("importSuccess", {
           imported: result.imported,
-          skippedDuplicate: result.skippedDuplicate,
+          updated: result.updated,
+          unchanged: result.unchanged,
           skippedInvalid: result.skippedInvalid,
           skippedStationMismatch: result.skippedStationMismatch,
         }),
       );
 
+      // Reload page 1 first so the table shows fresh import data even when the
+      // URL is already on page 1 (navigate alone would not re-trigger fetch).
+      await reloadList({ page: 1 });
       navigateLogbook({ page: 1 });
-      void reloadList();
+      router.refresh();
     });
   }
 
@@ -750,10 +913,9 @@ export function QsoLogbook({
           <select
             value={form.band}
             onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
+              applyModeBandFreq({
                 band: e.target.value as QsoInputValues["band"],
-              }))
+              })
             }
             className="w-full rounded-md border border-border px-3 py-2"
           >
@@ -788,10 +950,9 @@ export function QsoLogbook({
             required
             value={form.mode}
             onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
+              applyModeBandFreq({
                 mode: e.target.value as QsoMode,
-              }))
+              })
             }
             className="w-full rounded-md border border-border px-3 py-2"
           >
@@ -861,7 +1022,7 @@ export function QsoLogbook({
           <button
             type="submit"
             disabled={pending}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+            className={btnPrimaryClass}
           >
             {pending ? t("saving") : editingId ? t("update") : t("add")}
           </button>
@@ -869,7 +1030,7 @@ export function QsoLogbook({
             type="button"
             onClick={closeModal}
             disabled={pending}
-            className="rounded-md border border-border px-4 py-2 text-sm hover:bg-foreground/5 disabled:opacity-50"
+            className={btnSecondaryClass}
           >
             {t("cancel")}
           </button>
@@ -881,70 +1042,80 @@ export function QsoLogbook({
   return (
     <div className="grid gap-6">
       {canEdit || canAdminManage || canLogWithOperator ? (
-        <div className="flex items-center justify-between gap-3">
-          <p className="min-w-0 truncate text-sm text-muted">
-            {canEdit
-              ? t("stationCallsign", { callsign: stationCallsign })
-              : canAdminManage
-                ? t("adminViewingLogbook", { callsign: stationCallsign })
-                : t("stationCallsign", { callsign: stationCallsign })}
-          </p>
-          <div className="flex shrink-0 items-center gap-2">
-            {canEdit ? (
-              <>
-                <button
-                  type="button"
-                  onClick={openCreateModal}
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:opacity-90"
-                >
-                  {t("addQso")}
-                </button>
-                {/* API download — not a Next.js page route */}
-                {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-                <a
-                  href="/api/account/qso/export"
-                  className="rounded-md border border-border px-3 py-2 text-sm whitespace-nowrap hover:bg-foreground/5"
-                >
-                  {t("exportAdif")}
-                </a>
-                <button
-                  type="button"
-                  disabled={isImporting}
-                  onClick={() => importInputRef.current?.click()}
-                  className="rounded-md border border-border px-3 py-2 text-sm whitespace-nowrap hover:bg-foreground/5 disabled:opacity-60"
-                >
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {canEdit ? (
+            <>
+              <button
+                type="button"
+                onClick={openCreateModal}
+                aria-label={t("addQso")}
+                title={t("addQso")}
+                className={btnPrimaryClass}
+              >
+                <PlusIcon />
+                <span className={btnLabelClass}>{t("addQso")}</span>
+              </button>
+              {/* API download — not a Next.js page route */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+              <a
+                href="/api/account/qso/export"
+                aria-label={t("exportAdif")}
+                title={t("exportAdif")}
+                className={btnSecondaryClass}
+              >
+                <DownloadIcon />
+                <span className={btnLabelClass}>{t("exportAdif")}</span>
+              </a>
+              <button
+                type="button"
+                disabled={isImporting}
+                onClick={() => importInputRef.current?.click()}
+                aria-label={isImporting ? t("importing") : t("importAdif")}
+                title={isImporting ? t("importing") : t("importAdif")}
+                className={btnSecondaryClass}
+              >
+                <UploadIcon />
+                <span className={btnLabelClass}>
                   {isImporting ? t("importing") : t("importAdif")}
-                </button>
-                <input
-                  ref={importInputRef}
-                  type="file"
-                  accept=".adi,.adif,text/plain"
-                  multiple
-                  className="sr-only"
-                  onChange={onImportAdifSelected}
-                />
-              </>
-            ) : null}
-            {canLogWithOperator ? (
-              <button
-                type="button"
-                onClick={openLogWithOperatorModal}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-medium whitespace-nowrap text-white hover:opacity-90"
-              >
-                {t("logQsoWithOperator")}
+                </span>
               </button>
-            ) : null}
-            {(canEdit || canAdminManage) && total > 0 ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => void onDeleteAll()}
-                className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium whitespace-nowrap text-red-700 hover:bg-red-100 disabled:opacity-60"
-              >
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".adi,.adif,text/plain"
+                multiple
+                className="sr-only"
+                onChange={onImportAdifSelected}
+              />
+            </>
+          ) : null}
+          {canLogWithOperator ? (
+            <button
+              type="button"
+              onClick={openLogWithOperatorModal}
+              aria-label={t("logQsoWithOperator")}
+              title={t("logQsoWithOperator")}
+              className={btnPrimaryClass}
+            >
+              <PlusIcon />
+              <span className={btnLabelClass}>{t("logQsoWithOperator")}</span>
+            </button>
+          ) : null}
+          {(canEdit || canAdminManage) && total > 0 ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => void onDeleteAll()}
+              aria-label={pending ? t("deletingAll") : t("deleteAll")}
+              title={pending ? t("deletingAll") : t("deleteAll")}
+              className={btnDangerClass}
+            >
+              <DeleteIcon />
+              <span className={btnLabelClass}>
                 {pending ? t("deletingAll") : t("deleteAll")}
-              </button>
-            ) : null}
-          </div>
+              </span>
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -1030,7 +1201,7 @@ export function QsoLogbook({
           />
           {t("loading")}
         </div>
-      ) : total === 0 && !search ? (
+      ) : total === 0 && !filtersActive ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 py-16 text-center">
           <p className="max-w-md text-muted">
             {t("emptyFor", { callsign: stationCallsign })}
@@ -1039,62 +1210,286 @@ export function QsoLogbook({
             <button
               type="button"
               onClick={openCreateModal}
-              className="mt-6 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+              className={`mt-6 ${btnPrimaryClass}`}
             >
+              <PlusIcon />
               {t("addQso")}
             </button>
           ) : canLogWithOperator ? (
             <button
               type="button"
               onClick={openLogWithOperatorModal}
-              className="mt-6 rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90"
+              className={`mt-6 ${btnPrimaryClass}`}
             >
+              <PlusIcon />
               {t("logQsoWithOperator")}
             </button>
           ) : null}
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-3">
-            <input
-              key={search}
-              type="search"
-              defaultValue={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder={t("searchPlaceholder")}
-              className="min-w-[12rem] flex-1 rounded-md border border-border px-3 py-2 text-sm"
-            />
-            <p className="text-sm text-muted">
-              {total > 0
-                ? t("showingRange", {
-                    start: rangeStart,
-                    end: rangeEnd,
-                    total,
-                  })
-                : t("resultCount", { count: 0 })}
-            </p>
-            <label className="flex items-center gap-2 text-sm text-muted">
-              <span>{t("rowsPerPage")}</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  navigateLogbook({
-                    pageSize: Number(e.target.value) as typeof pageSize,
-                    page: 1,
-                  });
-                }}
-                className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
-              >
-                {QSO_LOGBOOK_PAGE_SIZES.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="grid gap-3 rounded-lg border border-border bg-foreground/[0.02] p-3 sm:p-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              <label className="block text-sm sm:col-span-2 lg:col-span-2">
+                <span className="mb-1 block text-xs font-medium text-muted">
+                  {t("filterSearch")}
+                </span>
+                <input
+                  type="search"
+                  value={searchInput}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  placeholder={t("searchPlaceholder")}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted">
+                  {t("band")}
+                </span>
+                <select
+                  value={bandFilter}
+                  onChange={(e) =>
+                    navigateLogbook({ band: e.target.value, page: 1 })
+                  }
+                  className={filterSelectClass}
+                >
+                  <option value="">{t("filterAll")}</option>
+                  {QSO_BANDS.map((band) => (
+                    <option key={band} value={band}>
+                      {band}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted">
+                  {t("mode")}
+                </span>
+                <select
+                  value={modeFilter}
+                  onChange={(e) =>
+                    navigateLogbook({ mode: e.target.value, page: 1 })
+                  }
+                  className={filterSelectClass}
+                >
+                  <option value="">{t("filterAll")}</option>
+                  {QSO_MODES.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {mode}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted">
+                  {t("status")}
+                </span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) =>
+                    navigateLogbook({
+                      status: e.target.value as QsoLogbookStatusFilter,
+                      page: 1,
+                    })
+                  }
+                  className={filterSelectClass}
+                >
+                  <option value="all">{t("filterAll")}</option>
+                  <option value="confirmed">{t("filterStatusConfirmed")}</option>
+                  <option value="sent">{t("filterStatusSent")}</option>
+                  <option value="pending">{t("filterStatusPending")}</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted">
+                  {t("filterSource")}
+                </span>
+                <select
+                  value={sourceFilter}
+                  onChange={(e) =>
+                    navigateLogbook({ source: e.target.value, page: 1 })
+                  }
+                  className={filterSelectClass}
+                >
+                  <option value="">{t("filterAll")}</option>
+                  {QSO_SOURCES.map((source) => (
+                    <option key={source} value={source}>
+                      {t(`source.${source}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted">
+                {total > 0
+                  ? t("showingRange", {
+                      start: rangeStart,
+                      end: rangeEnd,
+                      total,
+                    })
+                  : t("resultCount", { count: 0 })}
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                {filtersActive ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchInput("");
+                      if (searchTimerRef.current != null) {
+                        window.clearTimeout(searchTimerRef.current);
+                      }
+                      navigateLogbook({
+                        search: "",
+                        band: "",
+                        mode: "",
+                        status: "all",
+                        source: "",
+                        page: 1,
+                      });
+                    }}
+                    className={btnSecondaryClass}
+                  >
+                    {t("clearFilters")}
+                  </button>
+                ) : null}
+                <label className="flex items-center gap-2 text-sm text-muted">
+                  <span>{t("rowsPerPage")}</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      navigateLogbook({
+                        pageSize: Number(e.target.value) as typeof pageSize,
+                        page: 1,
+                      });
+                    }}
+                    className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+                  >
+                    {QSO_LOGBOOK_PAGE_SIZES.map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
           </div>
 
-          <div className="relative overflow-x-auto rounded-lg border border-border">
+          {/* Mobile cards */}
+          <div className="relative grid gap-3 md:hidden">
+            {listLoading ? (
+              <div
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/70"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-muted shadow-sm">
+                  <span
+                    className="inline-block size-3.5 animate-spin rounded-full border-2 border-muted border-t-foreground"
+                    aria-hidden
+                  />
+                  {t("loading")}
+                </span>
+              </div>
+            ) : null}
+            {items.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted">
+                {t("noSearchResults")}
+              </p>
+            ) : (
+              items.map((item) => (
+                <article
+                  key={item.id}
+                  className="rounded-lg border border-border bg-background p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">
+                        {item.workedCallsign}
+                      </p>
+                      {item.workedName ? (
+                        <p className="truncate text-xs text-muted">
+                          {item.workedName}
+                        </p>
+                      ) : null}
+                    </div>
+                    {canManageLogbook ? (
+                      <div className="flex shrink-0 gap-1">
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(item)}
+                            aria-label={t("edit")}
+                            title={t("edit")}
+                            className="rounded-md p-2 text-foreground hover:bg-foreground/5"
+                          >
+                            <EditIcon />
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => void onDelete(item.id)}
+                          aria-label={t("delete")}
+                          title={t("delete")}
+                          className="rounded-md p-2 text-foreground hover:bg-foreground/5 disabled:opacity-50"
+                        >
+                          <DeleteIcon />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                    <div>
+                      <dt className="text-muted">{t("dateTime")}</dt>
+                      <dd className="mt-0.5 font-medium">
+                        {formatQsoDateTime(item.qsoAt)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted">{t("band")}</dt>
+                      <dd className="mt-0.5 font-medium">
+                        {item.band} · {item.mode}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted">{t("grid")}</dt>
+                      <dd className="mt-0.5 font-mono font-medium uppercase">
+                        {item.grid || "—"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted">{t("rst")}</dt>
+                      <dd className="mt-0.5 font-medium">
+                        {item.rstSent}/{item.rstRcvd}
+                      </dd>
+                    </div>
+                    <div className="col-span-2">
+                      <dt className="text-muted">{t("status")}</dt>
+                      <dd className="mt-1">
+                        {item.qso_confirmed ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-foreground/10 px-2 py-1 text-xs font-medium">
+                            <CheckIcon />
+                            {t("qsoConfirmed")}
+                          </span>
+                        ) : item.qso_sent ? (
+                          <span className="rounded-full bg-foreground/8 px-2 py-1 text-xs font-medium">
+                            {t("qsoSent")}
+                          </span>
+                        ) : (
+                          <span className="text-muted">{t("statusPending")}</span>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              ))
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="relative hidden overflow-x-auto rounded-lg border border-border md:block">
             {listLoading ? (
               <div
                 className="absolute inset-0 z-10 flex items-center justify-center bg-background/70"
@@ -1103,7 +1498,7 @@ export function QsoLogbook({
               >
                 <span className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs text-muted shadow-sm">
                   <span
-                    className="inline-block size-3.5 animate-spin rounded-full border-2 border-muted border-t-accent"
+                    className="inline-block size-3.5 animate-spin rounded-full border-2 border-muted border-t-foreground"
                     aria-hidden
                   />
                   {t("loading")}
@@ -1183,7 +1578,10 @@ export function QsoLogbook({
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={canManageLogbook ? 8 : 7} className="px-3 py-8 text-center text-muted">
+                    <td
+                      colSpan={canManageLogbook ? 8 : 7}
+                      className="px-3 py-8 text-center text-muted"
+                    >
                       {t("noSearchResults")}
                     </td>
                   </tr>
@@ -1192,10 +1590,17 @@ export function QsoLogbook({
                     <tr key={item.id} className="border-b border-border/70">
                       <td className="px-3 py-2 font-medium">
                         <span className="inline-flex items-center gap-2">
-                          {item.workedCallsign}
+                          <span className="inline-flex min-w-0 flex-col">
+                            <span>{item.workedCallsign}</span>
+                            {item.workedName ? (
+                              <span className="truncate text-xs font-normal text-muted">
+                                {item.workedName}
+                              </span>
+                            ) : null}
+                          </span>
                           {item.qso_confirmed ? (
                             <span
-                              className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100 text-green-700"
+                              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-foreground"
                               title={t("qsoConfirmed")}
                               aria-label={t("qsoConfirmed")}
                             >
@@ -1209,14 +1614,16 @@ export function QsoLogbook({
                       </td>
                       <td className="px-3 py-2">{item.band}</td>
                       <td className="px-3 py-2">{item.mode}</td>
-                      <td className="px-3 py-2 font-mono uppercase">{item.grid}</td>
+                      <td className="px-3 py-2 font-mono uppercase">
+                        {item.grid}
+                      </td>
                       <td className="px-3 py-2">
                         {item.rstSent}/{item.rstRcvd}
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-2">
                           {item.qso_confirmed ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-foreground/10 px-2 py-1 text-xs font-medium">
                               <CheckIcon />
                               {t("qsoConfirmed")}
                             </span>
@@ -1225,7 +1632,9 @@ export function QsoLogbook({
                               {t("qsoSent")}
                             </span>
                           ) : (
-                            <span className="text-xs text-muted">{t("statusPending")}</span>
+                            <span className="text-xs text-muted">
+                              {t("statusPending")}
+                            </span>
                           )}
                         </div>
                       </td>
@@ -1238,7 +1647,7 @@ export function QsoLogbook({
                                 onClick={() => openEditModal(item)}
                                 aria-label={t("edit")}
                                 title={t("edit")}
-                                className="rounded-md p-2 text-accent hover:bg-accent/10"
+                                className="rounded-md p-2 text-foreground hover:bg-foreground/5"
                               >
                                 <EditIcon />
                               </button>
@@ -1249,7 +1658,7 @@ export function QsoLogbook({
                               onClick={() => void onDelete(item.id)}
                               aria-label={t("delete")}
                               title={t("delete")}
-                              className="rounded-md p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              className="rounded-md p-2 text-foreground hover:bg-foreground/5 disabled:opacity-50"
                             >
                               <DeleteIcon />
                             </button>
@@ -1272,7 +1681,7 @@ export function QsoLogbook({
                 type="button"
                 onClick={() => navigateLogbook({ page: page - 1 })}
                 disabled={page <= 1 || totalPages === 0}
-                className="rounded-md border border-border px-3 py-1.5 hover:bg-foreground/5 disabled:pointer-events-none disabled:opacity-40"
+                className={`${btnSecondaryClass} disabled:pointer-events-none disabled:opacity-40`}
               >
                 {t("previous")}
               </button>
@@ -1283,7 +1692,7 @@ export function QsoLogbook({
                 type="button"
                 onClick={() => navigateLogbook({ page: page + 1 })}
                 disabled={totalPages === 0 || page >= totalPages}
-                className="rounded-md border border-border px-3 py-1.5 hover:bg-foreground/5 disabled:pointer-events-none disabled:opacity-40"
+                className={`${btnSecondaryClass} disabled:pointer-events-none disabled:opacity-40`}
               >
                 {t("next")}
               </button>

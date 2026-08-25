@@ -2,6 +2,7 @@ import type { QsoSource } from "@/lib/qso-source";
 
 export type AdifExportQso = {
   workedCallsign: string;
+  workedName?: string;
   qsoAt: Date;
   band: string;
   freqMhz?: number | null;
@@ -61,6 +62,9 @@ export function baseAdifFields(
   }
   if (qso.grid?.trim()) {
     parts.push(adifField("GRIDSQUARE", qso.grid.trim().toUpperCase()));
+  }
+  if (qso.workedName?.trim()) {
+    parts.push(adifField("NAME", qso.workedName.trim()));
   }
 
   return parts.filter(Boolean);

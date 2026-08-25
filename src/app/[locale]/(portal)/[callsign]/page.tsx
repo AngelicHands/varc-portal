@@ -256,7 +256,10 @@ export default async function HamProfilePage({ params, searchParams }: Props) {
   const publicDocuments =
     canViewDocuments && !canEdit ? await listUserDocuments(ham.id) : [];
 
-  const canLogWithOperator = canViewLogbook && Boolean(viewerProfile?.callsign?.trim());
+  const canLogWithOperator =
+    canViewLogbook &&
+    !canEdit &&
+    Boolean(viewerProfile?.callsign?.trim());
   const activeTab = parseHamTab(tabParam, visibleTabs);
   const birthdayLabel = canViewBasicProfile
     ? formatBirthdayDmy(ham.birthday) || null

@@ -62,6 +62,12 @@ export const adifQsoImportSchema = z.object({
     .max(2000)
     .optional()
     .transform((value) => value || ""),
+  workedName: z
+    .string()
+    .trim()
+    .max(128)
+    .optional()
+    .transform((value) => value || ""),
 });
 
 /** European decimal comma in legacy JT65-HF exports (e.g. `14,076` MHz). */
@@ -107,6 +113,16 @@ export function adifNotesFromRecord(record: AdifRecord): string {
     }
   }
   return parts.join(" · ").slice(0, 2000);
+}
+
+/**
+ * Contact display name from ADIF (QRZ, eQSL, LoTW, generic).
+ * Prefer NAME_INTL when present, then NAME.
+ */
+export function adifWorkedNameFromRecord(record: AdifRecord): string {
+  const raw = adifField(record, "name_intl", "name");
+  if (!raw) return "";
+  return raw.replace(/\s+/g, " ").trim().slice(0, 128);
 }
 
 export function normalizeAdifBand(raw: string): QsoBand {
@@ -210,6 +226,7 @@ export function validateImportedCandidate(
     qso_sent: boolean;
     grid: string;
     notes: string;
+    workedName?: string;
   },
   source: QsoSource,
   confirmed: { qso_confirmed: boolean; confirmedAt: string | null },

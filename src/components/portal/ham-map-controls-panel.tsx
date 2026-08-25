@@ -1,7 +1,17 @@
 "use client";
 
-import type { ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useTranslations } from "next-intl";
+import { HAM_MAP_TOUR_ANCHORS } from "@/lib/map/ham-map-tour";
 import type { HamMapTheme } from "@/lib/map/maptiler-style";
 
 type Props = {
@@ -18,6 +28,16 @@ type Props = {
   isBrowserFullscreen: boolean;
   onToggleBrowserFullscreen: () => void;
   fullscreenSupported?: boolean;
+  /** When set, Tour appears beside the mobile settings strip. */
+  onStartTour?: () => void;
+  /** Controlled open state for the small-screen settings chrome. */
+  mobileMenuOpen?: boolean;
+  onMobileMenuOpenChange?: (open: boolean) => void;
+  /**
+   * Extra element(s) treated as "inside" the menu for outside-click dismiss
+   * (e.g. the time filter that appears with the gear menu).
+   */
+  mobileDismissRootRef?: RefObject<HTMLElement | null>;
 };
 
 function GridIcon({ className }: { className?: string }) {
@@ -127,6 +147,43 @@ function CompressIcon({ className }: { className?: string }) {
   );
 }
 
+function GearIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.998 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+function HelpIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.8 2.1c-.7.4-1.3 1-1.3 1.9V14" />
+      <circle cx="12" cy="17" r="0.75" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function ControlButton({
   active,
   idleClass,
@@ -134,7 +191,9 @@ function ControlButton({
   borderClass,
   onClick,
   label,
-  disabled,
+  disabled = false,
+  className = "",
+  style,
   children,
 }: {
   active: boolean;
@@ -144,17 +203,33 @@ function ControlButton({
   onClick: () => void;
   label: string;
   disabled?: boolean;
+  className?: string;
+  style?: CSSProperties;
   children: ReactNode;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      disabled={disabled ? true : undefined}
-      className={`inline-flex h-10 w-10 items-center justify-center border-l transition first:border-l-0 disabled:cursor-not-allowed disabled:opacity-35 ${borderClass} ${active ? activeClass : idleClass}`}
+      onClick={() => {
+        if (disabled) return;
+        onClick();
+      }}
+      aria-disabled={disabled || undefined}
       aria-label={label}
       aria-pressed={active}
       title={label}
+      // Avoid the HTML `disabled` attribute: React omits it when false (`null`)
+      // and sets it when true, which hydrates poorly when availability differs
+      // between server (Date/location) and client.
+      suppressHydrationWarning
+      style={style}
+      className={`inline-flex h-10 w-10 items-center justify-center border-l transition first:border-l-0 ${borderClass} ${
+        disabled
+          ? "cursor-not-allowed opacity-35"
+          : active
+            ? activeClass
+            : idleClass
+      } ${className}`}
     >
       {children}
     </button>
@@ -175,9 +250,37 @@ export function HamMapControlsPanel({
   isBrowserFullscreen,
   onToggleBrowserFullscreen,
   fullscreenSupported = false,
+  onStartTour,
+  mobileMenuOpen: mobileMenuOpenProp,
+  onMobileMenuOpenChange,
+  mobileDismissRootRef,
 }: Props) {
   const t = useTranslations("ham.map");
   const light = mapTheme === "light";
+  const menuId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const controlled = mobileMenuOpenProp !== undefined;
+  const menuOpen = controlled ? mobileMenuOpenProp : uncontrolledOpen;
+
+  const setMenuOpen = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      if (controlled) {
+        const value =
+          typeof next === "function"
+            ? next(Boolean(mobileMenuOpenProp))
+            : next;
+        onMobileMenuOpenChange?.(value);
+        return;
+      }
+      setUncontrolledOpen((prev) => {
+        const value = typeof next === "function" ? next(prev) : next;
+        onMobileMenuOpenChange?.(value);
+        return value;
+      });
+    },
+    [controlled, mobileMenuOpenProp, onMobileMenuOpenChange],
+  );
 
   const panelClass = light
     ? "border-zinc-300/80 bg-white/90 text-zinc-900 shadow-xl shadow-zinc-900/10"
@@ -190,72 +293,178 @@ export function HamMapControlsPanel({
     : "bg-white/15 text-white";
   const border = light ? "border-zinc-200" : "border-white/10";
 
-  return (
-    <aside
-      className={`pointer-events-auto flex overflow-hidden rounded-xl border backdrop-blur-md ${panelClass}`}
-      aria-label={t("mapControlsLabel")}
-    >
-      <ControlButton
-        active={showGridRectangles}
-        idleClass={idle}
-        activeClass={active}
-        borderClass={border}
-        onClick={onToggleGridRectangles}
-        label={t("toggleGridRectangles")}
-      >
-        <GridIcon className="h-4 w-4" />
-      </ControlButton>
-      <ControlButton
-        active={showLocationMarkers}
-        idleClass={idle}
-        activeClass={active}
-        borderClass={border}
-        onClick={onToggleLocationMarkers}
-        label={t("toggleLocationMarkers")}
-      >
-        <MarkerIcon className="h-4 w-4" />
-      </ControlButton>
-      <ControlButton
-        active={showCallsigns}
-        idleClass={idle}
-        activeClass={active}
-        borderClass={border}
-        onClick={onToggleCallsigns}
-        label={t("toggleCallsigns")}
-      >
-        <CallsignIcon className="h-4 w-4" />
-      </ControlButton>
-      <ControlButton
-        active={showTraces}
-        idleClass={idle}
-        activeClass={active}
-        borderClass={border}
-        onClick={onToggleTraces}
-        label={t("toggleTraces")}
-        disabled={!tracesAvailable}
-      >
-        <TraceIcon className="h-4 w-4" />
-      </ControlButton>
-      {fullscreenSupported ? (
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (target && rootRef.current?.contains(target)) return;
+      if (target && mobileDismissRootRef?.current?.contains(target)) return;
+      setMenuOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen, mobileDismissRootRef, setMenuOpen]);
+
+  function renderControlButtons({
+    includeFullscreen,
+    staggerFromGear = false,
+  }: {
+    includeFullscreen: boolean;
+    /** Stagger appear from the gear (right) toward the left. */
+    staggerFromGear?: boolean;
+  }) {
+    const layerCount = 4;
+    function staggerProps(fromGearIndex: number) {
+      if (!staggerFromGear) return {};
+      return {
+        className: "ham-map-chrome-in",
+        style: {
+          animationDelay: `${40 + fromGearIndex * 55}ms`,
+        } satisfies CSSProperties,
+      };
+    }
+
+    return (
+      <>
         <ControlButton
-          active={isBrowserFullscreen}
+          active={showGridRectangles}
           idleClass={idle}
           activeClass={active}
           borderClass={border}
-          onClick={onToggleBrowserFullscreen}
-          label={
-            isBrowserFullscreen
-              ? t("exitBrowserFullscreen")
-              : t("enterBrowserFullscreen")
-          }
+          onClick={onToggleGridRectangles}
+          label={t("toggleGridRectangles")}
+          {...staggerProps(layerCount - 1)}
         >
-          {isBrowserFullscreen ? (
-            <CompressIcon className="h-4 w-4" />
-          ) : (
-            <ExpandIcon className="h-4 w-4" />
-          )}
+          <GridIcon className="h-4 w-4" />
         </ControlButton>
-      ) : null}
-    </aside>
+        <ControlButton
+          active={showLocationMarkers}
+          idleClass={idle}
+          activeClass={active}
+          borderClass={border}
+          onClick={onToggleLocationMarkers}
+          label={t("toggleLocationMarkers")}
+          {...staggerProps(layerCount - 2)}
+        >
+          <MarkerIcon className="h-4 w-4" />
+        </ControlButton>
+        <ControlButton
+          active={showCallsigns}
+          idleClass={idle}
+          activeClass={active}
+          borderClass={border}
+          onClick={onToggleCallsigns}
+          label={t("toggleCallsigns")}
+          {...staggerProps(layerCount - 3)}
+        >
+          <CallsignIcon className="h-4 w-4" />
+        </ControlButton>
+        <ControlButton
+          active={showTraces}
+          idleClass={idle}
+          activeClass={active}
+          borderClass={border}
+          onClick={onToggleTraces}
+          label={t("toggleTraces")}
+          disabled={!tracesAvailable}
+          {...staggerProps(0)}
+        >
+          <TraceIcon className="h-4 w-4" />
+        </ControlButton>
+        {includeFullscreen && fullscreenSupported ? (
+          <ControlButton
+            active={isBrowserFullscreen}
+            idleClass={idle}
+            activeClass={active}
+            borderClass={border}
+            onClick={onToggleBrowserFullscreen}
+            label={
+              isBrowserFullscreen
+                ? t("exitBrowserFullscreen")
+                : t("enterBrowserFullscreen")
+            }
+          >
+            {isBrowserFullscreen ? (
+              <CompressIcon className="h-4 w-4" />
+            ) : (
+              <ExpandIcon className="h-4 w-4" />
+            )}
+          </ControlButton>
+        ) : null}
+      </>
+    );
+  }
+
+  const helpStaggerDelayMs = 40 + 4 * 55;
+
+  return (
+    <div ref={rootRef} className="pointer-events-auto">
+      {/* Small screens: gear stays fixed; strip opens to its left */}
+      <div className="relative h-10 w-10 shrink-0 md:hidden">
+        {menuOpen ? (
+          <div className="absolute top-0 right-full mr-2 flex items-center gap-2">
+            {onStartTour ? (
+              <button
+                type="button"
+                id={HAM_MAP_TOUR_ANCHORS.done}
+                onClick={() => {
+                  setMenuOpen(false);
+                  onStartTour();
+                }}
+                title={t("tourHelp")}
+                aria-label={t("tourHelp")}
+                className={`ham-map-chrome-in inline-flex h-10 w-10 items-center justify-center rounded-xl border backdrop-blur-md ${panelClass} ${idle}`}
+                style={{ animationDelay: `${helpStaggerDelayMs}ms` }}
+              >
+                <HelpIcon className="h-4 w-4" />
+              </button>
+            ) : null}
+            <aside
+              id={menuId}
+              className={`flex overflow-hidden rounded-xl border backdrop-blur-md ${panelClass}`}
+              aria-label={t("mapControlsLabel")}
+            >
+              {renderControlButtons({
+                includeFullscreen: false,
+                staggerFromGear: true,
+              })}
+            </aside>
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          id={!menuOpen && onStartTour ? HAM_MAP_TOUR_ANCHORS.done : undefined}
+          onClick={() => setMenuOpen((open) => !open)}
+          className={`absolute inset-0 inline-flex items-center justify-center rounded-xl border backdrop-blur-md transition ${panelClass} ${idle} ${
+            menuOpen ? active : ""
+          }`}
+          aria-label={t("mapSettingsMenu")}
+          aria-expanded={menuOpen}
+          aria-controls={menuOpen ? menuId : undefined}
+          title={t("mapSettingsMenu")}
+        >
+          <GearIcon className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* md+: always show the full control strip */}
+      <aside
+        className={`hidden overflow-hidden rounded-xl border backdrop-blur-md md:flex ${panelClass}`}
+        aria-label={t("mapControlsLabel")}
+      >
+        {renderControlButtons({ includeFullscreen: true })}
+      </aside>
+    </div>
   );
 }

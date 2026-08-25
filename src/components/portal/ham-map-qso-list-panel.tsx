@@ -25,6 +25,8 @@ type Props = {
   canAddQso?: boolean;
   selectedQsoId: string | null;
   onSelectQso: (qsoId: string | null) => void;
+  defaultGrid?: string;
+  onQsoCreated?: (qso: QsoListItemDto) => void;
 };
 
 export function HamMapQsoListPanel({
@@ -37,6 +39,8 @@ export function HamMapQsoListPanel({
   canAddQso = false,
   selectedQsoId,
   onSelectQso,
+  defaultGrid = "",
+  onQsoCreated,
 }: Props) {
   const t = useTranslations("ham.map");
   const [callsignDialogOpen, setCallsignDialogOpen] = useState(false);
@@ -144,9 +148,20 @@ export function HamMapQsoListPanel({
                       aria-pressed={selected}
                       className={`w-full px-4 py-3 text-left transition ${selected ? rowActive : rowIdle}`}
                     >
-                      <p className={`text-xs ${muted}`}>
-                        {formatQsoDateTime(qso.qsoAt)}
-                      </p>
+                      <div className="flex items-baseline justify-between gap-3">
+                        <p
+                          className={`min-w-0 truncate text-xs tabular-nums ${muted}`}
+                        >
+                          {formatQsoDateTime(qso.qsoAt)}
+                        </p>
+                        <p
+                          className={`shrink-0 text-right text-xs font-medium tabular-nums ${muted}`}
+                        >
+                          {qso.grid
+                            ? formatMaidenheadDisplay(qso.grid)
+                            : t("qsoListNoGrid")}
+                        </p>
+                      </div>
                       <div className="mt-1 flex items-baseline justify-between gap-3">
                         <p
                           className={`min-w-0 truncate font-display text-base tracking-wide ${strong}`}
@@ -154,11 +169,10 @@ export function HamMapQsoListPanel({
                           {qso.workedCallsign}
                         </p>
                         <p
-                          className={`shrink-0 text-xs font-medium tabular-nums ${muted}`}
+                          className={`min-w-0 max-w-[55%] truncate text-right text-xs ${muted}`}
+                          title={qso.workedName || undefined}
                         >
-                          {qso.grid
-                            ? formatMaidenheadDisplay(qso.grid)
-                            : t("qsoListNoGrid")}
+                          {qso.workedName || "—"}
                         </p>
                       </div>
                     </button>
@@ -208,7 +222,9 @@ export function HamMapQsoListPanel({
       <HamMapQsoDialog
         open={qsoDialogOpen}
         mapTheme={mapTheme}
+        defaultGrid={defaultGrid}
         onClose={() => setQsoDialogOpen(false)}
+        onCreated={onQsoCreated}
       />
     </div>
   );

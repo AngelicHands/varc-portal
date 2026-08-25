@@ -4,6 +4,8 @@ import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PortalDialog } from "@/components/portal/portal-dialog";
+import { useSharedHomeGridAutofill } from "@/hooks/use-shared-home-grid-autofill";
+import type { QsoListItemDto } from "@/lib/account-types";
 import type { HamMapTheme } from "@/lib/map/maptiler-style";
 import { createQsoAction } from "@/lib/qso-actions";
 import {
@@ -17,6 +19,7 @@ import {
   QSO_MODES,
   isValidFreqMhzInput,
   normalizeFreqMhzInput,
+  suggestedFreqMhzForModeBand,
   type QsoInputValues,
   type QsoMode,
 } from "@/lib/validations/qso";
@@ -27,6 +30,8 @@ type Props = {
   /** Grid to prefill — the operator usually logs the square they just picked. */
   defaultGrid?: string;
   onClose: () => void;
+  /** Called with the saved QSO so the map can update before refresh finishes. */
+  onCreated?: (qso: QsoListItemDto) => void;
 };
 
 type FormState = {
@@ -90,6 +95,7 @@ export function HamMapQsoDialog({
   mapTheme,
   defaultGrid = "",
   onClose,
+  onCreated,
 }: Props) {
   const t = useTranslations("logbook");
   const mapT = useTranslations("ham.map");
@@ -103,12 +109,29 @@ export function HamMapQsoDialog({
   const [pending, startTransition] = useTransition();
   const light = mapTheme === "light";
 
+  useSharedHomeGridAutofill(form.workedCallsign, (grid) => {
+    clearError("grid");
+    setForm((prev) => ({ ...prev, grid }));
+  });
+
   function clearError(...fields: FieldKey[]) {
     setFieldErrors((current) => {
       const next = { ...current };
       for (const field of fields) delete next[field];
       return next;
     });
+  }
+
+  function applyModeBandFreq(next: { mode?: QsoMode; band?: FormState["band"] }) {
+    const mode = next.mode ?? form.mode;
+    const band = next.band ?? form.band;
+    const suggested = suggestedFreqMhzForModeBand(mode, band);
+    if (!suggested) {
+      setForm((prev) => ({ ...prev, ...next }));
+      return;
+    }
+    clearError("freqMhz");
+    setForm((prev) => ({ ...prev, ...next, freqMhz: suggested }));
   }
 
   function switchZone(next: QsoTimeZoneMode) {
@@ -159,12 +182,16 @@ export function HamMapQsoDialog({
         qso_sent: true,
         grid: form.grid,
         notes: form.notes,
+        workedName: "",
       });
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      // The map and the sidebar both read server-rendered QSOs.
+      if ("qso" in result && result.qso) {
+        onCreated?.(result.qso);
+      }
+      // Keep server props in sync; local UI already shows the new QSO.
       router.refresh();
       onClose();
     });
@@ -197,6 +224,14 @@ export function HamMapQsoDialog({
   const switchClass = light
     ? "text-zinc-600 hover:text-zinc-900"
     : "text-white/60 hover:text-white";
+  const toggleIdle = light
+    ? "border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+    : "border-white/15 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white";
+  const toggleActive = light
+    ? "border-zinc-900 bg-zinc-900 text-white"
+    : "border-white/40 bg-white/20 text-white";
+  const toggleBase =
+    "rounded-md border px-2.5 py-1.5 text-xs font-medium transition disabled:opacity-50";
 
   function fieldClass(field: FieldKey, extra = "") {
     return `mt-1.5 w-full rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-50 ${extra} ${
@@ -284,26 +319,30 @@ export function HamMapQsoDialog({
           </div>
         </div>
 
-        <label className="block">
+        <div className="block sm:col-span-2">
           <span className={label}>{t("band")}</span>
-          <select
-            value={form.band}
-            disabled={pending}
-            onChange={(event) =>
-              setForm((prev) => ({
-                ...prev,
-                band: event.target.value as QsoInputValues["band"],
-              }))
-            }
-            className={`mt-1.5 w-full rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-50 ${fieldBase}`}
+          <div
+            className="mt-1.5 flex flex-wrap gap-1.5"
+            role="group"
+            aria-label={t("band")}
           >
-            {QSO_BANDS.map((band) => (
-              <option key={band} value={band} className="text-zinc-900">
-                {band}
-              </option>
-            ))}
-          </select>
-        </label>
+            {QSO_BANDS.map((band) => {
+              const selected = form.band === band;
+              return (
+                <button
+                  key={band}
+                  type="button"
+                  disabled={pending}
+                  aria-pressed={selected}
+                  onClick={() => applyModeBandFreq({ band })}
+                  className={`${toggleBase} ${selected ? toggleActive : toggleIdle}`}
+                >
+                  {band}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <label className="block">
           <span className={label}>{t("freqMhz")}</span>
@@ -322,28 +361,32 @@ export function HamMapQsoDialog({
           />
         </label>
 
-        <label className="block">
+        <div className="block sm:col-span-2">
           <span className={label}>{t("mode")}</span>
-          <select
-            value={form.mode}
-            disabled={pending}
-            onChange={(event) =>
-              setForm((prev) => ({
-                ...prev,
-                mode: event.target.value as QsoMode,
-              }))
-            }
-            className={`mt-1.5 w-full rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-50 ${fieldBase}`}
+          <div
+            className="mt-1.5 flex flex-wrap gap-1.5"
+            role="group"
+            aria-label={t("mode")}
           >
-            {QSO_MODES.map((mode) => (
-              <option key={mode} value={mode} className="text-zinc-900">
-                {mode}
-              </option>
-            ))}
-          </select>
-        </label>
+            {QSO_MODES.map((mode) => {
+              const selected = form.mode === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  disabled={pending}
+                  aria-pressed={selected}
+                  onClick={() => applyModeBandFreq({ mode })}
+                  className={`${toggleBase} ${selected ? toggleActive : toggleIdle}`}
+                >
+                  {mode}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-        <label className="block">
+        <label className="block sm:col-span-2">
           <span className={label}>{t("grid")}</span>
           <input
             value={form.grid}
@@ -361,31 +404,33 @@ export function HamMapQsoDialog({
           />
         </label>
 
-        <label className="block">
-          <span className={label}>{t("rstSent")}</span>
-          <input
-            value={form.rstSent}
-            maxLength={16}
-            disabled={pending}
-            onChange={(event) =>
-              setForm((prev) => ({ ...prev, rstSent: event.target.value }))
-            }
-            className={`mt-1.5 w-full rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-50 ${fieldBase}`}
-          />
-        </label>
+        <div className="grid grid-cols-2 gap-3 sm:col-span-2">
+          <label className="block min-w-0">
+            <span className={label}>{t("rstSent")}</span>
+            <input
+              value={form.rstSent}
+              maxLength={16}
+              disabled={pending}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, rstSent: event.target.value }))
+              }
+              className={`mt-1.5 w-full rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-50 ${fieldBase}`}
+            />
+          </label>
 
-        <label className="block">
-          <span className={label}>{t("rstRcvd")}</span>
-          <input
-            value={form.rstRcvd}
-            maxLength={16}
-            disabled={pending}
-            onChange={(event) =>
-              setForm((prev) => ({ ...prev, rstRcvd: event.target.value }))
-            }
-            className={`mt-1.5 w-full rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-50 ${fieldBase}`}
-          />
-        </label>
+          <label className="block min-w-0">
+            <span className={label}>{t("rstRcvd")}</span>
+            <input
+              value={form.rstRcvd}
+              maxLength={16}
+              disabled={pending}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, rstRcvd: event.target.value }))
+              }
+              className={`mt-1.5 w-full rounded-md border px-3 py-2 text-sm outline-none disabled:opacity-50 ${fieldBase}`}
+            />
+          </label>
+        </div>
 
         <label className="block sm:col-span-2">
           <span className={label}>{t("notes")}</span>

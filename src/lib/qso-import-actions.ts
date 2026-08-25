@@ -39,6 +39,23 @@ type CandidateWithFile = AdifImportValues & {
   fileName: string;
 };
 
+type ExistingQsoDoc = {
+  _id: mongoose.Types.ObjectId;
+  workedCallsign: string;
+  qsoAt: Date;
+  band: string;
+  mode: string;
+  freqMhz?: number | null;
+  rstSent?: string;
+  rstRcvd?: string;
+  grid?: string;
+  notes?: string;
+  workedName?: string;
+  source?: string;
+  qso_confirmed?: boolean;
+  confirmedAt?: Date | null;
+};
+
 function isAdifFilename(name: string): boolean {
   const lower = name.toLowerCase();
   return lower.endsWith(".adi") || lower.endsWith(".adif");
@@ -47,7 +64,6 @@ function isAdifFilename(name: string): boolean {
 function importFailureReason(params: {
   recordCount: number;
   validCount: number;
-  importedCount: number;
 }): AdifImportErrorRef | null {
   if (params.recordCount === 0) {
     return adifImportError("noRecordsInFile");
@@ -55,10 +71,61 @@ function importFailureReason(params: {
   if (params.validCount === 0) {
     return adifImportError("noValidRecordsInFile");
   }
-  if (params.importedCount === 0) {
-    return adifImportError("allDuplicates");
-  }
   return null;
+}
+
+/** Prefer non-empty ADIF values; keep existing when the import field is blank. */
+function mergeImportedFields(
+  existing: ExistingQsoDoc,
+  incoming: AdifImportValues,
+): Record<string, unknown> {
+  const $set: Record<string, unknown> = {};
+
+  const nextFreq =
+    incoming.freqMhz != null && Number.isFinite(incoming.freqMhz)
+      ? incoming.freqMhz
+      : existing.freqMhz ?? null;
+  if (nextFreq !== (existing.freqMhz ?? null)) {
+    $set.freqMhz = nextFreq;
+  }
+
+  if (incoming.rstSent && incoming.rstSent !== (existing.rstSent ?? "")) {
+    $set.rstSent = incoming.rstSent;
+  }
+  if (incoming.rstRcvd && incoming.rstRcvd !== (existing.rstRcvd ?? "")) {
+    $set.rstRcvd = incoming.rstRcvd;
+  }
+  if (incoming.grid && incoming.grid !== (existing.grid ?? "")) {
+    $set.grid = incoming.grid;
+  }
+  if (incoming.notes && incoming.notes !== (existing.notes ?? "")) {
+    $set.notes = incoming.notes;
+  }
+  if (
+    incoming.workedName &&
+    incoming.workedName !== (existing.workedName ?? "")
+  ) {
+    $set.workedName = incoming.workedName;
+  }
+  if (incoming.source && incoming.source !== existing.source) {
+    $set.source = incoming.source;
+  }
+
+  const nextConfirmed = Boolean(existing.qso_confirmed) || incoming.qso_confirmed;
+  if (nextConfirmed !== Boolean(existing.qso_confirmed)) {
+    $set.qso_confirmed = nextConfirmed;
+  }
+
+  const nextConfirmedAt =
+    existing.confirmedAt ??
+    (incoming.confirmedAt ? new Date(incoming.confirmedAt) : null);
+  const existingAtMs = existing.confirmedAt?.getTime() ?? null;
+  const nextAtMs = nextConfirmedAt?.getTime() ?? null;
+  if (nextAtMs !== existingAtMs) {
+    $set.confirmedAt = nextConfirmedAt;
+  }
+
+  return $set;
 }
 
 export async function importQsoAdifAction(formData: FormData) {
@@ -108,7 +175,12 @@ export async function importQsoAdifAction(formData: FormData) {
     const failedFiles: AdifImportFailedFile[] = [];
     const fileStats = new Map<
       string,
-      { recordCount: number; validCount: number; importedCount: number }
+      {
+        recordCount: number;
+        validCount: number;
+        importedCount: number;
+        updatedCount: number;
+      }
     >();
 
     for (const file of files) {
@@ -158,6 +230,7 @@ export async function importQsoAdifAction(formData: FormData) {
           recordCount: parsed.records.length,
           validCount,
           importedCount: 0,
+          updatedCount: 0,
         });
       } catch (error) {
         failedFiles.push({
@@ -171,8 +244,8 @@ export async function importQsoAdifAction(formData: FormData) {
       for (const [name, stats] of fileStats.entries()) {
         if (failedFiles.some((item) => item.name === name)) continue;
         const reason = importFailureReason({
-          ...stats,
-          importedCount: 0,
+          recordCount: stats.recordCount,
+          validCount: stats.validCount,
         });
         if (reason) {
           failedFiles.push({ name, reason });
@@ -190,7 +263,15 @@ export async function importQsoAdifAction(formData: FormData) {
       };
     }
 
-    const times = candidates.map((item) => new Date(item.qsoAt).getTime());
+    // Last occurrence wins within the upload batch (re-import refresh).
+    const latestByKey = new Map<string, CandidateWithFile>();
+    for (const item of candidates) {
+      latestByKey.set(qsoDuplicateKey(item), item);
+    }
+
+    const times = [...latestByKey.values()].map((item) =>
+      new Date(item.qsoAt).getTime(),
+    );
     const minAt = new Date(Math.min(...times));
     const maxAt = new Date(Math.max(...times));
 
@@ -198,24 +279,44 @@ export async function importQsoAdifAction(formData: FormData) {
       userId: session.user.id,
       qsoAt: { $gte: minAt, $lte: maxAt },
     })
-      .select("workedCallsign qsoAt band mode")
-      .lean();
+      .select(
+        "workedCallsign qsoAt band mode freqMhz rstSent rstRcvd grid notes workedName source qso_confirmed confirmedAt",
+      )
+      .lean<ExistingQsoDoc[]>();
 
-    const existingKeys = new Set(
-      existing.map((doc) => qsoDuplicateKeyFromDoc(doc)),
+    const existingByKey = new Map(
+      existing.map((doc) => [qsoDuplicateKeyFromDoc(doc), doc] as const),
     );
 
     const toInsert: CandidateWithFile[] = [];
-    let skippedDuplicate = 0;
+    const bulkOps: mongoose.AnyBulkWriteOperation[] = [];
+    let updated = 0;
+    let unchanged = 0;
 
-    for (const item of candidates) {
-      const key = qsoDuplicateKey(item);
-      if (existingKeys.has(key)) {
-        skippedDuplicate += 1;
+    for (const [key, item] of latestByKey.entries()) {
+      const existingDoc = existingByKey.get(key);
+      if (!existingDoc) {
+        toInsert.push(item);
         continue;
       }
-      existingKeys.add(key);
-      toInsert.push(item);
+
+      const $set = mergeImportedFields(existingDoc, item);
+      if (Object.keys($set).length === 0) {
+        unchanged += 1;
+        continue;
+      }
+
+      bulkOps.push({
+        updateOne: {
+          filter: { _id: existingDoc._id, userId: session.user.id },
+          update: { $set },
+        },
+      });
+      updated += 1;
+      const stats = fileStats.get(item.fileName);
+      if (stats) {
+        stats.updatedCount += 1;
+      }
     }
 
     for (const item of toInsert) {
@@ -238,6 +339,7 @@ export async function importQsoAdifAction(formData: FormData) {
         toInsert.map((item) => ({
           userId: new mongoose.Types.ObjectId(session.user.id),
           workedCallsign: item.workedCallsign,
+          workedName: item.workedName || "",
           qsoAt: new Date(item.qsoAt),
           band: item.band,
           freqMhz: item.freqMhz,
@@ -254,6 +356,10 @@ export async function importQsoAdifAction(formData: FormData) {
       );
     }
 
+    if (bulkOps.length > 0) {
+      await QsoLog.bulkWrite(bulkOps, { ordered: false });
+    }
+
     revalidateLogbook(callsignCheck.callsign);
     await invalidateQsoAndHamCache({
       userId: session.user.id,
@@ -263,10 +369,12 @@ export async function importQsoAdifAction(formData: FormData) {
     return {
       ok: true as const,
       imported: toInsert.length,
+      updated,
+      unchanged,
       files: files.length,
       source:
         detectedSources.size === 1 ? [...detectedSources][0] : "adif",
-      skippedDuplicate,
+      skippedDuplicate: unchanged,
       skippedInvalid,
       skippedStationMismatch,
       recordErrors,

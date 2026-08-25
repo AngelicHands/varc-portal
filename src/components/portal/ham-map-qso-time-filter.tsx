@@ -11,9 +11,22 @@ type Props = {
   mapTheme: HamMapTheme;
   value: HamMapQsoTimeRange;
   onChange: (value: HamMapQsoTimeRange) => void;
+  /** Stagger each option in from the gear (top → bottom). */
+  stagger?: boolean;
+  /** Delay before the first option starts (ms). */
+  staggerBaseDelayMs?: number;
+  /** Gap between each option (ms). */
+  staggerStepMs?: number;
 };
 
-export function HamMapQsoTimeFilter({ mapTheme, value, onChange }: Props) {
+export function HamMapQsoTimeFilter({
+  mapTheme,
+  value,
+  onChange,
+  stagger = false,
+  staggerBaseDelayMs = 280,
+  staggerStepMs = 55,
+}: Props) {
   const t = useTranslations("ham.map");
   const light = mapTheme === "light";
 
@@ -34,7 +47,7 @@ export function HamMapQsoTimeFilter({ mapTheme, value, onChange }: Props) {
       role="group"
       aria-label={t("qsoTimeFilterLabel")}
     >
-      {HAM_MAP_QSO_TIME_RANGES.map((range) => {
+      {HAM_MAP_QSO_TIME_RANGES.map((range, index) => {
         const selected = value === range;
         return (
           <button
@@ -43,7 +56,16 @@ export function HamMapQsoTimeFilter({ mapTheme, value, onChange }: Props) {
             onClick={() => onChange(range)}
             aria-pressed={selected}
             title={range === "all" ? t("qsoTimeFilterAll") : range}
-            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center border-t text-[10px] font-medium leading-none transition first:border-t-0 ${border} ${selected ? active : idle}`}
+            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center border-t text-[10px] font-medium leading-none transition first:border-t-0 ${border} ${selected ? active : idle}${
+              stagger ? " ham-map-chrome-in-down" : ""
+            }`}
+            style={
+              stagger
+                ? {
+                    animationDelay: `${staggerBaseDelayMs + index * staggerStepMs}ms`,
+                  }
+                : undefined
+            }
           >
             {range === "all" ? t("qsoTimeFilterAll") : range}
           </button>

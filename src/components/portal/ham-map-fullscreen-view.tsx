@@ -882,6 +882,8 @@ export function HamMapFullscreenView({
   const [showLocationMarkers, setShowLocationMarkers] = useState(true);
   const [showCallsigns, setShowCallsigns] = useState(true);
   const [showTraces, setShowTraces] = useState(true);
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
+  const mobileChromeRef = useRef<HTMLDivElement>(null);
   const [qsoTimeRange, setQsoTimeRange] = useState<HamMapQsoTimeRange>("24h");
   const [qsoListOpen, setQsoListOpen] = useState(false);
   const [selectedQsoId, setSelectedQsoId] = useState<string | null>(null);
@@ -946,7 +948,15 @@ export function HamMapFullscreenView({
 
   const callsign = viewed?.callsign ?? callsignProp;
   const homeMarker = viewed ? viewed.homeMarker : homeMarkerProp;
-  const qsos = viewed?.qsos ?? qsosProp;
+  const [createdQsos, setCreatedQsos] = useState<QsoListItemDto[]>([]);
+  const serverQsos = viewed?.qsos ?? qsosProp;
+  const viewingOwnLogbook = !viewed || viewed.isOwner;
+  const qsos = useMemo(() => {
+    if (!viewingOwnLogbook || createdQsos.length === 0) return serverQsos;
+    const serverIds = new Set(serverQsos.map((item) => item.id));
+    const pending = createdQsos.filter((item) => !serverIds.has(item.id));
+    return pending.length > 0 ? [...pending, ...serverQsos] : serverQsos;
+  }, [viewingOwnLogbook, createdQsos, serverQsos]);
   const showQsoMarkers = viewed?.showQsoMarkers ?? showQsoMarkersProp;
   const canAddQso = viewed ? viewed.isOwner : canAddQsoProp;
   const canPromptHomeLocation = viewed ? viewed.isOwner : canSetHomeLocation;
@@ -1138,6 +1148,9 @@ export function HamMapFullscreenView({
   const onTourStepChange = useCallback(
     (stepId: HamMapTourStepId | null) => {
       setTourStep(stepId);
+      if (stepId === "timeFilter" || stepId === "layers") {
+        setMobileControlsOpen(true);
+      }
     },
     [],
   );
@@ -1934,7 +1947,10 @@ export function HamMapFullscreenView({
         onLocationAcquireEnd={endLocationAcquire}
       />
 
-      <div className="pointer-events-none absolute right-3 top-3 z-20 flex flex-col items-end gap-2">
+      <div
+        ref={mobileChromeRef}
+        className="pointer-events-none absolute right-3 top-3 z-20 flex flex-col items-end gap-2"
+      >
         <HamMapTour
           mapTheme={panelTheme}
           enabled={Boolean(mapTilerKey) && themeReady}
@@ -1949,10 +1965,12 @@ export function HamMapFullscreenView({
                 id="ham-map-tour-layers"
                 className="flex items-center gap-2"
               >
-                <HamMapTourHelpButton
-                  mapTheme={panelTheme}
-                  onClick={startTour}
-                />
+                <div className="hidden md:block">
+                  <HamMapTourHelpButton
+                    mapTheme={panelTheme}
+                    onClick={startTour}
+                  />
+                </div>
                 <HamMapControlsPanel
                   mapTheme={panelTheme}
                   showGridRectangles={showGridRectangles}
@@ -1972,22 +1990,39 @@ export function HamMapFullscreenView({
                   tracesAvailable={
                     showQsoMarkers &&
                     Boolean(activeHomeMarker) &&
-                    qsoMarkers.length > 0
+                    qsos.length > 0
                   }
                   isBrowserFullscreen={isBrowserFullscreen}
                   onToggleBrowserFullscreen={() => {
                     void toggleBrowserFullscreen();
                   }}
                   fullscreenSupported={fullscreenSupported}
+                  onStartTour={startTour}
+                  mobileMenuOpen={mobileControlsOpen}
+                  onMobileMenuOpenChange={setMobileControlsOpen}
+                  mobileDismissRootRef={mobileChromeRef}
                 />
               </div>
-              <div id="ham-map-tour-time-filter">
-                  <HamMapQsoTimeFilter
-                    mapTheme={panelTheme}
-                    value={qsoTimeRange}
-                    onChange={setQsoTimeRange}
-                  />
-                </div>
+              <div
+                id="ham-map-tour-time-filter"
+                className={
+                  mobileControlsOpen ? "block" : "hidden md:block"
+                }
+              >
+                <HamMapQsoTimeFilter
+                  key={
+                    mobileControlsOpen
+                      ? "ham-map-time-filter-open"
+                      : "ham-map-time-filter"
+                  }
+                  mapTheme={panelTheme}
+                  value={qsoTimeRange}
+                  onChange={setQsoTimeRange}
+                  stagger={mobileControlsOpen}
+                  staggerBaseDelayMs={280}
+                  staggerStepMs={55}
+                />
+              </div>
             </>
           )}
         </HamMapTour>
@@ -2006,6 +2041,15 @@ export function HamMapFullscreenView({
           canAddQso={canAddQso}
           selectedQsoId={activeSelectedQsoId}
           onSelectQso={setSelectedQsoId}
+          defaultGrid={overlayDisplayGrid}
+          onQsoCreated={(qso) => {
+            setCreatedQsos((prev) => [
+              qso,
+              ...prev.filter((item) => item.id !== qso.id),
+            ]);
+            setQsoListOpen(true);
+            setSelectedQsoId(qso.id);
+          }}
         />
 
       <HamMapHomeLocationPrompt
