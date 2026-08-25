@@ -9,17 +9,30 @@ import {
 import { emptyLayout, type TemplateLayout } from "@/lib/blocks/types";
 import { categorySelectOptions, listCategories } from "@/lib/cms";
 import { listFormOptions } from "@/lib/forms";
+import {
+  listContentAccessRoleOptions,
+  listContentAccessUserOptions,
+} from "@/lib/content-access-options";
 
 export default async function NewPagePage() {
   await requirePagesPage();
-  const [templateOptions, templateDocs, articles, categories, forms] =
-    await Promise.all([
-      listPageTemplateOptions(),
-      listPageTemplatesAdmin(),
-      listAllArticles(),
-      listCategories(),
-      listFormOptions(),
-    ]);
+  const [
+    templateOptions,
+    templateDocs,
+    articles,
+    categories,
+    forms,
+    userOptions,
+    roleOptions,
+  ] = await Promise.all([
+    listPageTemplateOptions(),
+    listPageTemplatesAdmin(),
+    listAllArticles(),
+    listCategories(),
+    listFormOptions(),
+    listContentAccessUserOptions(),
+    listContentAccessRoleOptions(),
+  ]);
 
   const defaultLayouts: Record<string, TemplateLayout> = {};
   for (const doc of templateDocs) {
@@ -48,6 +61,8 @@ export default async function NewPagePage() {
               ? `${form.label}`
               : `${form.label} (draft)`,
         }))}
+        userOptions={userOptions}
+        roleOptions={roleOptions}
       />
     </div>
   );

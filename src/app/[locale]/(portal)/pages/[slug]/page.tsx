@@ -18,7 +18,11 @@ import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { pageHref } from "@/lib/locale-hrefs";
 import { Link } from "@/i18n/navigation";
 import { isEmptyHtml } from "@/lib/html";
-import { canManagePages } from "@/lib/roles";
+import { canManagePages, canManageArticles } from "@/lib/roles";
+import {
+  canViewPublishedContent,
+  contentViewerFromSession,
+} from "@/lib/content-access";
 import {
   resolvePageLayout,
   resolvePageTemplateKey,
@@ -39,8 +43,22 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale: localeParam, slug } = await params;
   const locale = localeParam as AppLocale;
-  const page = await getPublishedPageBySlug(locale, slug);
+  const [page, session] = await Promise.all([
+    getPublishedPageBySlug(locale, slug),
+    auth(),
+  ]);
   if (!page) return { title: "Not found" };
+
+  const canBypass = canManagePages(session?.user);
+  if (
+    !canViewPublishedContent(page, {
+      id: session?.user?.id ? String(session.user.id) : null,
+      role: session?.user?.role,
+      canBypass,
+    })
+  ) {
+    return { title: "Not found" };
+  }
 
   const content = getPageLocale(page, locale);
   const branding = await getPublicSiteBranding(locale);
@@ -91,6 +109,15 @@ export default async function CmsPage({ params }: Props) {
   }
 
   const canEdit = canManagePages(session?.user);
+  if (
+    !canViewPublishedContent(page, {
+      id: session?.user?.id ? String(session.user.id) : null,
+      role: session?.user?.role,
+      canBypass: canEdit,
+    })
+  ) {
+    notFound();
+  }
   const editHref = `/admin/pages/${String(page._id)}`;
   const editButton = canEdit ? (
     <PageEditButton href={editHref} label={t("edit")} />
@@ -136,6 +163,12 @@ export default async function CmsPage({ params }: Props) {
     layout,
     locale,
     pageContextFromPage(page, locale),
+    {
+      viewer: contentViewerFromSession(
+        session,
+        canManageArticles(session?.user),
+      ),
+    },
   );
 
   const hasBlocks = layout.sections.some((s) => s.blocks.length > 0);

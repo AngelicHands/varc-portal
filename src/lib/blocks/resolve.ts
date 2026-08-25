@@ -2,10 +2,12 @@ import mongoose from "mongoose";
 import {
   getLocaleContent,
   isArticlePubliclyVisible,
-  listFeaturedArticles,
-  listPublishedArticles,
   type PublicArticleCard,
 } from "@/lib/articles";
+import {
+  canViewPublishedContent,
+  type ContentViewer,
+} from "@/lib/content-access";
 import {
   DEFAULT_COVER_FOCUS,
   normalizeCoverFocus,
@@ -141,6 +143,22 @@ function toObjectIds(ids: string[]): mongoose.Types.ObjectId[] {
     .map((id) => new mongoose.Types.ObjectId(id));
 }
 
+function isArticleVisibleToViewer(
+  article: ArticleDocument,
+  locale: AppLocale,
+  viewer: ContentViewer | undefined,
+): boolean {
+  return (
+    isArticlePubliclyVisible(article, locale) &&
+    canViewPublishedContent(article, viewer ?? null)
+  );
+}
+
+/** Over-fetch so restricted posts can be skipped without emptying the block. */
+function accessAwareFetchLimit(limit: number) {
+  return Math.min(Math.max(limit * 6, limit), 80);
+}
+
 function applyShowExcerpt(
   articles: PublicArticleCard[],
   showExcerpt: boolean,
@@ -154,8 +172,10 @@ async function resolveArticlesFromSource(
   settings: Record<string, unknown>,
   locale: AppLocale,
   contextCategoryIds?: string[],
+  viewer?: ContentViewer,
 ): Promise<PublicArticleCard[]> {
   const limit = Math.min(Math.max(settingNumber(settings, "limit", 6), 1), 48);
+  const fetchLimit = accessAwareFetchLimit(limit);
   const mode = source.mode ?? "latest";
   const showExcerpt = settingBoolDefaultTrue(settings, "showExcerpt");
   const localeKey = locale === "en" ? "en" : "vi";
@@ -181,25 +201,21 @@ async function resolveArticlesFromSource(
     [`locales.${localeKey}.title`]: { $nin: ["", null] },
   };
 
-  let articles: PublicArticleCard[] = [];
+  let docs: ArticleDocument[] = [];
 
   if (mode === "featured") {
+    const filter: Record<string, unknown> = {
+      ...basePublishedFilter,
+      featured: true,
+    };
     const categoryIdsFilter = withExcludedCategories();
     if (categoryIdsFilter) {
-      const docs = await Article.find({
-        ...basePublishedFilter,
-        featured: true,
-        categoryIds: categoryIdsFilter,
-      })
-        .sort({ publishedAt: -1, createdAt: -1 })
-        .limit(limit)
-        .lean<ArticleDocument[]>();
-      articles = docs
-        .filter((doc) => isArticlePubliclyVisible(doc, locale))
-        .map((doc) => articleToCard(doc, locale));
-    } else {
-      articles = await listFeaturedArticles(locale, limit);
+      filter.categoryIds = categoryIdsFilter;
     }
+    docs = await Article.find(filter)
+      .sort({ publishedAt: -1, createdAt: -1 })
+      .limit(fetchLimit)
+      .lean<ArticleDocument[]>();
   } else if (mode === "ids") {
     const ids = (source.articleIds ?? []).filter((id) =>
       mongoose.isValidObjectId(id),
@@ -213,15 +229,11 @@ async function resolveArticlesFromSource(
       if (categoryIdsFilter) {
         filter.categoryIds = categoryIdsFilter;
       }
-      const docs = await Article.find(filter).lean<ArticleDocument[]>();
-      const byId = new Map(docs.map((doc) => [String(doc._id), doc]));
-      articles = ids
+      const found = await Article.find(filter).lean<ArticleDocument[]>();
+      const byId = new Map(found.map((doc) => [String(doc._id), doc]));
+      docs = ids
         .map((id) => byId.get(id))
-        .filter((doc): doc is ArticleDocument =>
-          Boolean(doc && isArticlePubliclyVisible(doc, locale)),
-        )
-        .map((doc) => articleToCard(doc, locale))
-        .slice(0, limit);
+        .filter((doc): doc is ArticleDocument => Boolean(doc));
     }
   } else if (mode === "category") {
     const categoryIds = (
@@ -231,7 +243,6 @@ async function resolveArticlesFromSource(
     ).filter((id) => mongoose.isValidObjectId(id));
     if (categoryIds.length) {
       const includeIds = toObjectIds(categoryIds);
-      // Drop exclude ids that are also included so the include set still wins.
       const effectiveExclude = excludeObjectIds.filter(
         (id) => !includeIds.some((include) => include.equals(id)),
       );
@@ -239,35 +250,30 @@ async function resolveArticlesFromSource(
       if (effectiveExclude.length) {
         categoryFilter.$nin = effectiveExclude;
       }
-      const docs = await Article.find({
+      docs = await Article.find({
         ...basePublishedFilter,
         categoryIds: categoryFilter,
       })
         .sort({ publishedAt: -1 })
-        .limit(limit)
+        .limit(fetchLimit)
         .lean<ArticleDocument[]>();
-      articles = docs
-        .filter((doc) => isArticlePubliclyVisible(doc, locale))
-        .map((doc) => articleToCard(doc, locale));
     }
   } else {
+    const filter: Record<string, unknown> = { ...basePublishedFilter };
     const categoryIdsFilter = withExcludedCategories();
     if (categoryIdsFilter) {
-      const docs = await Article.find({
-        ...basePublishedFilter,
-        categoryIds: categoryIdsFilter,
-      })
-        .sort({ publishedAt: -1, createdAt: -1 })
-        .limit(limit)
-        .lean<ArticleDocument[]>();
-      articles = docs
-        .filter((doc) => isArticlePubliclyVisible(doc, locale))
-        .map((doc) => articleToCard(doc, locale));
-    } else {
-      const listed = await listPublishedArticles(locale, 1, limit);
-      articles = listed.articles;
+      filter.categoryIds = categoryIdsFilter;
     }
+    docs = await Article.find(filter)
+      .sort({ publishedAt: -1, createdAt: -1 })
+      .limit(fetchLimit)
+      .lean<ArticleDocument[]>();
   }
+
+  const articles = docs
+    .filter((doc) => isArticleVisibleToViewer(doc, locale, viewer))
+    .map((doc) => articleToCard(doc, locale))
+    .slice(0, limit);
 
   return applyShowExcerpt(articles, showExcerpt);
 }
@@ -277,6 +283,7 @@ async function resolveVideosFromCategory(
   settings: Record<string, unknown>,
   locale: AppLocale,
   contextCategoryIds?: string[],
+  viewer?: ContentViewer,
 ): Promise<ResolvedVideoItem[]> {
   const variant = settingString(settings, "variant") || "grid";
   const isSingle = variant === "single";
@@ -313,7 +320,7 @@ async function resolveVideosFromCategory(
 
   const videos: ResolvedVideoItem[] = [];
   for (const doc of docs) {
-    if (!isArticlePubliclyVisible(doc, locale)) continue;
+    if (!isArticleVisibleToViewer(doc, locale, viewer)) continue;
     const content = getLocaleContent(doc, locale);
     const fallback = getLocaleContent(doc, locale === "en" ? "vi" : "en");
     const hls =
@@ -379,7 +386,7 @@ export async function resolveBlock(
   block: TemplateBlock,
   locale: AppLocale,
   page: BlockPageContext,
-  options?: { categoryIds?: string[] },
+  options?: { categoryIds?: string[]; viewer?: ContentViewer },
 ): Promise<ResolvedBlockData> {
   const source = block.source ?? {};
   const settings = block.settings ?? {};
@@ -436,6 +443,7 @@ export async function resolveBlock(
         settings,
         locale,
         options?.categoryIds,
+        options?.viewer,
       );
       const sectionTitle = resolveBlockLocaleText(source, contentLocale).text;
       return { articles, sectionTitle };
@@ -447,6 +455,7 @@ export async function resolveBlock(
           { ...settings, limit: settings.limit ?? 3 },
           locale,
           options?.categoryIds,
+          options?.viewer,
         ),
       };
     case "articleCard": {
@@ -462,7 +471,9 @@ export async function resolveBlock(
         [`locales.${localeKey}.slug`]: { $nin: ["", null] },
         [`locales.${localeKey}.title`]: { $nin: ["", null] },
       }).lean<ArticleDocument | null>();
-      if (!doc || !isArticlePubliclyVisible(doc, locale)) return { article: null };
+      if (!doc || !isArticleVisibleToViewer(doc, locale, options?.viewer)) {
+        return { article: null };
+      }
       const showExcerpt = settingBoolDefaultTrue(settings, "showExcerpt");
       const card = articleToCard(doc, locale);
       return {
@@ -519,6 +530,7 @@ export async function resolveBlock(
         settings,
         locale,
         options?.categoryIds,
+        options?.viewer,
       );
       const sectionTitle = resolveBlockLocaleText(source, contentLocale).text;
       return { videos, sectionTitle };
@@ -532,7 +544,7 @@ export async function resolveLayoutBlocks(
   layout: TemplateLayout,
   locale: AppLocale,
   page: BlockPageContext,
-  options?: { categoryIds?: string[] },
+  options?: { categoryIds?: string[]; viewer?: ContentViewer },
 ): Promise<Map<string, ResolvedBlockData>> {
   const entries = await Promise.all(
     (layout.sections ?? []).flatMap((section) =>

@@ -100,19 +100,26 @@ export function attachHlsSource(
       resolveManifest = resolve;
       rejectManifest = reject;
     });
+    // Attach happens on page load (before play). Catch so a bad playlist
+    // cannot surface as an unhandledRejection in the Next overlay.
+    void manifestReady.catch(() => undefined);
 
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    const settleManifest = (error?: Error) => {
       if (manifestSettled) return;
       manifestSettled = true;
-      resolveManifest?.();
+      if (error) rejectManifest?.(error);
+      else resolveManifest?.();
+    };
+
+    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+      settleManifest();
     });
     hls.on(Hls.Events.ERROR, (_event, data) => {
       if (!data.fatal || manifestSettled) {
         // Non-fatal / already settled: ignore for readiness.
         return;
       }
-      manifestSettled = true;
-      rejectManifest?.(
+      settleManifest(
         new Error(
           data.details
             ? `HLS error: ${data.details}`
@@ -126,6 +133,7 @@ export function attachHlsSource(
 
     return {
       destroy: () => {
+        settleManifest(new Error("HLS player destroyed"));
         hls.destroy();
       },
       play: async (options) => {

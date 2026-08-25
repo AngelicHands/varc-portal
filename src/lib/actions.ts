@@ -319,6 +319,22 @@ function normalizeArticleCategoryIds(categoryIds: string[]) {
     .map((value) => new mongoose.Types.ObjectId(value));
 }
 
+function normalizeAllowedUserIds(ids: string[] | undefined) {
+  return (ids ?? [])
+    .filter((value) => mongoose.isValidObjectId(value))
+    .map((value) => new mongoose.Types.ObjectId(value));
+}
+
+function normalizeAllowedRoleKeys(keys: string[] | undefined) {
+  return Array.from(
+    new Set(
+      (keys ?? [])
+        .map((key) => key.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+}
+
 function normalizeArticleTags(tags: string[]) {
   return Array.from(
     new Map(
@@ -374,6 +390,9 @@ function buildArticleContentPatch(
 ) {
   return {
     featured: options?.featured ?? data.featured,
+    allowPublic: data.allowPublic !== false,
+    allowedUserIds: normalizeAllowedUserIds(data.allowedUserIds),
+    allowedRoleKeys: normalizeAllowedRoleKeys(data.allowedRoleKeys),
     coverImageUrl: data.coverImageUrl.trim(),
     coverImageFocus: normalizeCoverFocus(data.coverImageFocus),
     ogImageUrl: data.ogImageUrl.trim(),
@@ -440,6 +459,9 @@ export async function autoSaveArticleAction(
     const created = await Article.create({
       status: "draft",
       featured: data.featured,
+      allowPublic: data.allowPublic !== false,
+      allowedUserIds: normalizeAllowedUserIds(data.allowedUserIds),
+      allowedRoleKeys: normalizeAllowedRoleKeys(data.allowedRoleKeys),
       coverImageUrl: data.coverImageUrl.trim(),
       coverImageFocus: normalizeCoverFocus(data.coverImageFocus),
       ogImageUrl: data.ogImageUrl.trim(),
@@ -514,6 +536,9 @@ export async function saveArticleAction(
     const created = await Article.create({
       status: data.status,
       featured: data.status === "published" ? data.featured : false,
+      allowPublic: data.allowPublic !== false,
+      allowedUserIds: normalizeAllowedUserIds(data.allowedUserIds),
+      allowedRoleKeys: normalizeAllowedRoleKeys(data.allowedRoleKeys),
       coverImageUrl: data.coverImageUrl.trim(),
       coverImageFocus: normalizeCoverFocus(data.coverImageFocus),
       ogImageUrl: data.ogImageUrl.trim(),
@@ -566,6 +591,9 @@ export async function cloneArticleAction(
       publishedAt: null,
       authorId: session.user.id,
       contentSource: "cms",
+      allowPublic: source.allowPublic !== false,
+      allowedUserIds: source.allowedUserIds ?? [],
+      allowedRoleKeys: source.allowedRoleKeys ?? [],
       categoryIds: source.categoryIds ?? [],
       tags: source.tags ?? [],
       coverImageUrl: source.coverImageUrl ?? "",
@@ -1109,6 +1137,9 @@ export async function savePageAction(
       existing.layoutOverride = layoutOverride;
       existing.galleryItems = data.galleryItems;
       existing.sortOrder = data.sortOrder;
+      existing.allowPublic = data.allowPublic !== false;
+      existing.allowedUserIds = normalizeAllowedUserIds(data.allowedUserIds);
+      existing.allowedRoleKeys = normalizeAllowedRoleKeys(data.allowedRoleKeys);
       existing.locales = locales;
       await existing.save();
       await refreshPortal();
@@ -1124,6 +1155,9 @@ export async function savePageAction(
       layoutOverride,
       galleryItems: data.galleryItems,
       sortOrder: data.sortOrder,
+      allowPublic: data.allowPublic !== false,
+      allowedUserIds: normalizeAllowedUserIds(data.allowedUserIds),
+      allowedRoleKeys: normalizeAllowedRoleKeys(data.allowedRoleKeys),
       locales,
     });
     await refreshPortal();

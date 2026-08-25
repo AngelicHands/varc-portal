@@ -17,6 +17,10 @@ import {
 } from "@/lib/cms";
 import { normalizeEditorHtml } from "@/lib/html";
 import { listFormOptions } from "@/lib/forms";
+import {
+  listContentAccessRoleOptions,
+  listContentAccessUserOptions,
+} from "@/lib/content-access-options";
 
 export const dynamic = "force-dynamic";
 
@@ -28,15 +32,25 @@ export default async function EditPagePage({ params }: Props) {
   await requirePagesPage();
 
   const { id } = await params;
-  const [page, templateOptions, templateDocs, articles, categories, forms] =
-    await Promise.all([
-      getPageById(id),
-      listPageTemplateOptions(),
-      listPageTemplatesAdmin(),
-      listAllArticles(),
-      listCategories(),
-      listFormOptions(),
-    ]);
+  const [
+    page,
+    templateOptions,
+    templateDocs,
+    articles,
+    categories,
+    forms,
+    userOptions,
+    roleOptions,
+  ] = await Promise.all([
+    getPageById(id),
+    listPageTemplateOptions(),
+    listPageTemplatesAdmin(),
+    listAllArticles(),
+    listCategories(),
+    listFormOptions(),
+    listContentAccessUserOptions(),
+    listContentAccessRoleOptions(),
+  ]);
   if (!page || page.deletedAt) notFound();
 
   const vi = getPageLocale(page, "vi");
@@ -78,9 +92,14 @@ export default async function EditPagePage({ params }: Props) {
               ? `${form.label}`
               : `${form.label} (draft)`,
         }))}
+        userOptions={userOptions}
+        roleOptions={roleOptions}
         initial={{
           ...emptyPageForm,
           status: page.status === "published" ? "published" : "draft",
+          allowPublic: page.allowPublic !== false,
+          allowedUserIds: (page.allowedUserIds ?? []).map(String),
+          allowedRoleKeys: (page.allowedRoleKeys ?? []).map(String),
           templateKey,
           fontFamily: page.fontFamily?.trim() || "default",
           ogImageUrl: page.ogImageUrl?.trim() ?? "",

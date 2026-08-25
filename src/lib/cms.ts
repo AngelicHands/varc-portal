@@ -433,6 +433,7 @@ async function loadPublicMenuLinks(
         _id: { $in: pageIds },
         ...notDeletedFilter,
         status: "published",
+        allowPublic: { $ne: false },
       }).lean<PageDocument[]>()
     : [];
   const pageById = new Map(pages.map((page) => [String(page._id), page]));
@@ -538,7 +539,11 @@ async function loadPublicMenuLinks(
 
 export async function listPublishedPagesForSitemap() {
   await connectDb();
-  return Page.find({ ...notDeletedFilter, status: "published" })
+  return Page.find({
+    ...notDeletedFilter,
+    status: "published",
+    allowPublic: { $ne: false },
+  })
     .select("locales updatedAt")
     .lean<PageDocument[]>();
 }

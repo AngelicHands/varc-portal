@@ -17,7 +17,10 @@ import { resolveLayoutBlocks } from "@/lib/blocks/resolve";
 import { emptyLayout } from "@/lib/blocks/types";
 import { TemplateLayoutRenderer } from "@/components/portal/blocks/template-layout-renderer";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
+import { auth } from "@/auth";
 import { categoryHref } from "@/lib/locale-hrefs";
+import { canManageArticles } from "@/lib/roles";
+import { contentViewerFromSession } from "@/lib/content-access";
 
 export const dynamic = "force-dynamic";
 
@@ -63,10 +66,11 @@ export default async function CategoryArchivePage({ params }: Props) {
 
   const tHome = await getTranslations("home");
   const tPage = await getTranslations("page");
-  const [category, settings, branding] = await Promise.all([
+  const [category, settings, branding, session] = await Promise.all([
     findPublishedCategory(locale, slug),
     getSiteSettingsDocument(),
     getPublicSiteBranding(locale),
+    auth(),
   ]);
   if (!category) notFound();
 
@@ -85,7 +89,13 @@ export default async function CategoryArchivePage({ params }: Props) {
       contentHtml: "",
       galleryItems: [],
     },
-    { categoryIds: [String(category._id)] },
+    {
+      categoryIds: [String(category._id)],
+      viewer: contentViewerFromSession(
+        session,
+        canManageArticles(session?.user),
+      ),
+    },
   );
 
   return (

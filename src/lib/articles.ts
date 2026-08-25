@@ -105,6 +105,7 @@ function publishedLocaleFilter(locale: AppLocale, now = new Date()) {
     ...notDeletedFilter,
     status: "published" as const,
     publishedAt: { $ne: null, $lte: now },
+    allowPublic: { $ne: false },
     [`locales.${key}.slug`]: { $nin: ["", null] },
     [`locales.${key}.title`]: { $nin: ["", null] },
   };
@@ -261,6 +262,7 @@ export async function listPublishedForSitemap() {
     ...notDeletedFilter,
     status: "published",
     publishedAt: { $ne: null, $lte: now },
+    allowPublic: { $ne: false },
   })
     .select("locales publishedAt updatedAt")
     .lean<ArticleDocument[]>();

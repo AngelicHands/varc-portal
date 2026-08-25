@@ -26,6 +26,9 @@ const articleLocaleSchema = z.object({
 const articleFormFieldsSchema = z.object({
   status: z.enum(["draft", "published"]),
   featured: z.boolean(),
+  allowPublic: z.boolean().default(true),
+  allowedUserIds: z.array(z.string().max(64)).max(200).default([]),
+  allowedRoleKeys: z.array(z.string().trim().min(1).max(64)).max(50).default([]),
   coverImageUrl: safeUrlSchema,
   coverImageFocus: z.object({
     x: z.number().min(0).max(100),
@@ -173,6 +176,12 @@ const pageGalleryItemSchema = z.object({
 export const pageFormSchema = z
   .object({
     status: z.enum(["draft", "published"]),
+    allowPublic: z.boolean().default(true),
+    allowedUserIds: z.array(z.string().max(64)).max(200).default([]),
+    allowedRoleKeys: z
+      .array(z.string().trim().min(1).max(64))
+      .max(50)
+      .default([]),
     templateKey: z.string().trim().min(1).max(100),
     fontFamily: z
       .string()

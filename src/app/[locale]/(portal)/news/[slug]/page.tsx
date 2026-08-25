@@ -13,6 +13,10 @@ import {
   getSiteSettingsDocument,
 } from "@/lib/cms";
 import { canManageArticles } from "@/lib/roles";
+import {
+  canViewPublishedContent,
+  contentViewerFromSession,
+} from "@/lib/content-access";
 import type { AppLocale } from "@/i18n/routing";
 import { ArticleBody } from "@/components/portal/article-body";
 import { PageEditButton } from "@/components/portal/page-edit-button";
@@ -41,8 +45,27 @@ type Props = {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { locale: localeParam, slug } = await params;
   const locale = localeParam as AppLocale;
-  const article = await getPublishedArticleBySlug(locale, slug);
+  const [article, session] = await Promise.all([
+    getPublishedArticleBySlug(locale, slug),
+    auth(),
+  ]);
   if (!article) return { title: "Not found" };
+
+  const userId = session?.user?.id ? String(session.user.id) : "";
+  const authorId = article.authorId ? String(article.authorId) : "";
+  const canBypass =
+    Boolean(userId) &&
+    (canManageArticles(session?.user) ||
+      (authorId !== "" && authorId === userId));
+  if (
+    !canViewPublishedContent(article, {
+      id: userId || null,
+      role: session?.user?.role,
+      canBypass,
+    })
+  ) {
+    return { title: "Not found" };
+  }
 
   const content = getLocaleContent(article, locale);
   const branding = await getPublicSiteBranding(locale);
@@ -105,6 +128,15 @@ export default async function ArticlePage({ params }: Props) {
     Boolean(userId) &&
     (canManageArticles(session?.user) ||
       (authorId !== "" && authorId === userId));
+  if (
+    !canViewPublishedContent(article, {
+      id: userId || null,
+      role: session?.user?.role,
+      canBypass: canEdit,
+    })
+  ) {
+    notFound();
+  }
   const editButton = canEdit ? (
     <PageEditButton
       href={`/admin/articles/${articleId}`}
@@ -199,6 +231,7 @@ export default async function ArticlePage({ params }: Props) {
         },
         {
           categoryIds: (article.categoryIds ?? []).map(String),
+          viewer: contentViewerFromSession(session, canEdit),
         },
       );
       return (

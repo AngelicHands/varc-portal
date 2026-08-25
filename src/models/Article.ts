@@ -45,6 +45,18 @@ const ArticleSchema = new Schema(
     },
     ogImageUrl: { type: String, default: "" },
     featured: { type: Boolean, default: false, index: true },
+    /** Anonymous/public viewers may open the published article. Default true. */
+    allowPublic: { type: Boolean, default: true, index: true },
+    /** When private: empty = all authenticated users. */
+    allowedUserIds: {
+      type: [{ type: Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
+    /** When private: empty = all roles. Matched against User.role keys. */
+    allowedRoleKeys: {
+      type: [{ type: String, trim: true, lowercase: true }],
+      default: [],
+    },
     /** Where article content is authored: CMS UI or Git sync import. */
     contentSource: {
       type: String,

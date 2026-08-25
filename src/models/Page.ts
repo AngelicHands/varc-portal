@@ -32,6 +32,18 @@ const PageSchema = new Schema(
       default: "draft",
       index: true,
     },
+    /** Anonymous/public viewers may open the published page. Default true. */
+    allowPublic: { type: Boolean, default: true, index: true },
+    /** When private: empty = all authenticated users. */
+    allowedUserIds: {
+      type: [{ type: Schema.Types.ObjectId, ref: "User" }],
+      default: [],
+    },
+    /** When private: empty = all roles. Matched against User.role keys. */
+    allowedRoleKeys: {
+      type: [{ type: String, trim: true, lowercase: true }],
+      default: [],
+    },
     /** @deprecated Use templateKey. Kept for migration of old documents. */
     template: {
       type: String,
@@ -119,6 +131,9 @@ export type PageDocument = {
   _id: mongoose.Types.ObjectId;
   key?: string | null;
   status: "draft" | "published";
+  allowPublic?: boolean;
+  allowedUserIds?: mongoose.Types.ObjectId[];
+  allowedRoleKeys?: string[];
   template?: PageTemplateLegacy;
   templateKey: string;
   fontFamily?: string;

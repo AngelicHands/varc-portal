@@ -18,7 +18,8 @@ import {
   pageContextFromPage,
   resolveLayoutBlocks,
 } from "@/lib/blocks/resolve";
-import { canManagePages } from "@/lib/roles";
+import { canManagePages, canManageArticles } from "@/lib/roles";
+import { contentViewerFromSession } from "@/lib/content-access";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,12 @@ export default async function HomePage({ params }: Props) {
     layout,
     locale,
     pageContextFromPage(page, locale),
+    {
+      viewer: contentViewerFromSession(
+        session,
+        canManageArticles(session?.user),
+      ),
+    },
   );
 
   return (

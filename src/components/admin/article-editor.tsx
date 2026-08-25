@@ -33,6 +33,7 @@ import {
   type ArticleSideSectionId,
 } from "@/components/admin/article-section-aside";
 import { HlsVideoPropertiesPanel } from "@/components/admin/hls-video-properties-panel";
+import { ContentAccessFields } from "@/components/admin/content-access-fields";
 import type { Editor } from "@tiptap/react";
 import {
   fromDatetimeLocalValue,
@@ -51,6 +52,8 @@ type Props = {
   heading: string;
   initial: ArticleFormValues;
   categories: CategoryOption[];
+  userOptions?: CategoryOption[];
+  roleOptions?: CategoryOption[];
 };
 
 const emptyLocale = {
@@ -129,6 +132,8 @@ export function ArticleEditor({
   heading,
   initial,
   categories,
+  userOptions = [],
+  roleOptions = [],
 }: Props) {
   const router = useRouter();
   const { ask, modal } = useConfirm();
@@ -358,6 +363,33 @@ export function ArticleEditor({
             </span>
           </span>
         </label>
+
+        <div className="min-w-0 border-t border-gray-100 pt-5">
+          <p className="mb-1 text-sm font-medium text-gray-900">
+            Who can view when published
+          </p>
+          <p className="mb-3 text-xs text-gray-600">
+            Restrict published access to signed-in users and/or roles.
+          </p>
+          <ContentAccessFields
+            compact
+            userOptions={userOptions}
+            roleOptions={roleOptions}
+            value={{
+              allowPublic: form.allowPublic ?? true,
+              allowedUserIds: form.allowedUserIds ?? [],
+              allowedRoleKeys: form.allowedRoleKeys ?? [],
+            }}
+            onChange={(access) =>
+              setForm((prev) => ({
+                ...prev,
+                allowPublic: access.allowPublic,
+                allowedUserIds: access.allowedUserIds,
+                allowedRoleKeys: access.allowedRoleKeys,
+              }))
+            }
+          />
+        </div>
 
         <div className="min-w-0">
           <p className="mb-1 text-sm font-medium text-gray-900">Categories</p>
@@ -804,6 +836,9 @@ export function ArticleEditor({
 export const emptyArticleForm: ArticleFormValues = {
   status: "draft",
   featured: false,
+  allowPublic: true,
+  allowedUserIds: [],
+  allowedRoleKeys: [],
   coverImageUrl: "",
   coverImageFocus: { x: 15, y: 15, width: 70, height: 70 },
   ogImageUrl: "",

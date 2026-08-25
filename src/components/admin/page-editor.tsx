@@ -15,6 +15,7 @@ import {
 import { RichTextEditor } from "@/components/admin/rich-text-editor";
 import { PageGalleryField } from "@/components/admin/page-gallery-field";
 import { ImageSourceField } from "@/components/admin/image-source-field";
+import { ContentAccessFields } from "@/components/admin/content-access-fields";
 import { TemplateLayoutBuilder } from "@/components/admin/template-builder/template-layout-builder";
 import { useConfirm } from "@/components/admin/use-confirm";
 import { notifyAction } from "@/components/admin/admin-toast";
@@ -35,6 +36,8 @@ type Props = {
   articleOptions?: Option[];
   categoryOptions?: Option[];
   formOptions?: Option[];
+  userOptions?: Option[];
+  roleOptions?: Option[];
 };
 
 const emptyLocale = {
@@ -102,6 +105,8 @@ export function PageEditor({
   articleOptions = [],
   categoryOptions = [],
   formOptions = [],
+  userOptions = [],
+  roleOptions = [],
 }: Props) {
   const router = useRouter();
   const { ask, modal } = useConfirm();
@@ -403,6 +408,33 @@ export function PageEditor({
             </span>
           </label>
         </div>
+
+        <div className="rounded-md border border-gray-200 p-3">
+          <p className="mb-1 text-sm font-medium text-gray-900">
+            Who can view when published
+          </p>
+          <p className="mb-3 text-xs text-gray-600">
+            Restrict published access to signed-in users and/or roles.
+          </p>
+          <ContentAccessFields
+            userOptions={userOptions}
+            roleOptions={roleOptions}
+            value={{
+              allowPublic: form.allowPublic ?? true,
+              allowedUserIds: form.allowedUserIds ?? [],
+              allowedRoleKeys: form.allowedRoleKeys ?? [],
+            }}
+            onChange={(access) =>
+              setForm((prev) => ({
+                ...prev,
+                allowPublic: access.allowPublic,
+                allowedUserIds: access.allowedUserIds,
+                allowedRoleKeys: access.allowedRoleKeys,
+              }))
+            }
+          />
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block text-sm">
             <span className="mb-1 block font-medium">Meta title</span>
@@ -467,6 +499,9 @@ export function PageEditor({
 
 export const emptyPageForm: PageFormValues = {
   status: "draft",
+  allowPublic: true,
+  allowedUserIds: [],
+  allowedRoleKeys: [],
   templateKey: "custom",
   fontFamily: "default",
   ogImageUrl: "",

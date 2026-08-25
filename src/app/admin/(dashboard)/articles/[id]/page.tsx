@@ -6,6 +6,10 @@ import {
 import { requireEditorialPage } from "@/lib/admin-access";
 import { getArticleById, getLocaleContent } from "@/lib/articles";
 import { listCategories, categorySelectOptions } from "@/lib/cms";
+import {
+  listContentAccessRoleOptions,
+  listContentAccessUserOptions,
+} from "@/lib/content-access-options";
 import { normalizeEditorHtml } from "@/lib/html";
 import { normalizeCoverFocus } from "@/lib/cover-focus";
 
@@ -19,9 +23,11 @@ export default async function EditArticlePage({ params }: Props) {
   await requireEditorialPage();
 
   const { id } = await params;
-  const [article, categories] = await Promise.all([
+  const [article, categories, userOptions, roleOptions] = await Promise.all([
     getArticleById(id),
     listCategories(),
+    listContentAccessUserOptions(),
+    listContentAccessRoleOptions(),
   ]);
   if (!article || article.deletedAt) notFound();
 
@@ -33,10 +39,15 @@ export default async function EditArticlePage({ params }: Props) {
       articleId={id}
       heading="Edit article"
       categories={categorySelectOptions(categories, "vi")}
+      userOptions={userOptions}
+      roleOptions={roleOptions}
       initial={{
         ...emptyArticleForm,
         status: article.status === "published" ? "published" : "draft",
         featured: Boolean(article.featured),
+        allowPublic: article.allowPublic !== false,
+        allowedUserIds: (article.allowedUserIds ?? []).map(String),
+        allowedRoleKeys: (article.allowedRoleKeys ?? []).map(String),
         coverImageUrl: article.coverImageUrl ?? "",
         coverImageFocus: normalizeCoverFocus(article.coverImageFocus),
         ogImageUrl: article.ogImageUrl ?? "",
