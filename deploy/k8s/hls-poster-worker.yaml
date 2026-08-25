@@ -23,7 +23,7 @@ spec:
         - name: ghcr-pull
       containers:
         - name: hls-poster-worker
-          image: ghcr.io/varc-vietnam/varc-portal-hls-poster:v1.0.36
+          image: ghcr.io/varc-vietnam/varc-portal-hls-poster:v1.0.37
           imagePullPolicy: Always
           env:
             - name: HLS_POSTER_WORKER_ENABLED
