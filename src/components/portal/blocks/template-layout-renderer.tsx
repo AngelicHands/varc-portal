@@ -365,9 +365,16 @@ export function TemplateLayoutRenderer({
         const textAlignClass = sectionTextAlignClass(textAlign);
 
         if (fullBleed) {
+          // Full-bleed heroes (featured slider, etc.) must reach the viewport
+          // edges — keep vertical section spacing only.
+          const bleedPaddingStyle = {
+            ...paddingStyle,
+            paddingLeft: "0px",
+            paddingRight: "0px",
+          };
           return (
             <section key={section.id} className="w-full" style={marginStyle}>
-              <div className={`w-full ${textAlignClass}`} style={paddingStyle}>
+              <div className={`w-full ${textAlignClass}`} style={bleedPaddingStyle}>
               {section.blocks.map((block) => {
                 const data = resolved.get(block.id) ?? {};
                 // Featured slider / spotlight always span the viewport edge-to-edge.

@@ -13,7 +13,27 @@ type Props = {
   className?: string;
   /** fill = zoom until the rect covers the frame (hero). fit = keep whole rect visible. */
   mode?: "fill" | "fit";
+  /** When false, skip ResizeObserver work (hidden / off-screen slides). */
+  active?: boolean;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
 };
+
+type Layout = {
+  width: number;
+  height: number;
+  left: number;
+  top: number;
+};
+
+function layoutsClose(a: Layout, b: Layout) {
+  return (
+    Math.abs(a.width - b.width) < 0.5 &&
+    Math.abs(a.height - b.height) < 0.5 &&
+    Math.abs(a.left - b.left) < 0.5 &&
+    Math.abs(a.top - b.top) < 0.5
+  );
+}
 
 /**
  * Renders a cover image so the selected focus rectangle is centered in the
@@ -26,23 +46,27 @@ export function FocusedCoverImage({
   alt = "",
   className = "",
   mode = "fill",
+  active = true,
+  loading = "lazy",
+  fetchPriority = "auto",
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [layout, setLayout] = useState<{
-    width: number;
-    height: number;
-    left: number;
-    top: number;
-  } | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const layoutRef = useRef<Layout | null>(null);
+  const [layout, setLayout] = useState<Layout | null>(null);
   const rect = normalizeCoverFocus(focus);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    if (!active) return;
 
-    const img = new Image();
+    const container = containerRef.current;
+    const img = imgRef.current;
+    if (!container || !img) return;
+
     let frame = 0;
     let disposed = false;
+    let lastCw = 0;
+    let lastCh = 0;
 
     const compute = () => {
       if (disposed) return;
@@ -51,6 +75,13 @@ export function FocusedCoverImage({
       const iw = img.naturalWidth;
       const ih = img.naturalHeight;
       if (!cw || !ch || !iw || !ih) return;
+
+      // Ignore sub-pixel / mobile-chrome jitter (common while scrolling).
+      if (Math.abs(cw - lastCw) < 1 && Math.abs(ch - lastCh) < 1 && layoutRef.current) {
+        return;
+      }
+      lastCw = cw;
+      lastCh = ch;
 
       const regionW = iw * (rect.width / 100);
       const regionH = ih * (rect.height / 100);
@@ -66,12 +97,16 @@ export function FocusedCoverImage({
       const cx = (rect.x + rect.width / 2) / 100;
       const cy = (rect.y + rect.height / 2) / 100;
 
-      setLayout({
+      const next: Layout = {
         width: displayW,
         height: displayH,
         left: cw / 2 - cx * displayW,
         top: ch / 2 - cy * displayH,
-      });
+      };
+
+      if (layoutRef.current && layoutsClose(layoutRef.current, next)) return;
+      layoutRef.current = next;
+      setLayout(next);
     };
 
     const schedule = () => {
@@ -82,25 +117,32 @@ export function FocusedCoverImage({
     const ro = new ResizeObserver(schedule);
     ro.observe(container);
 
-    img.onload = schedule;
-    img.src = src;
+    img.addEventListener("load", schedule);
     if (img.complete) schedule();
 
     return () => {
       disposed = true;
       cancelAnimationFrame(frame);
       ro.disconnect();
-      img.onload = null;
+      img.removeEventListener("load", schedule);
     };
-  }, [src, mode, rect.x, rect.y, rect.width, rect.height]);
+  }, [src, mode, active, rect.x, rect.y, rect.width, rect.height]);
 
   return (
-    <div ref={containerRef} className={`relative overflow-hidden ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative overflow-hidden ${className}`}
+      style={{ contain: "paint" }}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        ref={imgRef}
         src={src}
         alt={alt}
         draggable={false}
+        loading={loading}
+        fetchPriority={fetchPriority}
+        decoding="async"
         className="absolute max-w-none"
         style={
           layout

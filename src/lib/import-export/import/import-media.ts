@@ -12,9 +12,9 @@ import {
 import {
   buildObjectKey,
   contentTypeForObjectKey,
-  publicUrlForObjectKey,
   putObject,
 } from "@/lib/media/storage";
+import { canonicalMediaPath } from "@/lib/media/types";
 import { Media, mediaKindFromContentType } from "@/models/Media";
 
 export class ImportMediaResolver {
@@ -65,13 +65,9 @@ export class ImportMediaResolver {
 
     const existingKey = parseMediaKeyFromUrl(trimmed);
     if (existingKey) {
-      try {
-        const publicUrl = publicUrlForObjectKey(existingKey);
-        this.urlMap.set(trimmed, publicUrl);
-        return publicUrl;
-      } catch {
-        // fall through to bundled media lookup
-      }
+      const mediaUrl = canonicalMediaPath(existingKey);
+      this.urlMap.set(trimmed, mediaUrl);
+      return mediaUrl;
     }
 
     const repoPath = this.resolveRepoPath(trimmed);
@@ -90,13 +86,14 @@ export class ImportMediaResolver {
     const key = buildObjectKey(originalName);
     const contentType = contentTypeForObjectKey(originalName);
     const stored = await putObject(key, buffer, contentType);
+    const mediaUrl = canonicalMediaPath(stored.key);
 
     await connectDb();
     const existing = await Media.findOne({ key: stored.key }).lean();
     if (!existing) {
       await Media.create({
         key: stored.key,
-        url: stored.url,
+        url: mediaUrl,
         contentType: stored.contentType,
         kind: mediaKindFromContentType(stored.contentType),
         size: stored.size,
@@ -108,8 +105,8 @@ export class ImportMediaResolver {
       });
     }
 
-    this.urlMap.set(trimmed, stored.url);
-    return stored.url;
+    this.urlMap.set(trimmed, mediaUrl);
+    return mediaUrl;
   }
 
   async resolveOptional(url: string | null | undefined): Promise<string> {
