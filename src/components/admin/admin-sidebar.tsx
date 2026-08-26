@@ -47,6 +47,7 @@ type NavFlag =
   | "importExport"
   | "pages"
   | "site"
+  | "backgroundJobs"
   | "users"
   | "roles";
 
@@ -301,7 +302,7 @@ const navGroups: NavGroup[] = [
       {
         href: "/admin/background-jobs",
         label: "Background Jobs",
-        flag: "site",
+        flag: "backgroundJobs",
         icon: (
           <Icon>
             <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -333,6 +334,9 @@ function isLinkVisible(
   if (link.flag === "importExport") return flags.showImportExport;
   if (link.flag === "pages") return flags.showPages;
   if (link.flag === "site") return flags.showSite;
+  if (link.flag === "backgroundJobs") {
+    return flags.showSite || flags.showImportExport;
+  }
   if (link.flag === "users") return flags.showUsers;
   if (link.flag === "roles") return flags.showRoles;
   return true;

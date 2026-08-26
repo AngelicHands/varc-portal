@@ -2669,36 +2669,18 @@ export async function saveImportExportScheduleAction(
     const isImport = direction === "import";
     await connectDb();
 
-    const existing = await ImportExportSettings.findOne({
-      key: IMPORT_EXPORT_SETTINGS_KEY,
-    }).lean<ImportExportSettingsDocument | null>();
-
-    const wasEnabled = isImport
-      ? Boolean(existing?.importScheduleEnabled)
-      : Boolean(existing?.exportScheduleEnabled);
-
+    // Any schedule save while enabled restarts the cadence from now so the
+    // worker picks up the new interval on the next tick (not the prior nextRunAt).
     const update: Record<string, unknown> = {};
     const now = new Date();
     if (isImport) {
       update.importScheduleEnabled = enabled;
       update.importScheduleIntervalMinutes = intervalMinutes;
-      if (enabled) {
-        if (!wasEnabled || !existing?.importScheduleNextRunAt) {
-          update.importScheduleNextRunAt = now;
-        }
-      } else {
-        update.importScheduleNextRunAt = null;
-      }
+      update.importScheduleNextRunAt = enabled ? now : null;
     } else {
       update.exportScheduleEnabled = enabled;
       update.exportScheduleIntervalMinutes = intervalMinutes;
-      if (enabled) {
-        if (!wasEnabled || !existing?.exportScheduleNextRunAt) {
-          update.exportScheduleNextRunAt = now;
-        }
-      } else {
-        update.exportScheduleNextRunAt = null;
-      }
+      update.exportScheduleNextRunAt = enabled ? now : null;
     }
 
     await ImportExportSettings.findOneAndUpdate(

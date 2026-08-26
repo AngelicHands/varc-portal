@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { executeImportExportJob } from "@/lib/import-export/execute-job";
 import { getImportExportJobDocument } from "@/lib/import-export/jobs";
 import { isWorkerInternalAuthorized } from "@/lib/worker-internal-auth";
-import { publicErrorMessage } from "@/lib/safe-error";
+import { logServerError, workerErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 900;
@@ -25,12 +25,15 @@ export async function POST(request: Request, context: RouteContext) {
     const job = await getImportExportJobDocument(id);
     if (job?.kind === "import" || job?.kind === "export") {
       revalidatePath("/admin/import-export", "page");
+      revalidatePath("/admin/background-jobs", "page");
     }
     return NextResponse.json({ ok: true });
   } catch (error) {
+    logServerError("import-export-run", error);
     revalidatePath("/admin/import-export", "page");
+    revalidatePath("/admin/background-jobs", "page");
     return NextResponse.json(
-      { error: publicErrorMessage(error, "Job execution failed") },
+      { error: workerErrorMessage(error, "Job execution failed") },
       { status: 500 },
     );
   }

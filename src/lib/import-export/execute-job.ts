@@ -64,6 +64,7 @@ export async function executeImportExportJob(jobId: string): Promise<void> {
         CmsCacheTags.templates,
       );
       revalidatePath("/admin/import-export", "page");
+      revalidatePath("/admin/background-jobs", "page");
       revalidatePath("/admin/articles", "page");
       revalidatePath("/admin/categories", "page");
       return;
@@ -77,6 +78,7 @@ export async function executeImportExportJob(jobId: string): Promise<void> {
       htmlUrl: result.htmlUrl,
     });
     revalidatePath("/admin/import-export", "page");
+    revalidatePath("/admin/background-jobs", "page");
   } catch (error) {
     const message = error instanceof Error ? error.message : "Job failed";
     await markImportExportJobFailed(jobId, message);

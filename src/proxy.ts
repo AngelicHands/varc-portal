@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import createMiddleware from "next-intl/middleware";
-import { isAdminRole, canManageSite, canManagePages, canManageUsers, canManageRoles, pickRoleCapabilities, type Role } from "@/lib/roles";
+import { isAdminRole, canManageSite, canManagePages, canManageUsers, canManageRoles, canManageImportExport, pickRoleCapabilities, type Role } from "@/lib/roles";
 import { routing, type AppLocale } from "@/i18n/routing";
 import { isReservedHamPath, parseBareCallsignPath } from "@/lib/ham-reserved";
 import { PORTAL_LOCALE_HEADER } from "@/lib/portal-locale";
@@ -122,7 +122,6 @@ export default async function proxy(req: NextRequest) {
       if (
         (pathMatches(pathname, "/admin/settings") ||
           pathMatches(pathname, "/admin/backup") ||
-          pathMatches(pathname, "/admin/background-jobs") ||
           pathMatches(pathname, "/admin/hls-posters") ||
           pathMatches(pathname, "/admin/menu") ||
           pathMatches(pathname, "/admin/mailbox") ||
@@ -130,6 +129,13 @@ export default async function proxy(req: NextRequest) {
           pathMatches(pathname, "/admin/forms") ||
           pathMatches(pathname, "/admin/templates")) &&
         !canManageSite(caps)
+      ) {
+        return NextResponse.redirect(adminHome);
+      }
+      if (
+        pathMatches(pathname, "/admin/background-jobs") &&
+        !canManageSite(caps) &&
+        !canManageImportExport(caps)
       ) {
         return NextResponse.redirect(adminHome);
       }

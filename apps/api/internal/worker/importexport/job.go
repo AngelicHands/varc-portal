@@ -78,14 +78,19 @@ func (s *JobStore) MarkFailed(ctx context.Context, id primitive.ObjectID, errMsg
 	if len(errMsg) > 500 {
 		errMsg = errMsg[:500]
 	}
-	_, _ = s.DB.Collection("importexportjobs").UpdateByID(ctx, id, bson.M{"$set": bson.M{
-		"status":     "failed",
-		"finishedAt": time.Now(),
-		"lockedBy":   "",
-		"phase":      "failed",
-		"message":    "Job failed",
-		"error":      errMsg,
-	}})
+	// Only mark running jobs so we do not overwrite a richer error already
+	// written by the portal execute path.
+	_, _ = s.DB.Collection("importexportjobs").UpdateOne(ctx,
+		bson.M{"_id": id, "status": "running"},
+		bson.M{"$set": bson.M{
+			"status":     "failed",
+			"finishedAt": time.Now(),
+			"lockedBy":   "",
+			"phase":      "failed",
+			"message":    "Job failed",
+			"error":      errMsg,
+		}},
+	)
 }
 
 func (s *JobStore) CreateScheduled(ctx context.Context, kind, email string) (primitive.ObjectID, error) {

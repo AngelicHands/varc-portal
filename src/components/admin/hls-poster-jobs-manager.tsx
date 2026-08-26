@@ -2,6 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { notifyAction } from "@/components/admin/admin-toast";
+import {
+  AlertIcon,
+  RefreshIcon,
+  StopIcon,
+  TrashIcon,
+} from "@/components/admin/admin-action-icons";
+import {
+  IconActionButton,
+  RowActionsGroup,
+} from "@/components/admin/icon-action-button";
+import { JobErrorModal } from "@/components/admin/job-error-modal";
+import { useConfirm } from "@/components/admin/use-confirm";
 import type { AdminHlsPosterJob } from "@/lib/hls-poster/jobs";
 
 type Props = {
@@ -25,6 +37,8 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
   const [jobs, setJobs] = useState(initialJobs);
   const [pending, setPending] = useState(false);
   const [actionJobId, setActionJobId] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const { ask, modal } = useConfirm();
 
   useEffect(() => {
     const timer = window.setInterval(async () => {
@@ -167,10 +181,18 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
     }
   }
 
-  async function deleteJob(jobId: string) {
-    setActionJobId(jobId);
+  async function confirmDeleteJob(job: AdminHlsPosterJob) {
+    const confirmed = await ask({
+      title: "Delete HLS poster job?",
+      message: `Remove this ${job.status} job from ${formatDate(job.createdAt)}? This cannot be undone.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
+    setActionJobId(job.id);
     try {
-      const response = await fetch(`/api/admin/hls-poster/jobs/${jobId}`, {
+      const response = await fetch(`/api/admin/hls-poster/jobs/${job.id}`, {
         method: "DELETE",
       });
       const payload = (await response.json().catch(() => ({}))) as {
@@ -183,148 +205,192 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
         );
         return;
       }
-      setJobs((current) => current.filter((job) => job.id !== jobId));
+      setJobs((current) => current.filter((item) => item.id !== job.id));
       notifyAction({ ok: true }, "Job deleted");
     } finally {
       setActionJobId(null);
     }
   }
 
-  return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-gray-200 bg-white p-5">
-        <h2 className="text-lg font-semibold">HLS poster</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Queue a job for the HLS poster worker to find videos missing thumbnails,
-          generate posters with ffmpeg, and write them back to articles. The
-          worker must be running (`pnpm worker:hls-poster` or the k8s
-          hls-poster-worker deployment).
-        </p>
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            disabled={pending || hasActive}
-            onClick={() => void startJob()}
-            className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
-          >
-            {pending ? "Working…" : hasActive ? "Job in progress" : "Start job"}
-          </button>
-          <button
-            type="button"
-            disabled={pending || !hasActive}
-            onClick={() => void stopAll()}
-            className="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-60"
-          >
-            Stop active jobs
-          </button>
-          {hasActive ? (
-            <span className="text-sm text-amber-700">
-              A job is queued or running — progress updates below.
-            </span>
-          ) : null}
-        </div>
-      </section>
+  const runLabel = pending
+    ? "Working…"
+    : hasActive
+      ? "Job in progress"
+      : "Start job";
 
-      <section className="rounded-lg border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 px-5 py-4">
-          <h2 className="text-lg font-semibold">Jobs</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Refreshes automatically every few seconds.
-          </p>
-        </div>
-        {jobs.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-gray-600">
-            No HLS poster jobs yet. Click Start job to enqueue one.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Created</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Progress</th>
-                  <th className="px-4 py-3 font-medium">Requested by</th>
-                  <th className="px-4 py-3 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job) => (
-                  <tr
-                    key={job.id}
-                    className="border-t border-gray-100 align-top"
-                  >
-                    <td className="px-4 py-3 text-gray-600">
-                      {formatDate(job.createdAt)}
-                    </td>
-                    <td className={`px-4 py-3 ${statusClass(job.status)}`}>
-                      <div>{job.status}</div>
-                      <div className="text-xs text-gray-500">{job.phase}</div>
-                      {job.lockedBy ? (
-                        <div className="text-xs text-gray-400">
-                          {job.lockedBy}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      <div>{job.message || "—"}</div>
-                      <div className="mt-1 text-xs">
-                        Scanned {job.articlesScanned} · Updated{" "}
-                        {job.articlesUpdated} · Posters {job.postersGenerated} ·
-                        Errors {job.errorCount}
-                      </div>
-                      {job.error ? (
-                        <div className="mt-1 text-xs text-red-700">
-                          {job.error}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      <div>{job.requestedByName || "—"}</div>
-                      <div className="text-xs">{job.requestedByEmail}</div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-3">
-                        {job.status === "queued" || job.status === "running" ? (
-                          <button
-                            type="button"
-                            disabled={actionJobId === job.id}
-                            onClick={() => void cancelJob(job.id)}
-                            className="text-sm font-medium text-amber-700 hover:underline disabled:opacity-60"
-                          >
-                            {actionJobId === job.id ? "Cancelling…" : "Cancel"}
-                          </button>
-                        ) : null}
-                        {job.status === "failed" ||
-                        job.status === "cancelled" ? (
-                          <button
-                            type="button"
-                            disabled={actionJobId === job.id || hasActive}
-                            onClick={() => void retryJob(job.id)}
-                            className="text-sm font-medium text-blue-700 hover:underline disabled:opacity-60"
-                          >
-                            {actionJobId === job.id ? "Retrying…" : "Retry"}
-                          </button>
-                        ) : null}
-                        {job.status !== "running" ? (
-                          <button
-                            type="button"
-                            disabled={actionJobId === job.id}
-                            onClick={() => void deleteJob(job.id)}
-                            className="text-sm font-medium text-red-700 hover:underline disabled:opacity-60"
-                          >
-                            {actionJobId === job.id ? "Deleting…" : "Delete"}
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+  return (
+    <>
+      <div className="mt-8">
+        <section className="rounded-lg border border-gray-200 bg-white">
+          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-gray-900">
+                HLS poster jobs
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Queue a worker job to find videos missing thumbnails, generate
+                posters with ffmpeg, and write them back to articles. The worker
+                must be running (`pnpm worker:hls-poster` or the k8s
+                hls-poster-worker deployment).
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={pending || !hasActive}
+                onClick={() => void stopAll()}
+                className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Stop active
+              </button>
+              <button
+                type="button"
+                disabled={pending || hasActive}
+                onClick={() => void startJob()}
+                className="rounded bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-50"
+              >
+                {runLabel}
+              </button>
+            </div>
           </div>
-        )}
-      </section>
-    </div>
+
+          {hasActive ? (
+            <p className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+              A job is queued or running — progress updates automatically.
+            </p>
+          ) : null}
+
+          {jobs.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-gray-600">
+              No HLS poster jobs yet. Click Start job to enqueue one.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Created</th>
+                    <th className="px-4 py-3 font-medium">Status</th>
+                    <th className="px-4 py-3 font-medium">Details</th>
+                    <th className="px-4 py-3 font-medium">Requested by</th>
+                    <th className="px-4 py-3 text-right font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => {
+                    const failedMessage = job.error?.trim() || "";
+                    const showErrorButton =
+                      job.status === "failed" && Boolean(failedMessage);
+                    return (
+                      <tr
+                        key={job.id}
+                        className="border-t border-gray-100 align-top"
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                          {formatDate(job.createdAt)}
+                        </td>
+                        <td
+                          className={`px-4 py-3 font-medium ${statusClass(job.status)}`}
+                        >
+                          <div>{job.status}</div>
+                          {job.phase ? (
+                            <div className="text-xs font-normal text-gray-500">
+                              {job.phase}
+                            </div>
+                          ) : null}
+                          {job.lockedBy ? (
+                            <div className="text-xs font-normal text-gray-400">
+                              {job.lockedBy}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          <div>{job.message || "—"}</div>
+                          <div className="mt-1 text-xs text-gray-500">
+                            Scanned {job.articlesScanned} · Updated{" "}
+                            {job.articlesUpdated} · Posters{" "}
+                            {job.postersGenerated} · Errors {job.errorCount}
+                          </div>
+                          {showErrorButton ? (
+                            <button
+                              type="button"
+                              onClick={() => setErrorDetail(failedMessage)}
+                              className="mt-2 inline-flex items-center gap-1.5 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                            >
+                              <AlertIcon className="h-3.5 w-3.5" />
+                              View error
+                            </button>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          <div>{job.requestedByName || "—"}</div>
+                          <div className="text-xs">{job.requestedByEmail}</div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <RowActionsGroup>
+                            {job.status === "queued" ||
+                            job.status === "running" ? (
+                              <IconActionButton
+                                label={
+                                  actionJobId === job.id
+                                    ? "Cancelling job"
+                                    : "Cancel job"
+                                }
+                                disabled={actionJobId === job.id}
+                                onClick={() => void cancelJob(job.id)}
+                              >
+                                <StopIcon />
+                              </IconActionButton>
+                            ) : null}
+                            {job.status === "failed" ||
+                            job.status === "cancelled" ? (
+                              <IconActionButton
+                                label={
+                                  actionJobId === job.id
+                                    ? "Retrying job"
+                                    : "Retry job"
+                                }
+                                disabled={actionJobId === job.id || hasActive}
+                                onClick={() => void retryJob(job.id)}
+                              >
+                                <RefreshIcon />
+                              </IconActionButton>
+                            ) : null}
+                            {job.status !== "running" ? (
+                              <IconActionButton
+                                label={
+                                  actionJobId === job.id
+                                    ? "Deleting job"
+                                    : "Delete job"
+                                }
+                                variant="danger"
+                                disabled={actionJobId === job.id}
+                                onClick={() => void confirmDeleteJob(job)}
+                              >
+                                <TrashIcon />
+                              </IconActionButton>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </RowActionsGroup>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <JobErrorModal
+        open={Boolean(errorDetail)}
+        title="HLS poster job error"
+        message={errorDetail || ""}
+        onClose={() => setErrorDetail(null)}
+      />
+      {modal}
+    </>
   );
 }

@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { notifyAction } from "@/components/admin/admin-toast";
-import { TrashIcon } from "@/components/admin/admin-action-icons";
+import { AlertIcon, TrashIcon } from "@/components/admin/admin-action-icons";
 import { IconActionButton } from "@/components/admin/icon-action-button";
+import { JobErrorModal } from "@/components/admin/job-error-modal";
 import { useImportExportJobsStream } from "@/components/admin/use-import-export-jobs-stream";
 import { useConfirm } from "@/components/admin/use-confirm";
 import type { AdminImportExportJob } from "@/lib/import-export/jobs-shared";
@@ -83,6 +84,7 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
   const [pending, setPending] = useState(false);
   const [actionJobId, setActionJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const { ask, modal } = useConfirm();
 
   const canRun =
@@ -280,15 +282,19 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
           <p className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
             Configure {kind} on the{" "}
             <Link href="/admin/import-export" className="underline">
-              Settings
+              Import/Export settings
             </Link>{" "}
-            tab first.
+            page first.
           </p>
         ) : null}
 
         {settings.isConfigured && !settings.isVerified ? (
           <p className="border-b border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
-            Verify the {kind} connection on the Settings tab before running jobs.
+            Verify the {kind} connection on the{" "}
+            <Link href="/admin/import-export" className="underline">
+              Import/Export settings
+            </Link>{" "}
+            page before running jobs.
           </p>
         ) : null}
 
@@ -320,7 +326,11 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {jobs.map((job) => (
+                {jobs.map((job) => {
+                  const failedMessage = job.error?.trim() || "";
+                  const showErrorButton =
+                    job.status === "failed" && Boolean(failedMessage);
+                  return (
                   <tr key={job.id} className="border-t border-gray-100 align-top">
                     <td className="px-4 py-3 whitespace-nowrap text-gray-600">
                       {formatDate(job.createdAt)}
@@ -333,7 +343,17 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
                       ) : null}
                     </td>
                     <td className="px-4 py-3 text-gray-700">
-                      <div>{job.error || job.message || "—"}</div>
+                      <div>{job.message || "—"}</div>
+                      {showErrorButton ? (
+                        <button
+                          type="button"
+                          onClick={() => setErrorDetail(failedMessage)}
+                          className="mt-2 inline-flex items-center gap-1.5 rounded border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                        >
+                          <AlertIcon className="h-3.5 w-3.5" />
+                          View error
+                        </button>
+                      ) : null}
                       {job.kind === "export" && job.htmlUrl ? (
                         <a
                           href={job.htmlUrl}
@@ -373,7 +393,8 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -462,6 +483,12 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
         ) : null}
       </section>
       </div>
+      <JobErrorModal
+        open={Boolean(errorDetail)}
+        title={`${kind === "import" ? "Import" : "Export"} job error`}
+        message={errorDetail || ""}
+        onClose={() => setErrorDetail(null)}
+      />
       {modal}
     </>
   );

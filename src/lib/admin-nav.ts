@@ -4,6 +4,7 @@ export type AdminNavFlag =
   | "importExport"
   | "pages"
   | "site"
+  | "backgroundJobs"
   | "users"
   | "roles";
 
@@ -101,9 +102,9 @@ export const adminNavGroups: AdminNavGroup[] = [
       {
         href: "/admin/import-export",
         label: "Import/Export",
-        description: "Bulk move content in or out of the CMS.",
+        description: "Configure GitHub sources and schedules for CMS sync.",
         flag: "importExport",
-        keywords: ["migrate", "transfer"],
+        keywords: ["migrate", "transfer", "settings", "github"],
       },
       {
         href: "/admin/media",
@@ -177,8 +178,8 @@ export const adminNavGroups: AdminNavGroup[] = [
         href: "/admin/background-jobs",
         label: "Background Jobs",
         description:
-          "Queue and monitor background workers, starting with HLS poster jobs.",
-        flag: "site",
+          "Queue and monitor HLS poster and content import/export jobs.",
+        flag: "backgroundJobs",
         keywords: [
           "background",
           "jobs",
@@ -188,6 +189,8 @@ export const adminNavGroups: AdminNavGroup[] = [
           "thumbnail",
           "video",
           "ffmpeg",
+          "import",
+          "export",
         ],
       },
     ],
@@ -249,6 +252,9 @@ export function isAdminNavItemVisible(
   if (item.flag === "importExport") return flags.showImportExport;
   if (item.flag === "pages") return flags.showPages;
   if (item.flag === "site") return flags.showSite;
+  if (item.flag === "backgroundJobs") {
+    return flags.showSite || flags.showImportExport;
+  }
   if (item.flag === "users") return flags.showUsers;
   if (item.flag === "roles") return flags.showRoles;
   return true;

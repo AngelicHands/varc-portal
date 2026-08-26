@@ -451,8 +451,8 @@ function SourcePanel({
             <Link
               href={
                 direction === "import"
-                  ? "/admin/import-export?tab=import"
-                  : "/admin/import-export?tab=export"
+                  ? "/admin/background-jobs?tab=import"
+                  : "/admin/background-jobs?tab=export"
               }
               className="font-medium text-gray-900 underline"
             >

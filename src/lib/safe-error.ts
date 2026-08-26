@@ -41,6 +41,20 @@ export function publicErrorMessage(
   return fallback;
 }
 
+/**
+ * Redacted message for trusted internal workers (not browser clients).
+ * Prefer the real error so job UIs can show useful failure details.
+ */
+export function workerErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  if (!(error instanceof Error)) return fallback;
+  const message = redact(error.message.trim());
+  if (!message) return fallback;
+  return message.slice(0, 500);
+}
+
 /** Log a sanitized one-line summary — never dump full error objects. */
 export function logServerError(scope: string, error: unknown): void {
   const name = error instanceof Error ? error.name : "Error";

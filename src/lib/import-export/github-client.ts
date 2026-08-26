@@ -256,13 +256,32 @@ export async function downloadGitHubFile(params: {
   const result = await githubRequest<{
     content?: string;
     encoding?: string;
+    download_url?: string | null;
+    size?: number;
   }>(
     `https://api.github.com/repos/${params.ownerRepo}/contents/${encodedPath}?ref=${encodeURIComponent(params.ref)}`,
     params.pat,
   );
 
+  // GitHub Contents API omits inline `content` for files roughly >1MB
+  // (encoding becomes "none"). Fall back to download_url / raw blob.
   if (!result.content) {
-    throw new Error(`Empty file content for ${params.path}`);
+    const downloadUrl =
+      result.download_url?.trim() ||
+      `https://raw.githubusercontent.com/${params.ownerRepo}/${encodeURIComponent(params.ref)}/${encodedPath}`;
+
+    const response = await fetch(downloadUrl, {
+      headers: githubHeaders(params.pat),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      throw new Error(await readGithubError(response));
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0 && (result.size ?? 0) > 0) {
+      throw new Error(`Empty file content for ${params.path}`);
+    }
+    return buffer;
   }
 
   if (result.encoding === "base64") {
