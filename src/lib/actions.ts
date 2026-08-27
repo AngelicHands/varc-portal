@@ -42,6 +42,22 @@ import {
   updateAdminUserSchema,
   type ArticleAutoSaveValues,
 } from "@/lib/validations/article";
+import {
+  articleCommentIdSchema,
+  createArticleCommentSchema,
+} from "@/lib/validations/article-comments";
+import {
+  isArticleCommentsSiteEnabled,
+  listAdminArticleComments,
+  loadArticleForComments,
+  normalizeCommentsMode,
+  viewerCanPostComments,
+} from "@/lib/article-comments";
+import {
+  canViewPublishedContent,
+  contentViewerFromSession,
+} from "@/lib/content-access";
+import { ArticleComment } from "@/models/ArticleComment";
 import { getImportExportSettingsEditorData } from "@/lib/import-export-settings";
 import {
   importExportSaveRequestSchema,
@@ -105,7 +121,7 @@ import {
 } from "@/models/ImportExportSettings";
 import { User } from "@/models/User";
 import { deleteObject } from "@/lib/media/storage";
-import { failAction, logServerError } from "@/lib/safe-error";
+import { failAction, logServerError, publicErrorMessage } from "@/lib/safe-error";
 import { createUniqueFormKey } from "@/lib/forms";
 import {
   ensureUserCallsignIndex,
@@ -390,6 +406,7 @@ function buildArticleContentPatch(
 ) {
   return {
     featured: options?.featured ?? data.featured,
+    commentsMode: data.commentsMode ?? "off",
     allowPublic: data.allowPublic !== false,
     allowedUserIds: normalizeAllowedUserIds(data.allowedUserIds),
     allowedRoleKeys: normalizeAllowedRoleKeys(data.allowedRoleKeys),
@@ -459,6 +476,7 @@ export async function autoSaveArticleAction(
     const created = await Article.create({
       status: "draft",
       featured: data.featured,
+      commentsMode: data.commentsMode ?? "off",
       allowPublic: data.allowPublic !== false,
       allowedUserIds: normalizeAllowedUserIds(data.allowedUserIds),
       allowedRoleKeys: normalizeAllowedRoleKeys(data.allowedRoleKeys),
@@ -536,6 +554,7 @@ export async function saveArticleAction(
     const created = await Article.create({
       status: data.status,
       featured: data.status === "published" ? data.featured : false,
+      commentsMode: data.commentsMode ?? "off",
       allowPublic: data.allowPublic !== false,
       allowedUserIds: normalizeAllowedUserIds(data.allowedUserIds),
       allowedRoleKeys: normalizeAllowedRoleKeys(data.allowedRoleKeys),
@@ -588,6 +607,7 @@ export async function cloneArticleAction(
     const created = await Article.create({
       status: "draft",
       featured: false,
+      commentsMode: source.commentsMode ?? "off",
       publishedAt: null,
       authorId: session.user.id,
       contentSource: "cms",
@@ -2146,6 +2166,7 @@ export async function saveSiteSettingsAction(
           homeTemplateKey: data.homeTemplateKey.trim() || "home",
           articleTemplateKey: data.articleTemplateKey.trim() || "article",
           categoryTemplateKey: data.categoryTemplateKey.trim() || "category",
+          articleCommentsEnabled: Boolean(data.articleCommentsEnabled),
           locales,
         },
       },
@@ -2784,6 +2805,178 @@ export async function runCmsImportAction(): Promise<CmsImportActionResult> {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Import failed",
+    };
+  }
+}
+
+async function revalidateArticleComments(articleId: string) {
+  revalidatePath("/admin/comments");
+  const article = await Article.findById(articleId)
+    .select({ "locales.vi.slug": 1, "locales.en.slug": 1 })
+    .lean();
+  const viSlug = article?.locales?.vi?.slug?.trim();
+  const enSlug = article?.locales?.en?.slug?.trim();
+  if (viSlug) revalidatePath(`/vi/news/${viSlug}`);
+  if (enSlug) revalidatePath(`/en/news/${enSlug}`);
+}
+
+export async function createArticleCommentAction(
+  raw: unknown,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { ok: false, error: "Sign in to comment" };
+    }
+
+    const parsed = createArticleCommentSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid comment",
+      };
+    }
+
+    const siteEnabled = await isArticleCommentsSiteEnabled();
+    if (!siteEnabled) {
+      return { ok: false, error: "Comments are disabled on this site" };
+    }
+
+    const article = await loadArticleForComments(parsed.data.articleId);
+    if (!article) return { ok: false, error: "Article not found" };
+
+    const mode = normalizeCommentsMode(article.commentsMode);
+    if (mode === "off") {
+      return { ok: false, error: "Comments are disabled on this article" };
+    }
+
+    const viewer = contentViewerFromSession(session);
+    if (!canViewPublishedContent(article, viewer)) {
+      return { ok: false, error: "You cannot comment on this article" };
+    }
+
+    if (
+      !viewerCanPostComments({
+        siteEnabled,
+        mode,
+        canView: true,
+        signedIn: true,
+      })
+    ) {
+      return { ok: false, error: "You cannot comment on this article" };
+    }
+
+    await connectDb();
+    const created = await ArticleComment.create({
+      articleId: article._id,
+      authorUserId: session.user.id,
+      body: parsed.data.body,
+      status: mode === "moderated" ? "pending" : "published",
+      deletedAt: null,
+    });
+
+    await revalidateArticleComments(String(article._id));
+    return { ok: true, id: String(created._id) };
+  } catch (error) {
+    return failAction(error, "Failed to post comment");
+  }
+}
+
+export async function approveArticleCommentAction(
+  raw: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await requireArticleManager();
+    const parsed = articleCommentIdSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Invalid comment" };
+
+    await connectDb();
+    const comment = await ArticleComment.findOne({
+      _id: parsed.data.commentId,
+      deletedAt: null,
+    });
+    if (!comment) return { ok: false, error: "Comment not found" };
+    if (comment.status === "published") return { ok: true };
+
+    comment.status = "published";
+    await comment.save();
+    await revalidateArticleComments(String(comment.articleId));
+    return { ok: true };
+  } catch (error) {
+    return failAction(error, "Failed to approve comment");
+  }
+}
+
+export async function rejectArticleCommentAction(
+  raw: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await requireArticleManager();
+    const parsed = articleCommentIdSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Invalid comment" };
+
+    await connectDb();
+    const comment = await ArticleComment.findOne({
+      _id: parsed.data.commentId,
+      deletedAt: null,
+    });
+    if (!comment) return { ok: false, error: "Comment not found" };
+
+    comment.status = "rejected";
+    await comment.save();
+    await revalidateArticleComments(String(comment.articleId));
+    return { ok: true };
+  } catch (error) {
+    return failAction(error, "Failed to reject comment");
+  }
+}
+
+export async function deleteArticleCommentAction(
+  raw: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { ok: false, error: "Unauthorized" };
+    }
+
+    const parsed = articleCommentIdSchema.safeParse(raw);
+    if (!parsed.success) return { ok: false, error: "Invalid comment" };
+
+    await connectDb();
+    const comment = await ArticleComment.findOne({
+      _id: parsed.data.commentId,
+      deletedAt: null,
+    });
+    if (!comment) return { ok: false, error: "Comment not found" };
+
+    const isModerator = canManageArticles(session.user);
+    const isAuthor = String(comment.authorUserId) === String(session.user.id);
+    if (!isModerator && !isAuthor) {
+      return { ok: false, error: "Forbidden" };
+    }
+
+    comment.deletedAt = new Date();
+    await comment.save();
+    await revalidateArticleComments(String(comment.articleId));
+    return { ok: true };
+  } catch (error) {
+    return failAction(error, "Failed to delete comment");
+  }
+}
+
+export async function listAdminArticleCommentsAction(
+  status: "pending" | "published" | "rejected" | "all" = "pending",
+) {
+  try {
+    await requireArticleManager();
+    const comments = await listAdminArticleComments({ status });
+    return { ok: true as const, comments };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: publicErrorMessage(error, "Failed to load comments"),
+      comments: [] as Awaited<ReturnType<typeof listAdminArticleComments>>,
     };
   }
 }

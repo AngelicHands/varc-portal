@@ -19,6 +19,7 @@ import {
 } from "@/lib/content-access";
 import type { AppLocale } from "@/i18n/routing";
 import { ArticleBody } from "@/components/portal/article-body";
+import { ArticleCommentsBlock } from "@/components/portal/article-comments-block";
 import { PageEditButton } from "@/components/portal/page-edit-button";
 import { SetLocaleAlternates } from "@/components/portal/locale-alternates";
 import { TemplateLayoutRenderer } from "@/components/portal/blocks/template-layout-renderer";
@@ -269,6 +270,9 @@ export default async function ArticlePage({ params }: Props) {
               backHome: tPage("backHome"),
             }}
           />
+          <div className="mx-auto mt-4 max-w-6xl px-4 md:px-6">
+            <ArticleCommentsBlock article={article} locale={locale} />
+          </div>
         </div>
       );
     }
@@ -333,6 +337,7 @@ export default async function ArticlePage({ params }: Props) {
           coverImageFocus={article.coverImageFocus}
         />
       ) : null}
+      <ArticleCommentsBlock article={article} locale={locale} />
     </article>
     </div>
   );

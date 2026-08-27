@@ -28,6 +28,8 @@ const SiteSettingsSchema = new Schema(
     homeTemplateKey: { type: String, default: "home", trim: true },
     articleTemplateKey: { type: String, default: "article", trim: true },
     categoryTemplateKey: { type: String, default: "category", trim: true },
+    /** Master switch for article comments site-wide. */
+    articleCommentsEnabled: { type: Boolean, default: false },
     locales: {
       vi: { type: SiteLocaleSchema, required: true },
       en: { type: SiteLocaleSchema, required: true },
@@ -49,8 +51,12 @@ export type SiteSettingsDocument = InferSchemaType<typeof SiteSettingsSchema> & 
   _id: mongoose.Types.ObjectId;
 };
 
+// Recompile on HMR so new fields (e.g. articleCommentsEnabled) take effect in dev.
+if (mongoose.models.SiteSettings) {
+  delete mongoose.models.SiteSettings;
+}
+
 export const SiteSettings: Model<SiteSettingsDocument> =
-  mongoose.models.SiteSettings ??
   mongoose.model<SiteSettingsDocument>("SiteSettings", SiteSettingsSchema);
 
 export const SITE_SETTINGS_KEY = "default";

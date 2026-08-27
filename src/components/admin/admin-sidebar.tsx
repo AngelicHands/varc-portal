@@ -173,6 +173,17 @@ const navGroups: NavGroup[] = [
         ),
       },
       {
+        href: "/admin/comments",
+        label: "Comments",
+        flag: "editorial",
+        icon: (
+          <Icon>
+            <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 3.2V16H6.5A2.5 2.5 0 0 1 4 13.5v-7Z" />
+            <path d="M8 8.5h8M8 12h5" />
+          </Icon>
+        ),
+      },
+      {
         href: "/admin/categories",
         label: "Categories",
         flag: "editorial",

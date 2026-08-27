@@ -49,6 +49,19 @@
     "missingTranslation": "Bài viết này chưa có bản tiếng Anh.",
     "edit": "Sửa bài viết"
   },
+  "ArticleComments": {
+    "title": "Bình luận",
+    "empty": "Chưa có bình luận. Hãy là người đầu tiên chia sẻ ý kiến.",
+    "placeholder": "Viết bình luận…",
+    "submit": "Gửi bình luận",
+    "submitting": "Đang gửi…",
+    "signInToComment": "Đăng nhập để bình luận",
+    "pending": "Đang chờ duyệt",
+    "approve": "Duyệt",
+    "reject": "Từ chối",
+    "delete": "Xóa",
+    "posted": "Đăng lúc"
+  },
   "page": {
     "backHome": "Quay lại trang chủ",
     "galleryPrevious": "Ảnh trước",

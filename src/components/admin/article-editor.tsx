@@ -412,6 +412,28 @@ export function ArticleEditor({
             }))
           }
         />
+        <label className="block min-w-0 text-sm">
+          <span className="mb-1 block font-medium text-gray-900">Comments</span>
+          <p className="mb-2 text-xs text-gray-600">
+            Requires site-wide comments to be enabled in Site Settings. Open
+            publishes immediately; Moderated holds new comments for editorial
+            review.
+          </p>
+          <select
+            value={form.commentsMode ?? "off"}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                commentsMode: e.target.value as "off" | "open" | "moderated",
+              }))
+            }
+            className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+          >
+            <option value="off">Off</option>
+            <option value="open">Open</option>
+            <option value="moderated">Moderated</option>
+          </select>
+        </label>
       </div>
     ),
     images: (
@@ -836,6 +858,7 @@ export function ArticleEditor({
 export const emptyArticleForm: ArticleFormValues = {
   status: "draft",
   featured: false,
+  commentsMode: "off",
   allowPublic: true,
   allowedUserIds: [],
   allowedRoleKeys: [],

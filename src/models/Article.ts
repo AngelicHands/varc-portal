@@ -45,6 +45,16 @@ const ArticleSchema = new Schema(
     },
     ogImageUrl: { type: String, default: "" },
     featured: { type: Boolean, default: false, index: true },
+    /**
+     * Commenting policy for this article (site master switch must also be on).
+     * off = hidden; open = publish immediately; moderated = pending review.
+     */
+    commentsMode: {
+      type: String,
+      enum: ["off", "open", "moderated"],
+      default: "off",
+      index: true,
+    },
     /** Anonymous/public viewers may open the published article. Default true. */
     allowPublic: { type: Boolean, default: true, index: true },
     /** When private: empty = all authenticated users. */
@@ -111,6 +121,10 @@ export type ArticleDocument = InferSchemaType<typeof ArticleSchema> & {
   _id: mongoose.Types.ObjectId;
 };
 
+// Recompile on HMR so new fields (e.g. commentsMode) take effect in dev.
+if (mongoose.models.Article) {
+  delete mongoose.models.Article;
+}
+
 export const Article: Model<ArticleDocument> =
-  mongoose.models.Article ??
   mongoose.model<ArticleDocument>("Article", ArticleSchema);

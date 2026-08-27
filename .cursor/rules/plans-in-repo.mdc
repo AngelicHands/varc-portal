@@ -1,0 +1,22 @@
+---
+description: Store Cursor plans in this repo's .cursor/plans folder
+alwaysApply: true
+---
+
+# Project plans location
+
+All Cursor plans for **this** repository must live under:
+
+`.cursor/plans/`
+
+## Rules
+
+1. **Never leave project plans only in** `~/.cursor/plans/`.
+2. When `CreatePlan` (or the UI) writes a plan under `~/.cursor/plans/`, **immediately move** it into this repo’s `.cursor/plans/` (use `mv`, not copy), then continue from the project path.
+3. When **updating** an existing plan, edit the file under `.cursor/plans/` — do not create a second copy in the global folder.
+4. Do **not** move other repositories’ plans out of `~/.cursor/plans/`.
+5. Prefer committing useful plans with the repo so the team shares them.
+
+## Check
+
+After creating a plan in a session, confirm the `.plan.md` exists under `.cursor/plans/` and is absent from `~/.cursor/plans/` (for this project’s plans).

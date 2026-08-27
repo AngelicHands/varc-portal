@@ -93,6 +93,13 @@ export const adminNavGroups: AdminNavGroup[] = [
         keywords: ["posts", "news", "blog"],
       },
       {
+        href: "/admin/comments",
+        label: "Comments",
+        description: "Review and moderate article comments.",
+        flag: "editorial",
+        keywords: ["moderation", "discussion", "pending"],
+      },
+      {
         href: "/admin/categories",
         label: "Categories",
         description: "Organize articles and content into categories.",

@@ -5,7 +5,7 @@ import { ConfirmModal, type ConfirmModalProps } from "@/components/admin/confirm
 
 export type ConfirmOptions = Pick<
   ConfirmModalProps,
-  "title" | "message" | "confirmLabel" | "cancelLabel" | "variant"
+  "title" | "message" | "confirmLabel" | "cancelLabel" | "variant" | "theme"
 >;
 
 type PendingDialog = ConfirmOptions & {
@@ -36,6 +36,7 @@ export function useConfirm() {
       confirmLabel={dialog.confirmLabel}
       cancelLabel={dialog.cancelLabel}
       variant={dialog.variant}
+      theme={dialog.theme}
       onCancel={() => close(false)}
       onConfirm={() => close(true)}
     />

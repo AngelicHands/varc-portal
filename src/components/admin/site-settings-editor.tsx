@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ImageSourceField } from "@/components/admin/image-source-field";
+import { AdminCheckbox } from "@/components/admin/admin-checkbox";
 import { saveSiteSettingsAction } from "@/lib/actions";
 import type { SiteSettingsFormValues } from "@/lib/validations/article";
 import { notifyAction } from "@/components/admin/admin-toast";
@@ -166,6 +167,36 @@ export function SiteSettingsEditor({
           another template to render those routes with the block builder.
           Category archives live at /categories/[slug].
         </p>
+      </section>
+
+      <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-5">
+        <h2 className="text-base font-semibold">Article comments</h2>
+        <p className="text-sm text-gray-600">
+          Master switch for comments on published articles. Each article still
+          needs Comments set to Open or Moderated under Access.
+        </p>
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-3 text-sm">
+          <AdminCheckbox
+            className="mt-0.5"
+            checked={Boolean(form.articleCommentsEnabled)}
+            onChange={(e) => {
+              setForm((prev) => ({
+                ...prev,
+                articleCommentsEnabled: e.target.checked,
+              }));
+              setSaved(false);
+            }}
+          />
+          <span className="min-w-0">
+            <span className="block font-medium text-gray-900">
+              Enable article comments
+            </span>
+            <span className="mt-0.5 block text-xs text-gray-500">
+              Signed-in members who can view an article may post when that
+              article allows comments.
+            </span>
+          </span>
+        </label>
       </section>
 
       <div className="flex gap-2">

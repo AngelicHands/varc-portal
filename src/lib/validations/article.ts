@@ -26,6 +26,7 @@ const articleLocaleSchema = z.object({
 const articleFormFieldsSchema = z.object({
   status: z.enum(["draft", "published"]),
   featured: z.boolean(),
+  commentsMode: z.enum(["off", "open", "moderated"]).default("off"),
   allowPublic: z.boolean().default(true),
   allowedUserIds: z.array(z.string().max(64)).max(200).default([]),
   allowedRoleKeys: z.array(z.string().trim().min(1).max(64)).max(50).default([]),
@@ -380,6 +381,7 @@ export const siteSettingsFormSchema = z
     homeTemplateKey: z.string().trim().max(100).default("home"),
     articleTemplateKey: z.string().trim().max(100).default("article"),
     categoryTemplateKey: z.string().trim().max(100).default("category"),
+    articleCommentsEnabled: z.boolean().default(false),
     locales: z.object({
       vi: siteLocaleSchema,
       en: siteLocaleSchema,

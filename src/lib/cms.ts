@@ -663,6 +663,7 @@ export function getDefaultSiteSettingsForm(): SiteSettingsFormValues {
     homeTemplateKey: "home",
     articleTemplateKey: "article",
     categoryTemplateKey: "category",
+    articleCommentsEnabled: false,
     locales: {
       vi: { ...DEFAULT_SITE_LOCALES.vi },
       en: { ...DEFAULT_SITE_LOCALES.en },
@@ -700,6 +701,7 @@ export async function getSiteSettingsFormValues(): Promise<SiteSettingsFormValue
     homeTemplateKey: doc.homeTemplateKey?.trim() || "home",
     articleTemplateKey: doc.articleTemplateKey?.trim() || "article",
     categoryTemplateKey: doc.categoryTemplateKey?.trim() || "category",
+    articleCommentsEnabled: Boolean(doc.articleCommentsEnabled),
     locales: {
       vi: mergeLocale(doc.locales?.vi, DEFAULT_SITE_LOCALES.vi),
       en: mergeLocale(doc.locales?.en, DEFAULT_SITE_LOCALES.en),

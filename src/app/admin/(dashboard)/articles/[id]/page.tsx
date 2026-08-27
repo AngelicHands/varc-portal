@@ -45,6 +45,10 @@ export default async function EditArticlePage({ params }: Props) {
         ...emptyArticleForm,
         status: article.status === "published" ? "published" : "draft",
         featured: Boolean(article.featured),
+        commentsMode:
+          article.commentsMode === "open" || article.commentsMode === "moderated"
+            ? article.commentsMode
+            : "off",
         allowPublic: article.allowPublic !== false,
         allowedUserIds: (article.allowedUserIds ?? []).map(String),
         allowedRoleKeys: (article.allowedRoleKeys ?? []).map(String),
