@@ -20,6 +20,7 @@ import {
 } from "@tiptap/extension-table"
 import { AlignedTableCell, AlignedTableHeader } from "@/components/tiptap-node/table-node/aligned-table-cell"
 import { Selection } from "@tiptap/extensions"
+import { PortalCodeBlock } from "@/components/tiptap-extension/code-block-extension"
 
 // --- UI Primitives ---
 import { Button } from "@/components/tiptap-ui-primitive/button"
@@ -310,9 +311,15 @@ function SimpleEditorClient({
     extensions: [
       StarterKit.configure({
         horizontalRule: false,
+        codeBlock: false,
         link: {
           openOnClick: false,
           enableClickSelection: true,
+        },
+      }),
+      PortalCodeBlock.configure({
+        HTMLAttributes: {
+          class: "portal-code-block",
         },
       }),
       HorizontalRule,

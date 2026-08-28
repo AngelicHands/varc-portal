@@ -8,6 +8,8 @@ import { useTiptapEditor } from "@/hooks/use-tiptap-editor"
 
 // --- Icons ---
 import { HeadingIcon } from "@/components/tiptap-icons/heading-icon"
+import { CodeBlockIcon } from "@/components/tiptap-icons/code-block-icon"
+import { TypeIcon } from "@/components/tiptap-icons/type-icon"
 
 // --- Tiptap UI ---
 import {
@@ -17,6 +19,7 @@ import {
   canToggle,
   shouldShowButton,
 } from "@/components/tiptap-ui/heading-button"
+import { canToggle as canToggleCodeBlock } from "@/components/tiptap-ui/code-block-button/use-code-block"
 
 /**
  * Configuration for the heading dropdown menu functionality
@@ -99,8 +102,15 @@ export function useHeadingDropdownMenu(config?: UseHeadingDropdownMenuConfig) {
   const [isVisible, setIsVisible] = useState(true)
 
   const activeLevel = getActiveHeadingLevel(editor, levels)
-  const isActive = isHeadingActive(editor)
-  const canToggleState = canToggle(editor)
+  const isCodeBlockActive = editor?.isActive("codeBlock") ?? false
+  const isParagraphActive =
+    Boolean(editor?.isActive("paragraph")) &&
+    !isHeadingActive(editor) &&
+    !isCodeBlockActive
+  const isActive =
+    isHeadingActive(editor) || isCodeBlockActive || isParagraphActive
+  const canToggleState =
+    canToggle(editor) || canToggleCodeBlock(editor, true)
 
   useEffect(() => {
     if (!editor) return
@@ -124,9 +134,21 @@ export function useHeadingDropdownMenu(config?: UseHeadingDropdownMenuConfig) {
     isVisible,
     activeLevel,
     isActive,
+    isCodeBlockActive,
+    isParagraphActive,
     canToggle: canToggleState,
     levels,
-    label: "Heading",
-    Icon: activeLevel ? headingIcons[activeLevel] : HeadingIcon,
+    label: isCodeBlockActive
+      ? "Code block"
+      : isParagraphActive
+        ? "Paragraph"
+        : "Heading",
+    Icon: isCodeBlockActive
+      ? CodeBlockIcon
+      : isParagraphActive
+        ? TypeIcon
+        : activeLevel
+          ? headingIcons[activeLevel]
+          : HeadingIcon,
   }
 }

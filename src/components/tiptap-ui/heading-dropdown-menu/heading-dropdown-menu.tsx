@@ -10,8 +10,12 @@ import { useTiptapEditor } from "@/hooks/use-tiptap-editor"
 
 // --- Tiptap UI ---
 import { HeadingButton } from "@/components/tiptap-ui/heading-button"
+import { CodeBlockButton } from "@/components/tiptap-ui/code-block-button"
 import type { UseHeadingDropdownMenuConfig } from "@/components/tiptap-ui/heading-dropdown-menu"
 import { useHeadingDropdownMenu } from "@/components/tiptap-ui/heading-dropdown-menu"
+
+// --- Icons ---
+import { TypeIcon } from "@/components/tiptap-icons/type-icon"
 
 // --- UI Primitives ---
 import type { ButtonProps } from "@/components/tiptap-ui-primitive/button"
@@ -59,7 +63,8 @@ export const HeadingDropdownMenu = forwardRef<
   ) => {
     const { editor } = useTiptapEditor(providedEditor)
     const [isOpen, setIsOpen] = useState<boolean>(false)
-    const { isVisible, isActive, canToggle, Icon } = useHeadingDropdownMenu({
+    const { isVisible, isActive, canToggle, Icon, isParagraphActive, isCodeBlockActive } =
+      useHeadingDropdownMenu({
       editor,
       levels,
       hideWhenUnavailable,
@@ -89,9 +94,9 @@ export const HeadingDropdownMenu = forwardRef<
             tabIndex={-1}
             disabled={!canToggle}
             data-disabled={!canToggle}
-            aria-label="Format text as heading"
+            aria-label="Format text block"
             aria-pressed={isActive}
-            tooltip="Heading"
+            tooltip="Block format"
             {...buttonProps}
             ref={ref}
           >
@@ -108,6 +113,18 @@ export const HeadingDropdownMenu = forwardRef<
 
         <DropdownMenuContent align="start">
           <DropdownMenuGroup>
+            <DropdownMenuItem asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                data-active-state={isParagraphActive ? "on" : "off"}
+                aria-pressed={isParagraphActive}
+                onClick={() => editor?.chain().focus().setNode("paragraph").run()}
+              >
+                <TypeIcon className="tiptap-button-icon" />
+                <span className="tiptap-button-text">Paragraph</span>
+              </Button>
+            </DropdownMenuItem>
             {levels.map((level) => (
               <DropdownMenuItem key={`heading-${level}`} asChild>
                 <HeadingButton
@@ -118,6 +135,15 @@ export const HeadingDropdownMenu = forwardRef<
                 />
               </DropdownMenuItem>
             ))}
+            <DropdownMenuItem asChild>
+              <CodeBlockButton
+                editor={editor}
+                text="Code block"
+                showTooltip={false}
+                data-active-state={isCodeBlockActive ? "on" : "off"}
+                aria-pressed={isCodeBlockActive}
+              />
+            </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>

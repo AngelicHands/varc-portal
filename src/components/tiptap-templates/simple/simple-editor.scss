@@ -92,6 +92,27 @@
   background: rgba(31, 107, 74, 0.12);
 }
 
+.simple-editor-content .tiptap.ProseMirror.simple-editor .portal-code-block-node-view {
+  margin: 1rem 0;
+}
+
+.simple-editor-content .tiptap.ProseMirror.simple-editor .portal-code-block-table {
+  margin: 0;
+  border-collapse: collapse;
+}
+
+.simple-editor-content .tiptap.ProseMirror.simple-editor .portal-code-block-table td,
+.simple-editor-content .tiptap.ProseMirror.simple-editor .portal-code-block-table th {
+  border: 0;
+  min-width: 0;
+  vertical-align: top;
+  background: transparent;
+}
+
+.simple-editor-content .tiptap.ProseMirror.simple-editor pre:not(.portal-code-block-code) {
+  margin: 1rem 0;
+}
+
 .image-size-menu {
   display: flex;
   flex-direction: column;

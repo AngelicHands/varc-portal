@@ -6,6 +6,8 @@ import {
   sanitizeHtml,
 } from "@/lib/html";
 import { useAttachHlsVideos } from "@/hooks/use-attach-hls-videos";
+import { useEnhanceCodeBlocks } from "@/hooks/use-enhance-code-blocks";
+import "@/styles/portal-code-block.scss";
 
 export function HtmlContent({
   html,
@@ -20,6 +22,7 @@ export function HtmlContent({
     [html],
   );
   useAttachHlsVideos(contentRef, safe);
+  useEnhanceCodeBlocks(contentRef, safe);
 
   return (
     <div

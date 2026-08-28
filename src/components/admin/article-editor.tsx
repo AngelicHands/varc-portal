@@ -32,6 +32,7 @@ import {
   useArticleSectionAsideExpanded,
   type ArticleSideSectionId,
 } from "@/components/admin/article-section-aside";
+import { CodeBlockPropertiesPanel } from "@/components/admin/code-block-properties-panel";
 import { HlsVideoPropertiesPanel } from "@/components/admin/hls-video-properties-panel";
 import { ContentAccessFields } from "@/components/admin/content-access-fields";
 import type { Editor } from "@tiptap/react";
@@ -151,7 +152,7 @@ export function ArticleEditor({
   const titleInputRef = useRef<HTMLInputElement>(null);
   const contentFieldRef = useRef<HTMLDivElement>(null);
 
-  const onHlsVideoActiveChange = useCallback((active: boolean) => {
+  const onNodePropertiesActiveChange = useCallback((active: boolean) => {
     if (!active) return;
     setArticleSectionAsideExpanded(true);
     setSideSection("properties");
@@ -337,9 +338,13 @@ export function ArticleEditor({
   const sidePanels = {
     properties: (
       <div className="grid min-w-0 content-start gap-5">
+        <CodeBlockPropertiesPanel
+          editor={contentEditor}
+          onActiveChange={onNodePropertiesActiveChange}
+        />
         <HlsVideoPropertiesPanel
           editor={contentEditor}
-          onActiveChange={onHlsVideoActiveChange}
+          onActiveChange={onNodePropertiesActiveChange}
         />
 
         <label className="flex min-w-0 cursor-pointer items-start gap-3 rounded-md border border-gray-200 bg-white px-3 py-3 text-sm">

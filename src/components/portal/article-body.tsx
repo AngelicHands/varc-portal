@@ -14,6 +14,8 @@ import {
 } from "@/lib/cover-focus";
 import { ImageLightbox } from "@/components/portal/image-lightbox";
 import { useAttachHlsVideos } from "@/hooks/use-attach-hls-videos";
+import { useEnhanceCodeBlocks } from "@/hooks/use-enhance-code-blocks";
+import "@/styles/portal-code-block.scss";
 
 type Props = {
   html: string;
@@ -116,6 +118,7 @@ export function ArticleBody({
     [html],
   );
   useAttachHlsVideos(contentRef, safe);
+  useEnhanceCodeBlocks(contentRef, safe);
   const parsedImages = useMemo(
     () => mergeImages(coverImageUrl, extractContentImages(safe)),
     [coverImageUrl, safe],
