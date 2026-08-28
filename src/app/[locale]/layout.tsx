@@ -5,9 +5,10 @@ import { getMessages, setRequestLocale } from "next-intl/server";
 import { auth } from "@/auth";
 import { routing } from "@/i18n/routing";
 import { portalLocaleFromHeaders } from "@/lib/portal-locale-server";
-import { getPublicSiteBranding, listPublicMenuLinks } from "@/lib/cms";
+import { getPublicGoogleAnalyticsConfig, getPublicSiteBranding, listPublicMenuLinks } from "@/lib/cms";
 import { isAdminRole } from "@/lib/roles";
 import { contentViewerFromSession } from "@/lib/content-access";
+import { PortalAnalytics } from "@/components/portal/portal-analytics";
 import { SiteFooter } from "@/components/portal/site-footer";
 import { SiteHeader } from "@/components/portal/site-header";
 import { LocaleAlternatesProvider } from "@/components/portal/locale-alternates";
@@ -69,10 +70,11 @@ export default async function LocaleLayout({ children, params }: Props) {
   // Parallelize independent shell work; auth is React.cache'd for page reuse.
   const [messages, session] = await Promise.all([getMessages(), auth()]);
   const viewer = contentViewerFromSession(session);
-  const [navItems, footerItems, branding] = await Promise.all([
+  const [navItems, footerItems, branding, analytics] = await Promise.all([
     listPublicMenuLinks("navigation", appLocale, viewer),
     listPublicMenuLinks("footer", appLocale, viewer),
     getPublicSiteBranding(appLocale),
+    getPublicGoogleAnalyticsConfig(),
   ]);
 
   // Prefer JWT callsign — avoid a Mongo profile round-trip on every nav.
@@ -97,7 +99,7 @@ export default async function LocaleLayout({ children, params }: Props) {
               logoUrl: branding.logoUrl || undefined,
             }}
           />
-          <main className="flex-1">{children}</main>
+          <main className="flex flex-1 flex-col">{children}</main>
           <SiteFooter
             menuItems={footerItems}
             branding={{
@@ -105,6 +107,7 @@ export default async function LocaleLayout({ children, params }: Props) {
               copyright: branding.copyright,
             }}
           />
+          <PortalAnalytics config={analytics} />
         </div>
       </LocaleAlternatesProvider>
     </NextIntlClientProvider>

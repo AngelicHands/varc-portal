@@ -12,6 +12,17 @@ const SiteLocaleSchema = new Schema(
   { _id: false },
 );
 
+const GoogleAnalyticsSchema = new Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    provider: { type: String, enum: ["ga4", "gtm"], default: "ga4" },
+    measurementId: { type: String, default: "", trim: true },
+    containerId: { type: String, default: "", trim: true },
+    debugMode: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
 const SiteSettingsSchema = new Schema(
   {
     key: {
@@ -30,6 +41,10 @@ const SiteSettingsSchema = new Schema(
     categoryTemplateKey: { type: String, default: "category", trim: true },
     /** Master switch for article comments site-wide. */
     articleCommentsEnabled: { type: Boolean, default: false },
+    googleAnalytics: {
+      type: GoogleAnalyticsSchema,
+      default: () => ({}),
+    },
     locales: {
       vi: { type: SiteLocaleSchema, required: true },
       en: { type: SiteLocaleSchema, required: true },
@@ -45,6 +60,14 @@ export type SiteLocaleContent = {
   copyright: string;
   metaTitle: string;
   metaDescription: string;
+};
+
+export type GoogleAnalyticsSettings = {
+  enabled: boolean;
+  provider: "ga4" | "gtm";
+  measurementId: string;
+  containerId: string;
+  debugMode: boolean;
 };
 
 export type SiteSettingsDocument = InferSchemaType<typeof SiteSettingsSchema> & {

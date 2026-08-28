@@ -30,6 +30,7 @@ import { Page, type PageDocument, type PageLocaleContent } from "@/models/Page";
 import {
   SITE_SETTINGS_KEY,
   SiteSettings,
+  type GoogleAnalyticsSettings,
   type SiteLocaleContent,
   type SiteSettingsDocument,
 } from "@/models/SiteSettings";
@@ -654,6 +655,31 @@ function mergeLocale(
   };
 }
 
+export function getDefaultGoogleAnalyticsSettings(): GoogleAnalyticsSettings {
+  return {
+    enabled: false,
+    provider: "ga4",
+    measurementId: "",
+    containerId: "",
+    debugMode: false,
+  };
+}
+
+function parseGoogleAnalyticsSettings(
+  raw: SiteSettingsDocument["googleAnalytics"] | null | undefined,
+): GoogleAnalyticsSettings {
+  const defaults = getDefaultGoogleAnalyticsSettings();
+  if (!raw) return defaults;
+
+  return {
+    enabled: Boolean(raw.enabled),
+    provider: raw.provider === "gtm" ? "gtm" : "ga4",
+    measurementId: raw.measurementId?.trim() ?? "",
+    containerId: raw.containerId?.trim() ?? "",
+    debugMode: Boolean(raw.debugMode),
+  };
+}
+
 export function getDefaultSiteSettingsForm(): SiteSettingsFormValues {
   return {
     logoUrl: "",
@@ -664,6 +690,7 @@ export function getDefaultSiteSettingsForm(): SiteSettingsFormValues {
     articleTemplateKey: "article",
     categoryTemplateKey: "category",
     articleCommentsEnabled: false,
+    googleAnalytics: getDefaultGoogleAnalyticsSettings(),
     locales: {
       vi: { ...DEFAULT_SITE_LOCALES.vi },
       en: { ...DEFAULT_SITE_LOCALES.en },
@@ -702,6 +729,7 @@ export async function getSiteSettingsFormValues(): Promise<SiteSettingsFormValue
     articleTemplateKey: doc.articleTemplateKey?.trim() || "article",
     categoryTemplateKey: doc.categoryTemplateKey?.trim() || "category",
     articleCommentsEnabled: Boolean(doc.articleCommentsEnabled),
+    googleAnalytics: parseGoogleAnalyticsSettings(doc.googleAnalytics),
     locales: {
       vi: mergeLocale(doc.locales?.vi, DEFAULT_SITE_LOCALES.vi),
       en: mergeLocale(doc.locales?.en, DEFAULT_SITE_LOCALES.en),
@@ -745,6 +773,21 @@ export async function getPublicSiteBranding(
       } catch {
         // Build-time prerender / transient DB outages should not crash the app.
         return empty;
+      }
+    },
+  );
+}
+
+export async function getPublicGoogleAnalyticsConfig(): Promise<GoogleAnalyticsSettings> {
+  return cacheAside(
+    CmsCacheKeys.settingsAnalytics(),
+    [CmsCacheTags.settings],
+    async () => {
+      try {
+        const doc = await getSiteSettingsDocument();
+        return parseGoogleAnalyticsSettings(doc?.googleAnalytics);
+      } catch {
+        return getDefaultGoogleAnalyticsSettings();
       }
     },
   );

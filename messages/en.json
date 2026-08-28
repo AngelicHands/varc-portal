@@ -73,6 +73,11 @@
     "galleryLoading": "Opening gallery…",
     "edit": "Edit page"
   },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you are looking for does not exist or may have been moved.",
+    "backHome": "Back to home"
+  },
   "footer": {
     "rights": "Vietnam Amateur Radio Club.",
     "menu": "Footer"

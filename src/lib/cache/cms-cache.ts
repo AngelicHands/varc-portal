@@ -30,6 +30,7 @@ export type CmsCacheTag = string;
 export const CmsCacheKeys = {
   branding: (locale: string) => `cms:branding:${locale}`,
   settings: () => "cms:settings",
+  settingsAnalytics: () => "cms:settings:analytics",
   menu: (location: string, locale: string) => `cms:menu:${location}:${locale}`,
   pageBySlug: (locale: string, slug: string) => `cms:page:${locale}:${slug}`,
   pageById: (id: string) => `cms:pageid:${id}`,

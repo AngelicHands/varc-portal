@@ -371,6 +371,125 @@ const siteLocaleSchema = z.object({
   metaDescription: z.string().trim().max(MAX_TEXT_CHARS),
 });
 
+const requireVietnameseSiteName = (
+  data: { locales: { vi: { siteName: string } } },
+  ctx: z.RefinementCtx,
+) => {
+  if (!data.locales.vi.siteName) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Vietnamese site name is required",
+      path: ["locales", "vi", "siteName"],
+    });
+  }
+};
+
+export const siteSettingsBrandingSchema = z.object({
+  logoUrl: safeUrlSchema,
+  faviconUrl: safeUrlSchema,
+  ogImageUrl: safeUrlSchema,
+});
+
+export const siteSettingsRoutesSchema = z.object({
+  /** Optional CMS page rendered at `/` instead of the hardcoded home. */
+  homePageId: z.string().trim().max(64).nullable().optional(),
+  homeTemplateKey: z.string().trim().max(100).default("home"),
+  articleTemplateKey: z.string().trim().max(100).default("article"),
+  categoryTemplateKey: z.string().trim().max(100).default("category"),
+});
+
+export const siteSettingsSiteSchema = z
+  .object({
+    locales: z.object({
+      vi: siteLocaleSchema,
+      en: siteLocaleSchema,
+    }),
+  })
+  .superRefine(requireVietnameseSiteName);
+
+const GA4_MEASUREMENT_ID_RE = /^G-[A-Z0-9]+$/;
+const GTM_CONTAINER_ID_RE = /^GTM-[A-Z0-9]+$/;
+
+export const googleAnalyticsSchema = z.object({
+  enabled: z.boolean().default(false),
+  provider: z.enum(["ga4", "gtm"]).default("ga4"),
+  measurementId: z.string().trim().max(32).default(""),
+  containerId: z.string().trim().max(32).default(""),
+  debugMode: z.boolean().default(false),
+});
+
+const validateGoogleAnalytics = (
+  data: z.infer<typeof googleAnalyticsSchema>,
+  ctx: z.RefinementCtx,
+  pathPrefix: (string | number)[] = [],
+) => {
+  if (!data.enabled) return;
+
+  const path = (...segments: (string | number)[]) => [...pathPrefix, ...segments];
+
+  if (data.provider === "ga4") {
+    const id = data.measurementId.trim();
+    if (!id) {
+      ctx.addIssue({
+        code: "custom",
+        message: "GA4 Measurement ID is required when analytics is enabled",
+        path: path("measurementId"),
+      });
+      return;
+    }
+    if (!GA4_MEASUREMENT_ID_RE.test(id)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "GA4 Measurement ID must look like G-XXXXXXXXXX",
+        path: path("measurementId"),
+      });
+    }
+    return;
+  }
+
+  const id = data.containerId.trim();
+  if (!id) {
+    ctx.addIssue({
+      code: "custom",
+      message: "GTM Container ID is required when analytics is enabled",
+      path: path("containerId"),
+    });
+    return;
+  }
+  if (!GTM_CONTAINER_ID_RE.test(id)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "GTM Container ID must look like GTM-XXXXXXX",
+      path: path("containerId"),
+    });
+  }
+};
+
+export const siteSettingsContentSchema = z
+  .object({
+    articleCommentsEnabled: z.boolean().default(false),
+    googleAnalytics: googleAnalyticsSchema,
+  })
+  .superRefine((data, ctx) => {
+    validateGoogleAnalytics(data.googleAnalytics, ctx, ["googleAnalytics"]);
+  });
+
+export type SiteSettingsSection =
+  | "site"
+  | "content"
+  | "branding"
+  | "routes";
+
+export type SiteSettingsBrandingValues = z.infer<
+  typeof siteSettingsBrandingSchema
+>;
+export type SiteSettingsRoutesValues = z.infer<typeof siteSettingsRoutesSchema>;
+export type SiteSettingsSiteValues = z.infer<typeof siteSettingsSiteSchema>;
+export type SiteSettingsContentValues = z.infer<
+  typeof siteSettingsContentSchema
+>;
+export type GoogleAnalyticsFormValues = z.infer<typeof googleAnalyticsSchema>;
+
 export const siteSettingsFormSchema = z
   .object({
     logoUrl: safeUrlSchema,
@@ -382,19 +501,15 @@ export const siteSettingsFormSchema = z
     articleTemplateKey: z.string().trim().max(100).default("article"),
     categoryTemplateKey: z.string().trim().max(100).default("category"),
     articleCommentsEnabled: z.boolean().default(false),
+    googleAnalytics: googleAnalyticsSchema,
     locales: z.object({
       vi: siteLocaleSchema,
       en: siteLocaleSchema,
     }),
   })
+  .superRefine(requireVietnameseSiteName)
   .superRefine((data, ctx) => {
-    if (!data.locales.vi.siteName) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Vietnamese site name is required",
-        path: ["locales", "vi", "siteName"],
-      });
-    }
+    validateGoogleAnalytics(data.googleAnalytics, ctx, ["googleAnalytics"]);
   });
 
 export type SiteSettingsFormValues = z.infer<typeof siteSettingsFormSchema>;

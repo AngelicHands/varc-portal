@@ -73,6 +73,11 @@
     "galleryLoading": "Đang mở gallery…",
     "edit": "Sửa trang"
   },
+  "notFound": {
+    "title": "Không tìm thấy trang",
+    "description": "Trang bạn tìm không tồn tại hoặc có thể đã được chuyển đi.",
+    "backHome": "Quay lại trang chủ"
+  },
   "footer": {
     "rights": "Hiệp hội Vô tuyến Nghiệp dư Việt Nam.",
     "menu": "Chân trang"

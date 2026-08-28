@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import mongoose from "mongoose";
 import { auth, signOut } from "@/auth";
 import { connectDb } from "@/lib/db";
+import { getSiteSettingsFormValues } from "@/lib/cms";
 import {
   canChangeUserRole,
   canManageArticles,
@@ -38,7 +39,11 @@ import {
   reorderCategoriesSchema,
   reorderMenuSchema,
   roleFormSchema,
-  siteSettingsFormSchema,
+  siteSettingsBrandingSchema,
+  siteSettingsContentSchema,
+  siteSettingsRoutesSchema,
+  siteSettingsSiteSchema,
+  type SiteSettingsSection,
   updateAdminUserSchema,
   type ArticleAutoSaveValues,
 } from "@/lib/validations/article";
@@ -2120,34 +2125,45 @@ export async function signOutAction() {
 }
 
 export async function saveSiteSettingsAction(
+  section: SiteSettingsSection,
   raw: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await requireSiteManager();
-    const parsed = siteSettingsFormSchema.safeParse(raw);
+
+    const sectionSchemas = {
+      branding: siteSettingsBrandingSchema,
+      content: siteSettingsContentSchema,
+      routes: siteSettingsRoutesSchema,
+      site: siteSettingsSiteSchema,
+    } as const;
+
+    const parsed = sectionSchemas[section].safeParse(raw);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid data" };
     }
 
-    const data = parsed.data;
+    const current = await getSiteSettingsFormValues();
+    const merged = { ...current, ...parsed.data };
+
     await connectDb();
 
     const locales = {
       vi: {
-        siteName: data.locales.vi.siteName.trim(),
-        siteTitle: data.locales.vi.siteTitle.trim(),
-        tagline: data.locales.vi.tagline.trim(),
-        copyright: data.locales.vi.copyright.trim(),
-        metaTitle: data.locales.vi.metaTitle.trim(),
-        metaDescription: data.locales.vi.metaDescription.trim(),
+        siteName: merged.locales.vi.siteName.trim(),
+        siteTitle: merged.locales.vi.siteTitle.trim(),
+        tagline: merged.locales.vi.tagline.trim(),
+        copyright: merged.locales.vi.copyright.trim(),
+        metaTitle: merged.locales.vi.metaTitle.trim(),
+        metaDescription: merged.locales.vi.metaDescription.trim(),
       },
       en: {
-        siteName: data.locales.en.siteName.trim(),
-        siteTitle: data.locales.en.siteTitle.trim(),
-        tagline: data.locales.en.tagline.trim(),
-        copyright: data.locales.en.copyright.trim(),
-        metaTitle: data.locales.en.metaTitle.trim(),
-        metaDescription: data.locales.en.metaDescription.trim(),
+        siteName: merged.locales.en.siteName.trim(),
+        siteTitle: merged.locales.en.siteTitle.trim(),
+        tagline: merged.locales.en.tagline.trim(),
+        copyright: merged.locales.en.copyright.trim(),
+        metaTitle: merged.locales.en.metaTitle.trim(),
+        metaDescription: merged.locales.en.metaDescription.trim(),
       },
     };
 
@@ -2156,17 +2172,25 @@ export async function saveSiteSettingsAction(
       {
         $set: {
           key: SITE_SETTINGS_KEY,
-          logoUrl: data.logoUrl.trim(),
-          faviconUrl: data.faviconUrl.trim(),
-          ogImageUrl: data.ogImageUrl.trim(),
+          logoUrl: merged.logoUrl.trim(),
+          faviconUrl: merged.faviconUrl.trim(),
+          ogImageUrl: merged.ogImageUrl.trim(),
           homePageId:
-            data.homePageId && mongoose.isValidObjectId(data.homePageId)
-              ? data.homePageId
+            merged.homePageId && mongoose.isValidObjectId(merged.homePageId)
+              ? merged.homePageId
               : null,
-          homeTemplateKey: data.homeTemplateKey.trim() || "home",
-          articleTemplateKey: data.articleTemplateKey.trim() || "article",
-          categoryTemplateKey: data.categoryTemplateKey.trim() || "category",
-          articleCommentsEnabled: Boolean(data.articleCommentsEnabled),
+          homeTemplateKey: merged.homeTemplateKey.trim() || "home",
+          articleTemplateKey: merged.articleTemplateKey.trim() || "article",
+          categoryTemplateKey: merged.categoryTemplateKey.trim() || "category",
+          articleCommentsEnabled: Boolean(merged.articleCommentsEnabled),
+          googleAnalytics: {
+            enabled: Boolean(merged.googleAnalytics.enabled),
+            provider:
+              merged.googleAnalytics.provider === "gtm" ? "gtm" : "ga4",
+            measurementId: merged.googleAnalytics.measurementId.trim(),
+            containerId: merged.googleAnalytics.containerId.trim(),
+            debugMode: Boolean(merged.googleAnalytics.debugMode),
+          },
           locales,
         },
       },
