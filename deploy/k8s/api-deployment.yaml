@@ -20,7 +20,7 @@ spec:
       containers:
         - name: api
           # Pin tag via .github/workflows/deploy.yml (on-demand deploy).
-          image: ghcr.io/varc-vietnam/varc-portal-api:v1.0.47
+          image: ghcr.io/varc-vietnam/varc-portal-api:v1.0.48
           imagePullPolicy: Always
           ports:
             - name: http
