@@ -13,6 +13,7 @@ import (
 	"github.com/varc-vietnam/varc-portal/apps/api/internal/cache"
 	"github.com/varc-vietnam/varc-portal/apps/api/internal/config"
 	"github.com/varc-vietnam/varc-portal/apps/api/internal/handler"
+	"github.com/varc-vietnam/varc-portal/apps/api/internal/callsign"
 	"github.com/varc-vietnam/varc-portal/apps/api/internal/middleware"
 	appmongo "github.com/varc-vietnam/varc-portal/apps/api/internal/mongo"
 	"github.com/varc-vietnam/varc-portal/apps/api/internal/qso"
@@ -64,6 +65,8 @@ func main() {
 	store := appmongo.NewStore(mongoClient.DB())
 	qsoService := qso.NewService(store, valkeyClient)
 	qsoHandler := handler.QsoHandler{Service: qsoService, Valkey: valkeyClient}
+	callsignService := callsign.NewService(store)
+	callsignHandler := handler.CallsignHandler{Service: callsignService}
 
 	router := chi.NewRouter()
 	router.Use(middleware.Recover)
@@ -87,6 +90,10 @@ func main() {
 		r.Get("/qsos/{id}", qsoHandler.Get)
 		r.Patch("/qsos/{id}", qsoHandler.Update)
 		r.Delete("/qsos/{id}", qsoHandler.Delete)
+
+		r.Get("/callsigns", callsignHandler.Search)
+		r.Get("/callsigns/stats", callsignHandler.Stats)
+		r.Get("/callsigns/{sign}", callsignHandler.Get)
 	})
 
 	server := &http.Server{

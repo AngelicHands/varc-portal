@@ -1,5 +1,5 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
-import { API_TOKEN_SCOPES } from "@/lib/api-token";
+import { API_TOKEN_QSO_SCOPES, API_TOKEN_SCOPES } from "@/lib/api-token";
 
 const ApiTokenSchema = new Schema(
   {
@@ -14,7 +14,7 @@ const ApiTokenSchema = new Schema(
     tokenHash: { type: String, required: true },
     scopes: {
       type: [String],
-      default: () => [...API_TOKEN_SCOPES],
+      default: () => [...API_TOKEN_QSO_SCOPES],
       validate: {
         validator: (values: string[]) =>
           values.length > 0 &&

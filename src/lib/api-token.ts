@@ -1,8 +1,28 @@
 import { createHmac, randomBytes } from "crypto";
+import {
+  API_TOKEN_CALLSIGN_SCOPES,
+  API_TOKEN_QSO_SCOPES,
+  API_TOKEN_SCOPES,
+  availableApiTokenScopes,
+  defaultApiTokenScopes,
+  isApiTokenScope,
+  resolveApiTokenScopes,
+  type ApiTokenScope,
+} from "@/lib/api-token-scopes";
+
+export {
+  API_TOKEN_CALLSIGN_SCOPES,
+  API_TOKEN_QSO_SCOPES,
+  API_TOKEN_SCOPES,
+  availableApiTokenScopes,
+  defaultApiTokenScopes,
+  isApiTokenScope,
+  resolveApiTokenScopes,
+  type ApiTokenScope,
+};
 
 export const API_TOKEN_PREFIX = "varc_";
 export const API_TOKEN_PREFIX_LENGTH = 12;
-export const API_TOKEN_SCOPES = ["qso:read", "qso:write"] as const;
 export const MAX_API_TOKENS_PER_USER = 10;
 
 export function getApiTokenPepper(): string {

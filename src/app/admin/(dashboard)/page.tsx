@@ -6,6 +6,7 @@ import { listCategories, listMenuItemsAdmin, listPages } from "@/lib/cms";
 import { countMedia } from "@/lib/media/library";
 import { connectDb } from "@/lib/db";
 import {
+  canManageCallsigns,
   canManageEditorial,
   canManagePages,
   canManageRoles,
@@ -107,6 +108,7 @@ export default async function AdminDashboardPage() {
   const showEditorial = canManageEditorial(user);
   const showPages = canManagePages(user);
   const showSite = canManageSite(user);
+  const showCallsigns = canManageCallsigns(user);
   const showUsers = canManageUsers(user);
   const showRoles = canManageRoles(user);
 
@@ -119,7 +121,7 @@ export default async function AdminDashboardPage() {
       showSite ? listMenuItemsAdmin() : Promise.resolve([]),
       showUsers ? User.countDocuments() : Promise.resolve(0),
       showEditorial ? countMedia() : Promise.resolve(0),
-      showSite ? Callsign.countDocuments() : Promise.resolve(0),
+      showCallsigns ? Callsign.countDocuments() : Promise.resolve(0),
     ]);
 
   const cards = [
@@ -177,7 +179,7 @@ export default async function AdminDashboardPage() {
           icon: CARD_ICONS.pages,
         }
       : null,
-    showSite
+    showCallsigns
       ? {
           href: "/admin/callsigns",
           title: "Callsigns",

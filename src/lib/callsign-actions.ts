@@ -17,7 +17,7 @@ import {
   callsignFormSchema,
   callsignLicenseSchema,
 } from "@/lib/validations/callsigns";
-import { canManageSite, isAdminRole } from "@/lib/roles";
+import { canManageCallsigns, isAdminRole } from "@/lib/roles";
 import { failAction } from "@/lib/safe-error";
 
 async function requireCallsignManager() {
@@ -25,7 +25,7 @@ async function requireCallsignManager() {
   if (!session?.user?.id || !isAdminRole(session.user)) {
     throw new Error("Unauthorized");
   }
-  if (!canManageSite(session.user)) {
+  if (!canManageCallsigns(session.user)) {
     throw new Error("Forbidden");
   }
   return session;

@@ -1,6 +1,6 @@
-# VARC QSO REST API
+# VARC REST API
 
-Standalone Go service (`apps/api`) for external QSO logbook access. Uses the same MongoDB database and `.env` as the portal.
+Standalone Go service (`apps/api`) for external QSO logbook access and Vietnam callsign directory lookup. Uses the same MongoDB database and `.env` as the portal.
 
 **Interactive documentation:** [https://api.hamvn.com/docs](https://api.hamvn.com/docs) (local: [http://localhost:3100/docs](http://localhost:3100/docs))
 
@@ -50,6 +50,13 @@ Base URL: `API_PUBLIC_URL` (default `http://localhost:3100`).
 | GET | `/v1/qsos/:id` | `qso:read` |
 | PATCH | `/v1/qsos/:id` | `qso:write` |
 | DELETE | `/v1/qsos/:id` | `qso:write` |
+| GET | `/v1/callsigns` | `callsign:read` |
+| GET | `/v1/callsigns/stats` | `callsign:read` |
+| GET | `/v1/callsigns/:sign` | `callsign:read` |
+
+New tokens include `qso:read` and `qso:write` by default. `callsign:read` and `callsign:write` are added only for **Setup Admin** and **Administrator** accounts (and can be toggled off when creating a token). Editors, readers, and guests cannot use callsign endpoints (403 even if a token somehow lists the scope). Existing tokens keep their previous scopes until recreated.
+
+Callsign **admin** import/create/update/delete remains available in the portal at `/admin/callsigns` (same administrator gate). REST mutations require `callsign:write` when those endpoints are used.
 
 ### List QSOs
 
@@ -143,6 +150,40 @@ Notes:
 - API-created QSOs use `source: "api"`.
 - **No confirmation emails** are sent for API create/update (portal logbook only).
 
+### Search callsigns
+
+Requires scope `callsign:read` **and** token owner role Setup Admin or Administrator.
+Matches the public portal directory (`/callsigns`).
+
+```bash
+curl -sS -H "Authorization: Bearer $VARC_TOKEN" \
+  "http://localhost:3100/v1/callsigns?q=XV1&page=1&pageSize=30"
+```
+
+| Param | Default | Max | Notes |
+|-------|---------|-----|-------|
+| `q` | — | 80 chars | Callsign prefix, operator name, or permit digits |
+| `page` | `1` | — | 1-based |
+| `pageSize` | `30` | `100` | Items per page |
+
+Empty `q` returns `{ "ok": true, "items": [], … }` with `total: 0`.
+
+### Callsign stats
+
+```bash
+curl -sS -H "Authorization: Bearer $VARC_TOKEN" \
+  http://localhost:3100/v1/callsigns/stats
+```
+
+### Get callsign detail
+
+```bash
+curl -sS -H "Authorization: Bearer $VARC_TOKEN" \
+  http://localhost:3100/v1/callsigns/XV1A
+```
+
+Response includes `callsign.licenses` (newest license events first).
+
 ## Rate limiting
 
 Rate limits use Valkey sliding windows (fixed window via `INCR` + TTL). They apply only to **`/v1/*`** routes. `/health`, `/docs`, and `/openapi.yaml` are not rate limited.
@@ -196,14 +237,14 @@ Ham public profile caches use `qso:tag:ham:{callsign}`. API create/update/delete
 
 ### Auth token cache
 
-After a successful Bearer verify, the API caches metadata (never the plaintext token):
+After a successful Bearer verify, the API caches token **identity** metadata (hash, id, prefix — never the plaintext token) to speed up lookup. **Scopes and the owner’s role are always re-read from MongoDB on every request**, so permission or role changes take effect on the next API call without waiting for cache TTL.
 
 | Key pattern | TTL | Invalidated by |
 |-------------|-----|----------------|
-| `api:auth:token:{tokenId}` | 90s (default) | Portal revoke, API restart flush |
-| `api:auth:prefix:{tokenPrefix}` | 90s (default) | Portal revoke, API restart flush |
+| `api:auth:token:{tokenId}` | 90s (default) | Portal revoke, scope update, role change, API restart flush |
+| `api:auth:prefix:{tokenPrefix}` | 90s (default) | Portal revoke, scope update, role change, API restart flush |
 
-HMAC verification still runs on every request. Revoking a token in **Account → Security** deletes both cache keys immediately.
+HMAC verification still runs on every request. Updating token permissions or changing a user’s role clears related cache keys immediately.
 
 On API startup, all `api:auth:*` keys are flushed by default (`API_AUTH_CACHE_FLUSH_ON_START=true`).
 

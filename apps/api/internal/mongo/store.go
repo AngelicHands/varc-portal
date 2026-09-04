@@ -92,19 +92,61 @@ type QsoLog struct {
 type User struct {
 	ID       primitive.ObjectID `bson:"_id"`
 	Callsign string             `bson:"callsign"`
+	Role     string             `bson:"role"`
+}
+
+type Callsign struct {
+	ID                 primitive.ObjectID   `bson:"_id,omitempty"`
+	Sign               string               `bson:"sign"`
+	PrefixFamily       string               `bson:"prefixFamily"`
+	AreaDigit          *string              `bson:"areaDigit,omitempty"`
+	OperatorIds        []primitive.ObjectID `bson:"operatorIds,omitempty"`
+	LatestLicenseID    *primitive.ObjectID  `bson:"latestLicenseId,omitempty"`
+	EventCount         int                  `bson:"eventCount"`
+	SearchNames        []string             `bson:"searchNames,omitempty"`
+	SearchPermits      []string             `bson:"searchPermits,omitempty"`
+	LatestOperatorName string               `bson:"latestOperatorName"`
+	LatestIssuedAt     *time.Time           `bson:"latestIssuedAt,omitempty"`
+	LatestExpiresAt    *time.Time           `bson:"latestExpiresAt,omitempty"`
+	LatestPermitRaw    string               `bson:"latestPermitRaw"`
+	LatestStatus       string               `bson:"latestStatus"`
+}
+
+type CallsignLicense struct {
+	ID           primitive.ObjectID   `bson:"_id,omitempty"`
+	ImportKey    string               `bson:"importKey"`
+	Stt          int                  `bson:"stt"`
+	OperatorID   primitive.ObjectID   `bson:"operatorId"`
+	OperatorName string               `bson:"operatorName"`
+	CallsignIds  []primitive.ObjectID `bson:"callsignIds,omitempty"`
+	CallsignRaw  string               `bson:"callsignRaw"`
+	Callsigns    []string             `bson:"callsigns,omitempty"`
+	PermitRaw    string               `bson:"permitRaw"`
+	PermitNumber string               `bson:"permitNumber"`
+	PermitType   string               `bson:"permitType"`
+	RenewalIndex *int                 `bson:"renewalIndex,omitempty"`
+	IssuedAt     *time.Time           `bson:"issuedAt,omitempty"`
+	ExpiresAt    *time.Time           `bson:"expiresAt,omitempty"`
+	Status       string               `bson:"status"`
+	Notes        string               `bson:"notes"`
+	Flags        []string             `bson:"flags,omitempty"`
 }
 
 type Store struct {
-	tokens *mongo.Collection
-	qsos   *mongo.Collection
-	users  *mongo.Collection
+	tokens           *mongo.Collection
+	qsos             *mongo.Collection
+	users            *mongo.Collection
+	callsigns        *mongo.Collection
+	callsignLicenses *mongo.Collection
 }
 
 func NewStore(db *mongo.Database) *Store {
 	return &Store{
-		tokens: db.Collection("apitokens"),
-		qsos:   db.Collection("qsologs"),
-		users:  db.Collection("users"),
+		tokens:           db.Collection("apitokens"),
+		qsos:             db.Collection("qsologs"),
+		users:            db.Collection("users"),
+		callsigns:        db.Collection("callsigns"),
+		callsignLicenses: db.Collection("callsignlicenses"),
 	}
 }
 
@@ -112,9 +154,36 @@ func (s *Store) Qsos() *mongo.Collection {
 	return s.qsos
 }
 
+func (s *Store) Callsigns() *mongo.Collection {
+	return s.callsigns
+}
+
+func (s *Store) CallsignLicenses() *mongo.Collection {
+	return s.callsignLicenses
+}
+
 func (s *Store) FindActiveTokenByPrefix(ctx context.Context, prefix string) (*ApiToken, error) {
 	filter := bson.M{
 		"tokenPrefix": prefix,
+		"$or": []bson.M{
+			{"revokedAt": nil},
+			{"revokedAt": bson.M{"$exists": false}},
+		},
+	}
+	var doc ApiToken
+	err := s.tokens.FindOne(ctx, filter).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+func (s *Store) FindActiveTokenByID(ctx context.Context, id primitive.ObjectID) (*ApiToken, error) {
+	filter := bson.M{
+		"_id": id,
 		"$or": []bson.M{
 			{"revokedAt": nil},
 			{"revokedAt": bson.M{"$exists": false}},
@@ -146,4 +215,16 @@ func (s *Store) UserCallsign(ctx context.Context, userID primitive.ObjectID) (st
 		return "", err
 	}
 	return user.Callsign, nil
+}
+
+func (s *Store) UserRole(ctx context.Context, userID primitive.ObjectID) (string, error) {
+	var user User
+	err := s.users.FindOne(ctx, bson.M{"_id": userID}, options.FindOne().SetProjection(bson.M{"role": 1})).Decode(&user)
+	if err == mongo.ErrNoDocuments {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return user.Role, nil
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import {
   canManageEditorial,
   canManageImportExport,
+  canManageCallsigns,
   canManagePages,
   canManageSite,
   canManageUsers,
@@ -29,6 +30,14 @@ export async function requireEditorialPage() {
 export async function requireImportExportPage() {
   const session = await requireAdminPage();
   if (!canManageImportExport(session.user)) {
+    redirect("/admin");
+  }
+  return session;
+}
+
+export async function requireCallsignsPage() {
+  const session = await requireAdminPage();
+  if (!canManageCallsigns(session.user)) {
     redirect("/admin");
   }
   return session;

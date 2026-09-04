@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireSiteAdminApi } from "@/lib/admin-api";
+import { requireCallsignAdminApi } from "@/lib/admin-api";
 import { type CallsignListFilters } from "@/lib/callsigns-admin";
 import {
   parseOperatorKindFilter,
@@ -30,7 +30,7 @@ function parseFilters(input: {
 }
 
 export async function POST(request: Request) {
-  const session = await requireSiteAdminApi();
+  const session = await requireCallsignAdminApi();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

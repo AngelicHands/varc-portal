@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { requireSitePage } from "@/lib/admin-access";
+import { requireCallsignsPage } from "@/lib/admin-access";
 import { deleteCallsignAction } from "@/lib/callsign-actions";
 import {
   getCallsignImportSummary,
@@ -33,7 +33,7 @@ type Props = {
 };
 
 export default async function AdminCallsignsPage({ searchParams }: Props) {
-  await requireSitePage();
+  await requireCallsignsPage();
   const params = await searchParams;
   const query = (params.q ?? "").trim();
   const operatorKind = parseOperatorKindFilter(params.operatorKind);

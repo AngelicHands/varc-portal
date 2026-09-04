@@ -48,6 +48,7 @@ export function AdminFunctionSearch({
   className = "",
   showEditorial,
   showImportExport,
+  showCallsigns,
   showPages,
   showSite,
   showUsers,
@@ -67,6 +68,7 @@ export function AdminFunctionSearch({
       getVisibleAdminFunctions({
         showEditorial,
         showImportExport,
+        showCallsigns,
         showPages,
         showSite,
         showUsers,
@@ -75,6 +77,7 @@ export function AdminFunctionSearch({
     [
       showEditorial,
       showImportExport,
+      showCallsigns,
       showPages,
       showSite,
       showUsers,

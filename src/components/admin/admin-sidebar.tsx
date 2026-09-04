@@ -45,6 +45,7 @@ type NavFlag =
   | "always"
   | "editorial"
   | "importExport"
+  | "callsigns"
   | "pages"
   | "site"
   | "backgroundJobs"
@@ -221,7 +222,7 @@ const navGroups: NavGroup[] = [
       {
         href: "/admin/callsigns",
         label: "Callsigns",
-        flag: "site",
+        flag: "callsigns",
         icon: (
           <Icon>
             <circle cx="12" cy="12" r="3" />
@@ -335,6 +336,7 @@ function isLinkVisible(
   flags: {
     showEditorial: boolean;
     showImportExport: boolean;
+    showCallsigns: boolean;
     showPages: boolean;
     showSite: boolean;
     showUsers: boolean;
@@ -343,6 +345,7 @@ function isLinkVisible(
 ) {
   if (link.flag === "editorial") return flags.showEditorial;
   if (link.flag === "importExport") return flags.showImportExport;
+  if (link.flag === "callsigns") return flags.showCallsigns;
   if (link.flag === "pages") return flags.showPages;
   if (link.flag === "site") return flags.showSite;
   if (link.flag === "backgroundJobs") {
@@ -356,6 +359,7 @@ function isLinkVisible(
 type Props = {
   showEditorial: boolean;
   showImportExport: boolean;
+  showCallsigns: boolean;
   showPages: boolean;
   showSite: boolean;
   showUsers: boolean;
@@ -369,6 +373,7 @@ type Props = {
 export function AdminSidebar({
   showEditorial,
   showImportExport,
+  showCallsigns,
   showPages,
   showSite,
   showUsers,
@@ -397,6 +402,7 @@ export function AdminSidebar({
         isLinkVisible(link, {
           showEditorial,
           showImportExport,
+          showCallsigns,
           showPages,
           showSite,
           showUsers,
@@ -532,6 +538,7 @@ export function AdminSidebar({
           compact
           showEditorial={showEditorial}
           showImportExport={showImportExport}
+          showCallsigns={showCallsigns}
           showPages={showPages}
           showSite={showSite}
           showUsers={showUsers}

@@ -2,6 +2,7 @@ export type AdminNavFlag =
   | "always"
   | "editorial"
   | "importExport"
+  | "callsigns"
   | "pages"
   | "site"
   | "backgroundJobs"
@@ -11,6 +12,7 @@ export type AdminNavFlag =
 export type AdminNavVisibility = {
   showEditorial: boolean;
   showImportExport: boolean;
+  showCallsigns: boolean;
   showPages: boolean;
   showSite: boolean;
   showUsers: boolean;
@@ -124,7 +126,7 @@ export const adminNavGroups: AdminNavGroup[] = [
         href: "/admin/callsigns",
         label: "Callsigns",
         description: "Manage ham radio operator callsign records.",
-        flag: "site",
+        flag: "callsigns",
         keywords: ["ham", "radio", "operators"],
       },
       {
@@ -257,6 +259,7 @@ export function isAdminNavItemVisible(
 ): boolean {
   if (item.flag === "editorial") return flags.showEditorial;
   if (item.flag === "importExport") return flags.showImportExport;
+  if (item.flag === "callsigns") return flags.showCallsigns;
   if (item.flag === "pages") return flags.showPages;
   if (item.flag === "site") return flags.showSite;
   if (item.flag === "backgroundJobs") {

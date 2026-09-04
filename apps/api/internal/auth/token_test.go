@@ -13,14 +13,20 @@ func TestHashTokenDeterministic(t *testing.T) {
 	}
 }
 
-func TestConstantTimeEqual(t *testing.T) {
-	if !constantTimeEqual("abc", "abc") {
-		t.Fatalf("expected equal strings to match")
+func TestCanManageCallsigns(t *testing.T) {
+	cases := map[string]bool{
+		"setup_admin":   true,
+		"administrator": true,
+		"system_admin":  true, // legacy
+		"editor":        false,
+		"reader":        false,
+		"user":          false, // legacy reader
+		"":              false,
+		"guest":         false,
 	}
-	if constantTimeEqual("abc", "abd") {
-		t.Fatalf("expected different strings to mismatch")
-	}
-	if constantTimeEqual("abc", "ab") {
-		t.Fatalf("expected different lengths to mismatch")
+	for role, want := range cases {
+		if got := CanManageCallsigns(role); got != want {
+			t.Fatalf("CanManageCallsigns(%q)=%v want %v", role, got, want)
+		}
 	}
 }

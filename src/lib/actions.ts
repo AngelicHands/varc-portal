@@ -140,6 +140,7 @@ import {
   type CmsCacheTag,
 } from "@/lib/cache/cms-cache";
 import { invalidateQsoAndHamCache } from "@/lib/cache/qso-cache";
+import { invalidateApiAuthCacheForUser } from "@/lib/cache/api-auth-cache";
 
 async function loadMenuParentRefs(location: "navigation" | "footer") {
   const docs = await MenuItem.find({ location, ...notDeletedFilter })
@@ -1923,6 +1924,7 @@ export async function updateUserRoleAction(
 
     user.role = nextRole;
     await user.save();
+    await invalidateApiAuthCacheForUser(userId);
     return { ok: true };
   } catch (error) {
     return failAction(error, "Failed to update role");

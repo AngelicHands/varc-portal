@@ -21,12 +21,25 @@ var ErrUnauthorized = errors.New("unauthorized")
 type Principal struct {
 	UserID  string
 	TokenID string
+	Role    string
 	Scopes  map[string]struct{}
 }
 
 func HasScope(p Principal, scope string) bool {
 	_, ok := p.Scopes[scope]
 	return ok
+}
+
+// CanManageCallsigns mirrors portal canManageCallsigns: Setup Admin / Administrator only.
+func CanManageCallsigns(role string) bool {
+	key := strings.ToLower(strings.TrimSpace(role))
+	switch key {
+	case "system_admin":
+		key = "setup_admin"
+	case "user":
+		key = "reader"
+	}
+	return key == "setup_admin" || key == "administrator"
 }
 
 func HashToken(token, pepper string) string {
@@ -44,6 +57,38 @@ func constantTimeEqual(a, b string) bool {
 		diff |= a[i] ^ b[i]
 	}
 	return diff == 0
+}
+
+func scopesFromDoc(scopes []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(scopes))
+	for _, scope := range scopes {
+		out[scope] = struct{}{}
+	}
+	return out
+}
+
+func tokenStillValid(doc *appmongo.ApiToken) bool {
+	if doc == nil {
+		return false
+	}
+	if doc.RevokedAt != nil && !doc.RevokedAt.IsZero() {
+		return false
+	}
+	if doc.ExpiresAt != nil && doc.ExpiresAt.Before(time.Now().UTC()) {
+		return false
+	}
+	return true
+}
+
+func cacheEntryExpired(entry *cache.AuthCacheEntry) bool {
+	if entry == nil || entry.ExpiresAt == nil {
+		return false
+	}
+	parsed, err := time.Parse(time.RFC3339, *entry.ExpiresAt)
+	if err != nil {
+		return false
+	}
+	return parsed.Before(time.Now().UTC())
 }
 
 func AuthenticateBearer(
@@ -64,38 +109,46 @@ func AuthenticateBearer(
 	prefix := token[:TokenPrefixLength]
 	expected := HashToken(token, pepper)
 
+	var doc *appmongo.ApiToken
+
+	// Cache accelerates locating the token id after hash check. Scopes and role are
+	// always read from Mongo so permission updates apply on the next request.
 	if valkey != nil && valkey.Available() {
 		if entry, err := cache.GetAuthCacheByPrefix(ctx, valkey, prefix); err == nil && entry != nil {
-			if principal, ok := principalFromCacheEntry(entry, expected); ok {
-				if oid, err := primitive.ObjectIDFromHex(entry.TokenID); err == nil {
-					go store.TouchTokenLastUsed(context.Background(), oid)
+			if entry.RevokedAt != nil || cacheEntryExpired(entry) || !constantTimeEqual(expected, entry.TokenHash) {
+				cache.DeleteAuthCache(ctx, valkey, entry.TokenID, prefix)
+			} else if oid, err := primitive.ObjectIDFromHex(entry.TokenID); err == nil {
+				fresh, findErr := store.FindActiveTokenByID(ctx, oid)
+				if findErr != nil {
+					return Principal{}, ErrUnauthorized
 				}
-				return principal, nil
+				if tokenStillValid(fresh) && constantTimeEqual(expected, fresh.TokenHash) {
+					doc = fresh
+				} else {
+					cache.DeleteAuthCache(ctx, valkey, entry.TokenID, prefix)
+				}
 			}
 		}
 	}
 
-	doc, err := store.FindActiveTokenByPrefix(ctx, prefix)
-	if err != nil || doc == nil {
-		return Principal{}, ErrUnauthorized
-	}
-	if !constantTimeEqual(expected, doc.TokenHash) {
-		return Principal{}, ErrUnauthorized
-	}
-	if doc.RevokedAt != nil && !doc.RevokedAt.IsZero() {
-		return Principal{}, ErrUnauthorized
-	}
-	if doc.ExpiresAt != nil && doc.ExpiresAt.Before(time.Now().UTC()) {
-		return Principal{}, ErrUnauthorized
+	if doc == nil {
+		found, err := store.FindActiveTokenByPrefix(ctx, prefix)
+		if err != nil || found == nil {
+			return Principal{}, ErrUnauthorized
+		}
+		if !constantTimeEqual(expected, found.TokenHash) || !tokenStillValid(found) {
+			return Principal{}, ErrUnauthorized
+		}
+		doc = found
 	}
 
-	scopes := make(map[string]struct{}, len(doc.Scopes))
-	for _, scope := range doc.Scopes {
-		scopes[scope] = struct{}{}
+	role, err := store.UserRole(ctx, doc.UserID)
+	if err != nil {
+		return Principal{}, ErrUnauthorized
 	}
 
 	if valkey != nil && valkey.Available() && authCacheTTL > 0 {
-		cache.SetAuthCache(ctx, valkey, cacheEntryFromDoc(doc, prefix), authCacheTTL)
+		cache.SetAuthCache(ctx, valkey, cacheEntryFromDoc(doc, prefix, role), authCacheTTL)
 	}
 
 	go store.TouchTokenLastUsed(context.Background(), doc.ID)
@@ -103,40 +156,18 @@ func AuthenticateBearer(
 	return Principal{
 		UserID:  doc.UserID.Hex(),
 		TokenID: doc.ID.Hex(),
-		Scopes:  scopes,
+		Role:    role,
+		Scopes:  scopesFromDoc(doc.Scopes),
 	}, nil
 }
 
-func principalFromCacheEntry(entry *cache.AuthCacheEntry, expectedHash string) (Principal, bool) {
-	if entry == nil || entry.RevokedAt != nil {
-		return Principal{}, false
-	}
-	if !constantTimeEqual(expectedHash, entry.TokenHash) {
-		return Principal{}, false
-	}
-	if entry.ExpiresAt != nil {
-		parsed, err := time.Parse(time.RFC3339, *entry.ExpiresAt)
-		if err == nil && parsed.Before(time.Now().UTC()) {
-			return Principal{}, false
-		}
-	}
-	scopes := make(map[string]struct{}, len(entry.Scopes))
-	for _, scope := range entry.Scopes {
-		scopes[scope] = struct{}{}
-	}
-	return Principal{
-		UserID:  entry.UserID,
-		TokenID: entry.TokenID,
-		Scopes:  scopes,
-	}, true
-}
-
-func cacheEntryFromDoc(doc *appmongo.ApiToken, prefix string) cache.AuthCacheEntry {
+func cacheEntryFromDoc(doc *appmongo.ApiToken, prefix, role string) cache.AuthCacheEntry {
 	entry := cache.AuthCacheEntry{
 		TokenID:     doc.ID.Hex(),
 		TokenPrefix: prefix,
 		UserID:      doc.UserID.Hex(),
 		TokenHash:   doc.TokenHash,
+		Role:        role,
 		Scopes:      doc.Scopes,
 	}
 	if doc.ExpiresAt != nil {

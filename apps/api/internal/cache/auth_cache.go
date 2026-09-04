@@ -20,6 +20,7 @@ type AuthCacheEntry struct {
 	TokenPrefix string   `json:"tokenPrefix"`
 	UserID      string   `json:"userId"`
 	TokenHash   string   `json:"tokenHash"`
+	Role        string   `json:"role,omitempty"`
 	Scopes      []string `json:"scopes"`
 	ExpiresAt   *string  `json:"expiresAt,omitempty"`
 	RevokedAt   *string  `json:"revokedAt,omitempty"`

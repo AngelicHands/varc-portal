@@ -2,6 +2,7 @@ import { auth, signOut } from "@/auth";
 import {
   canManageEditorial,
   canManageImportExport,
+  canManageCallsigns,
   canManagePages,
   canManageRoles,
   canManageSite,
@@ -23,6 +24,7 @@ export default async function AdminDashboardLayout({
   const callsign = user?.callsign?.trim() ?? "";
   const showEditorial = canManageEditorial(user);
   const showImportExport = canManageImportExport(user);
+  const showCallsigns = canManageCallsigns(user);
   const showPages = canManagePages(user);
   const showSite = canManageSite(user);
   const showUsers = canManageUsers(user);
@@ -41,6 +43,7 @@ export default async function AdminDashboardLayout({
       <AdminSidebar
         showEditorial={showEditorial}
         showImportExport={showImportExport}
+        showCallsigns={showCallsigns}
         showPages={showPages}
         showSite={showSite}
         showUsers={showUsers}
@@ -56,6 +59,7 @@ export default async function AdminDashboardLayout({
           <AdminFunctionSearch
             showEditorial={showEditorial}
             showImportExport={showImportExport}
+            showCallsigns={showCallsigns}
             showPages={showPages}
             showSite={showSite}
             showUsers={showUsers}

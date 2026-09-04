@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireSitePage } from "@/lib/admin-access";
+import { requireCallsignsPage } from "@/lib/admin-access";
 import { getAdminCallsign } from "@/lib/callsigns-admin";
 import { CallsignEditor } from "@/components/admin/callsign-editor";
 
@@ -9,7 +9,7 @@ type Props = {
 };
 
 export default async function EditCallsignPage({ params }: Props) {
-  await requireSitePage();
+  await requireCallsignsPage();
   const { sign } = await params;
   const record = await getAdminCallsign(sign);
   if (!record) notFound();

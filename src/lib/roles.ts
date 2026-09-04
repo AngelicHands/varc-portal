@@ -51,8 +51,7 @@ export const ROLE_PERMISSION_CATEGORIES: Array<{
   {
     key: "canManageSite",
     label: "Site",
-    description:
-      "Menus, settings, backup, mailbox, forms, templates, and callsigns",
+    description: "Menus, settings, backup, mailbox, forms, and templates",
   },
   {
     key: "canManageUsers",
@@ -255,12 +254,8 @@ export function canManageSite(source?: CapabilitySource): boolean {
   return resolveCapabilities(source).canManageSite;
 }
 
-export function canManageCallsigns(source?: CapabilitySource): boolean {
-  return canManageSite(source);
-}
-
-/** GitHub CMS import/export — Setup Admin and Administrator only. */
-export function canManageImportExport(source?: CapabilitySource): boolean {
+/** Setup Admin and Administrator only (not editor / reader / guest). */
+export function isAdministratorRole(source?: CapabilitySource): boolean {
   const role =
     isCapabilityObject(source) && source.role != null
       ? source.role
@@ -269,6 +264,16 @@ export function canManageImportExport(source?: CapabilitySource): boolean {
         : null;
   const key = normalizeRoleKey(role);
   return key === "setup_admin" || key === "administrator";
+}
+
+/** Callsign directory admin + API — Setup Admin and Administrator only. */
+export function canManageCallsigns(source?: CapabilitySource): boolean {
+  return isAdministratorRole(source);
+}
+
+/** GitHub CMS import/export — Setup Admin and Administrator only. */
+export function canManageImportExport(source?: CapabilitySource): boolean {
+  return isAdministratorRole(source);
 }
 
 /**

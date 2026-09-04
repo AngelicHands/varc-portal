@@ -1,12 +1,28 @@
 openapi: 3.1.0
 info:
   title: HAMVN API documentation
-  version: 1.0.0
+  version: 1.1.0
   description: |
-    REST API for external QSO logbook access. Create API tokens in the portal under
-    **Account → Security → API tokens**.
+    REST API for external QSO logbook access and Vietnam callsign directory lookup.
+    Create API tokens in the portal under **Account → Security → API tokens**.
 
     Interactive documentation: `/docs`
+
+    ## Scopes
+
+    | Scope | Access |
+    |-------|--------|
+    | `qso:read` | List and read your QSOs |
+    | `qso:write` | Create, update, delete your QSOs |
+    | `callsign:read` | Search and read the callsign license directory (**Setup Admin / Administrator only**) |
+    | `callsign:write` | Manage callsign directory records (**Setup Admin / Administrator only**) |
+
+    New tokens get `qso:read` and `qso:write` by default. Callsign scopes are included only when
+    the token owner is Setup Admin or Administrator. Editors, readers, and guests cannot obtain
+    or use callsign API access. Callsign endpoints also re-check the owner's current role at
+    request time (403 if demoted). Directory mutations via REST require `callsign:write` when
+    those endpoints are used; portal admin at `/admin/callsigns` remains available with the same
+    role gate.
 
     ## Rate limiting
 
@@ -33,6 +49,10 @@ servers:
 tags:
   - name: Health
   - name: QSOs
+  - name: Callsigns
+    description: |
+      Vietnam callsign license directory (read-only). Requires `callsign:read` and a
+      Setup Admin or Administrator token owner.
 
 security:
   - bearerAuth: []
@@ -223,6 +243,117 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /v1/callsigns:
+    get:
+      tags: [Callsigns]
+      summary: Search callsigns
+      description: |
+        Search the Vietnam callsign license directory by callsign prefix, operator name,
+        or permit number. Same matching rules as the public portal directory.
+        Empty `q` returns an empty result set (not an error).
+
+        **Permission:** token must include `callsign:read` and the owner must be
+        Setup Admin or Administrator (editors/readers/guests receive 403).
+      operationId: searchCallsigns
+      security:
+        - bearerAuth: [callsign:read]
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 80
+          description: |
+            Search query. Matches callsign prefix (normalized uppercase), folded operator
+            names, and permit digits (leading zeros stripped).
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: 1-based page index
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+          description: Items per page (max 100)
+      responses:
+        "200":
+          description: Paginated callsign search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallsignSearchResult"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/callsigns/stats:
+    get:
+      tags: [Callsigns]
+      summary: Callsign directory stats
+      description: Aggregate counts for the public callsign directory. Same permission rules as search.
+      operationId: getCallsignStats
+      security:
+        - bearerAuth: [callsign:read]
+      responses:
+        "200":
+          description: Directory statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallsignStatsResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/callsigns/{sign}:
+    parameters:
+      - $ref: "#/components/parameters/callsignSign"
+    get:
+      tags: [Callsigns]
+      summary: Get callsign detail
+      description: |
+        Returns a callsign and its license history (newest first), matching the public
+        portal detail page. Same permission rules as search.
+      operationId: getCallsign
+      security:
+        - bearerAuth: [callsign:read]
+      responses:
+        "200":
+          description: Callsign detail with licenses
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallsignDetailResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -231,8 +362,18 @@ components:
       bearerFormat: varc_
       description: |
         API token from the portal (Account → Security). Format: `Bearer varc_…`
+        Required scopes depend on the operation (`qso:read`, `qso:write`, `callsign:read`, `callsign:write`).
 
   parameters:
+    callsignSign:
+      name: sign
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 20
+      description: Callsign (case-insensitive; non-alphanumeric characters stripped)
     qsoId:
       name: id
       in: path
@@ -346,7 +487,7 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     NotFound:
-      description: QSO not found (or not owned by token user)
+      description: Resource not found (QSO not owned by token user, or unknown callsign)
       content:
         application/json:
           schema:
@@ -590,3 +731,141 @@ components:
           type: boolean
         qso:
           $ref: "#/components/schemas/QsoListItem"
+
+    CallsignStatus:
+      type: string
+      enum: [valid, expired, unknown]
+
+    CallsignPrefixFamily:
+      type: string
+      enum: [XV, 3W, other]
+
+    CallsignListItem:
+      type: object
+      properties:
+        sign:
+          type: string
+          example: XV1A
+        operatorName:
+          type: string
+        permitRaw:
+          type: string
+        issuedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: "#/components/schemas/CallsignStatus"
+        eventCount:
+          type: integer
+        prefixFamily:
+          $ref: "#/components/schemas/CallsignPrefixFamily"
+        areaDigit:
+          type: string
+          nullable: true
+          example: "1"
+
+    CallsignSearchResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        query:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallsignListItem"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    CallsignLicenseItem:
+      type: object
+      properties:
+        stt:
+          type: integer
+        operatorName:
+          type: string
+        callsignRaw:
+          type: string
+        callsigns:
+          type: array
+          items:
+            type: string
+        permitRaw:
+          type: string
+        permitType:
+          type: string
+          enum: [GP, GH, VARC, unknown, missing]
+        issuedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          $ref: "#/components/schemas/CallsignStatus"
+        notes:
+          type: string
+        flags:
+          type: array
+          items:
+            type: string
+
+    CallsignDetail:
+      type: object
+      properties:
+        sign:
+          type: string
+        prefixFamily:
+          $ref: "#/components/schemas/CallsignPrefixFamily"
+        areaDigit:
+          type: string
+          nullable: true
+        operatorName:
+          type: string
+        eventCount:
+          type: integer
+        latestStatus:
+          $ref: "#/components/schemas/CallsignStatus"
+        licenses:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallsignLicenseItem"
+
+    CallsignDetailResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        callsign:
+          $ref: "#/components/schemas/CallsignDetail"
+
+    CallsignStats:
+      type: object
+      properties:
+        callsigns:
+          type: integer
+          format: int64
+        operators:
+          type: integer
+        events:
+          type: integer
+          format: int64
+        expired:
+          type: integer
+          format: int64
+
+    CallsignStatsResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        stats:
+          $ref: "#/components/schemas/CallsignStats"
