@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
 import { AdminRouteTabs } from "@/components/admin/admin-route-tabs";
+import { BackupManager } from "@/components/admin/backup-manager";
 import { HlsPosterJobsManager } from "@/components/admin/hls-poster-jobs-manager";
 import { ImportExportJobsPanel } from "@/components/admin/import-export-jobs-panel";
 import { requireAdminPage } from "@/lib/admin-access";
-import { listHlsPosterJobs } from "@/lib/hls-poster/jobs";
+import { getBackupAdminSummary } from "@/lib/backup/admin";
+import {
+  hasActiveHlsPosterJob,
+  listHlsPosterJobsPage,
+} from "@/lib/hls-poster/jobs";
 import { getExportSettingsSummary } from "@/lib/import-export/export/load-export-config";
 import { getImportSettingsSummary } from "@/lib/import-export/import/load-import-config";
 import {
@@ -17,20 +22,27 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type TabId = "hls-poster" | "import" | "export";
+type TabId = "hls-poster" | "backup" | "import" | "export";
 
 type Props = {
   searchParams: Promise<{ tab?: string }>;
 };
 
-function buildTabs(opts: { showHls: boolean; showImportExport: boolean }) {
+function buildTabs(opts: { showSite: boolean; showImportExport: boolean }) {
   const tabs: Array<{ id: TabId; label: string; href: string }> = [];
-  if (opts.showHls) {
-    tabs.push({
-      id: "hls-poster",
-      label: "HLS poster",
-      href: "/admin/background-jobs",
-    });
+  if (opts.showSite) {
+    tabs.push(
+      {
+        id: "hls-poster",
+        label: "HLS poster",
+        href: "/admin/background-jobs",
+      },
+      {
+        id: "backup",
+        label: "Backup",
+        href: "/admin/background-jobs?tab=backup",
+      },
+    );
   }
   if (opts.showImportExport) {
     tabs.push(
@@ -54,7 +66,12 @@ function resolveTab(
   tabs: Array<{ id: TabId }>,
 ): TabId | null {
   if (tabs.length === 0) return null;
-  if (tab === "import" || tab === "export" || tab === "hls-poster") {
+  if (
+    tab === "import" ||
+    tab === "export" ||
+    tab === "hls-poster" ||
+    tab === "backup"
+  ) {
     if (tabs.some((item) => item.id === tab)) return tab;
   }
   return tabs[0].id;
@@ -62,20 +79,25 @@ function resolveTab(
 
 export default async function AdminBackgroundJobsPage({ searchParams }: Props) {
   const session = await requireAdminPage();
-  const showHls = canManageSite(session.user);
+  const showSite = canManageSite(session.user);
   const showImportExport = canManageImportExport(session.user);
-  if (!showHls && !showImportExport) {
+  if (!showSite && !showImportExport) {
     redirect("/admin");
   }
 
   const { tab } = await searchParams;
-  const tabs = buildTabs({ showHls, showImportExport });
+  const tabs = buildTabs({ showSite, showImportExport });
   const activeTab = resolveTab(tab, tabs);
   if (!activeTab) {
     redirect("/admin");
   }
 
-  const jobs = activeTab === "hls-poster" ? await listHlsPosterJobs() : null;
+  const [hlsJobsPage, hlsHasActive] =
+    activeTab === "hls-poster"
+      ? await Promise.all([listHlsPosterJobsPage(), hasActiveHlsPosterJob()])
+      : [null, false];
+  const backupSummary =
+    activeTab === "backup" ? await getBackupAdminSummary() : null;
   const importSettings =
     activeTab === "import" ? await getImportSettingsSummary() : null;
   const exportSettings =
@@ -101,15 +123,29 @@ export default async function AdminBackgroundJobsPage({ searchParams }: Props) {
     <div>
       <h1 className="text-2xl font-semibold">Background Jobs</h1>
       <p className="mt-2 text-sm text-gray-600">
-        Queue and monitor background workers for HLS posters and content
-        import/export.
+        Queue and monitor background workers for HLS posters, backup/restore,
+        and content import/export.
       </p>
 
       <AdminRouteTabs tabs={tabs} active={activeTab} />
 
       <div className="mt-8">
-        {activeTab === "hls-poster" && jobs ? (
-          <HlsPosterJobsManager initialJobs={jobs} />
+        {activeTab === "hls-poster" && hlsJobsPage ? (
+          <HlsPosterJobsManager
+            initialJobsPage={hlsJobsPage}
+            initialHasActive={hlsHasActive}
+          />
+        ) : null}
+
+        {activeTab === "backup" && backupSummary ? (
+          <BackupManager
+            view="jobs"
+            initialJobsPage={backupSummary.jobsPage}
+            initialHasActive={backupSummary.hasActive}
+            estimatedBytes={backupSummary.estimatedBytes}
+            uniqueMediaFiles={backupSummary.uniqueMediaFiles}
+            uploadLimitBytes={backupSummary.uploadLimitBytes}
+          />
         ) : null}
 
         {activeTab === "import" && importSettings && importJobsPage ? (

@@ -1,14 +1,20 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { requireSitePage } from "@/lib/admin-access";
 import { deleteCallsignAction } from "@/lib/callsign-actions";
 import {
   getCallsignImportSummary,
-  listAdminCallsigns,
+  listAdminCallsignsPage,
 } from "@/lib/callsigns-admin";
 import {
   parseOperatorKindFilter,
   parsePermitTypeFilter,
 } from "@/lib/callsigns-filters";
+import {
+  parseAdminJobsPage,
+  parseAdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
+import { AdminListPagination } from "@/components/admin/admin-list-pagination";
 import { CallsignListFilters } from "@/components/admin/callsign-list-filters";
 import { CallsignListToolbar } from "@/components/admin/callsign-list-toolbar";
 import { ActiveRowActions } from "@/components/admin/active-row-actions";
@@ -21,6 +27,8 @@ type Props = {
     q?: string;
     operatorKind?: string;
     permitType?: string;
+    page?: string;
+    pageSize?: string;
   }>;
 };
 
@@ -30,12 +38,21 @@ export default async function AdminCallsignsPage({ searchParams }: Props) {
   const query = (params.q ?? "").trim();
   const operatorKind = parseOperatorKindFilter(params.operatorKind);
   const permitType = parsePermitTypeFilter(params.permitType);
+  const page = parseAdminJobsPage(params.page);
+  const pageSize = parseAdminJobsPageSize(params.pageSize);
   const filtered =
     Boolean(query) || operatorKind !== "all" || permitType !== "all";
-  const [items, summary] = await Promise.all([
-    listAdminCallsigns({ q: query, operatorKind, permitType }),
+  const [listPage, summary] = await Promise.all([
+    listAdminCallsignsPage({
+      q: query,
+      operatorKind,
+      permitType,
+      page,
+      pageSize,
+    }),
     getCallsignImportSummary(),
   ]);
+  const items = listPage.items;
 
   return (
     <div className="space-y-8">
@@ -56,7 +73,7 @@ export default async function AdminCallsignsPage({ searchParams }: Props) {
         permitType={permitType}
       />
 
-      {items.length === 0 ? (
+      {listPage.total === 0 ? (
         <p className="text-gray-600">
           {filtered
             ? "No callsigns match that search or filter."
@@ -155,6 +172,16 @@ export default async function AdminCallsignsPage({ searchParams }: Props) {
               </li>
             ))}
           </ul>
+
+          <Suspense fallback={null}>
+            <AdminListPagination
+              page={listPage.page}
+              pageSize={listPage.pageSize}
+              total={listPage.total}
+              totalPages={listPage.totalPages}
+              label="Callsigns"
+            />
+          </Suspense>
         </div>
       )}
     </div>

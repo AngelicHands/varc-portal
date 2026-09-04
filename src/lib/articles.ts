@@ -6,6 +6,10 @@ import {
   hashExcludeIds,
 } from "@/lib/cache/cms-cache";
 import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  normalizeAdminJobsPage,
+} from "@/lib/admin-jobs-pagination";
+import {
   DEFAULT_COVER_FOCUS,
   normalizeCoverFocus,
   type CoverFocusRect,
@@ -238,6 +242,43 @@ export async function listAllArticles(options?: { trash?: boolean }) {
   return Article.find(filter)
     .sort(options?.trash ? { deletedAt: -1 } : { updatedAt: -1 })
     .lean<ArticleDocument[]>();
+}
+
+export type ArticlesAdminPage = {
+  items: ArticleDocument[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listArticlesAdminPage(options?: {
+  trash?: boolean;
+  page?: number;
+  pageSize?: number;
+}): Promise<ArticlesAdminPage> {
+  await connectDb();
+  const filter = options?.trash ? { deletedAt: { $ne: null } } : notDeletedFilter;
+  const total = await Article.countDocuments(filter);
+  const meta = normalizeAdminJobsPage(
+    options?.page ?? 1,
+    options?.pageSize ?? ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+    total,
+  );
+  const items = await Article.find(filter)
+    .sort(options?.trash ? { deletedAt: -1 } : { updatedAt: -1 })
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
+    .lean<ArticleDocument[]>();
+  return { items, ...meta };
+}
+
+export async function countArticles(options?: {
+  trash?: boolean;
+}): Promise<number> {
+  await connectDb();
+  const filter = options?.trash ? { deletedAt: { $ne: null } } : notDeletedFilter;
+  return Article.countDocuments(filter);
 }
 
 export async function getArticleById(id: string) {

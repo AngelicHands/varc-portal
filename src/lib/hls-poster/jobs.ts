@@ -1,5 +1,11 @@
 import mongoose from "mongoose";
+import { unstable_noStore as noStore } from "next/cache";
 import { connectDb } from "@/lib/db";
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  ADMIN_JOBS_PAGE_SIZES,
+  normalizeAdminJobsPage,
+} from "@/lib/admin-jobs-pagination";
 import {
   HlsPosterJob,
   type HlsPosterJobDocument,
@@ -73,15 +79,42 @@ export async function createHlsPosterJob(params: {
   return toAdminJob(created);
 }
 
+export type HlsPosterJobsPage = {
+  jobs: AdminHlsPosterJob[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listHlsPosterJobsPage(
+  page = 1,
+  pageSize: number = ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+): Promise<HlsPosterJobsPage> {
+  noStore();
+  await connectDb();
+
+  const total = await HlsPosterJob.countDocuments({});
+  const meta = normalizeAdminJobsPage(page, pageSize, total);
+  const docs = await HlsPosterJob.find({})
+    .sort({ createdAt: -1 })
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
+    .lean();
+
+  return {
+    jobs: docs.map((doc) => toAdminJob(doc as HlsPosterJobDocument)),
+    ...meta,
+  };
+}
+
 export async function listHlsPosterJobs(
   limit = 30,
 ): Promise<AdminHlsPosterJob[]> {
-  await connectDb();
-  const docs = await HlsPosterJob.find({})
-    .sort({ createdAt: -1 })
-    .limit(Math.max(1, Math.min(limit, 100)))
-    .lean();
-  return docs.map((doc) => toAdminJob(doc as HlsPosterJobDocument));
+  const max = Math.max(...ADMIN_JOBS_PAGE_SIZES);
+  return listHlsPosterJobsPage(1, Math.max(1, Math.min(limit, max))).then(
+    (result) => result.jobs,
+  );
 }
 
 export async function getHlsPosterJob(

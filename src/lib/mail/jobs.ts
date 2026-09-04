@@ -1,4 +1,10 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { connectDb } from "@/lib/db";
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  ADMIN_JOBS_PAGE_SIZES,
+  normalizeAdminJobsPage,
+} from "@/lib/admin-jobs-pagination";
 import type { AdminEmailJob } from "@/lib/mail/job-types";
 import {
   EmailJob,
@@ -8,6 +14,21 @@ import {
 import type { MailMessageKind } from "@/models/MailMessage";
 
 export type { AdminEmailJob } from "@/lib/mail/job-types";
+
+export type EmailJobsPage = {
+  jobs: AdminEmailJob[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+const ACTIVE_EMAIL_JOB_STATUSES: EmailJobStatus[] = [
+  "queued",
+  "running",
+  "failed",
+  "cancelled",
+];
 
 function toAdminJob(doc: EmailJobDocument): AdminEmailJob {
   return {
@@ -53,13 +74,50 @@ export async function createEmailJob(params: {
   return toAdminJob(created);
 }
 
-export async function listEmailJobs(limit = 50): Promise<AdminEmailJob[]> {
+export async function listEmailJobsPage(
+  page = 1,
+  pageSize: number = ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  options?: { activeOnly?: boolean },
+): Promise<EmailJobsPage> {
+  noStore();
   await connectDb();
-  const docs = await EmailJob.find({})
+
+  const filter = options?.activeOnly
+    ? { status: { $in: ACTIVE_EMAIL_JOB_STATUSES } }
+    : {};
+  const total = await EmailJob.countDocuments(filter);
+  const meta = normalizeAdminJobsPage(page, pageSize, total);
+  const docs = await EmailJob.find(filter)
     .sort({ createdAt: -1 })
-    .limit(Math.max(1, Math.min(limit, 200)))
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
     .lean();
-  return docs.map((doc) => toAdminJob(doc as EmailJobDocument));
+
+  return {
+    jobs: docs.map((doc) => toAdminJob(doc as EmailJobDocument)),
+    ...meta,
+  };
+}
+
+export async function listEmailJobs(limit = 50): Promise<AdminEmailJob[]> {
+  const max = Math.max(...ADMIN_JOBS_PAGE_SIZES);
+  return listEmailJobsPage(1, Math.max(1, Math.min(limit, max))).then(
+    (result) => result.jobs,
+  );
+}
+
+export async function countEmailJobsByStatus(): Promise<{
+  queued: number;
+  running: number;
+  failed: number;
+}> {
+  await connectDb();
+  const [queued, running, failed] = await Promise.all([
+    EmailJob.countDocuments({ status: "queued" }),
+    EmailJob.countDocuments({ status: "running" }),
+    EmailJob.countDocuments({ status: "failed" }),
+  ]);
+  return { queued, running, failed };
 }
 
 export async function getEmailJob(id: string): Promise<AdminEmailJob | null> {

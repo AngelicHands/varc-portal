@@ -1,8 +1,14 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AdminListPagination } from "@/components/admin/admin-list-pagination";
 import { FormSubmissionDeleteButton } from "@/components/admin/form-submission-delete-button";
 import { requireSitePage } from "@/lib/admin-access";
-import { getFormById, listFormSubmissions } from "@/lib/forms";
+import {
+  parseAdminJobsPage,
+  parseAdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
+import { getFormById, listFormSubmissionsPage } from "@/lib/forms";
 import { PORTAL_TIMEZONE } from "@/lib/datetime-local";
 import { isFormUploadValue } from "@/lib/validations/forms";
 
@@ -10,6 +16,7 @@ export const dynamic = "force-dynamic";
 
 type Props = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string; pageSize?: string }>;
 };
 
 function formatAdminDate(value: string | null | undefined) {
@@ -27,14 +34,23 @@ function previewValue(value: unknown) {
   return String(value ?? "");
 }
 
-export default async function FormSubmissionsPage({ params }: Props) {
+export default async function FormSubmissionsPage({
+  params,
+  searchParams,
+}: Props) {
   await requireSitePage();
   const { id } = await params;
-  const [form, submissions] = await Promise.all([
+  const query = await searchParams;
+  const page = parseAdminJobsPage(query.page);
+  const pageSize = parseAdminJobsPageSize(query.pageSize);
+
+  const [form, listPage] = await Promise.all([
     getFormById(id),
-    listFormSubmissions(id),
+    listFormSubmissionsPage(id, { page, pageSize }),
   ]);
   if (!form || form.deletedAt) notFound();
+
+  const submissions = listPage.items;
 
   return (
     <div>
@@ -51,22 +67,29 @@ export default async function FormSubmissionsPage({ params }: Props) {
         </Link>
       </div>
 
-      {submissions.length === 0 ? (
-        <p className="mt-8 text-gray-600">No submissions yet.</p>
-      ) : (
-        <div className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white">
-          <table className="hidden w-full text-left text-sm md:table">
-            <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
+      <div className="mt-6 overflow-hidden rounded-lg border border-gray-200 bg-white">
+        <table className="hidden w-full text-left text-sm md:table">
+          <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
+            <tr>
+              <th className="px-4 py-3 font-medium">Submitted</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Page</th>
+              <th className="px-4 py-3 font-medium">Preview</th>
+              <th className="px-4 py-3 font-medium text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {submissions.length === 0 ? (
               <tr>
-                <th className="px-4 py-3 font-medium">Submitted</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Page</th>
-                <th className="px-4 py-3 font-medium">Preview</th>
-                <th className="px-4 py-3 font-medium text-right">Actions</th>
+                <td
+                  colSpan={5}
+                  className="px-4 py-10 text-center text-sm text-gray-600"
+                >
+                  No submissions yet.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {submissions.map((submission) => (
+            ) : (
+              submissions.map((submission) => (
                 <tr key={submission.id} className="border-b border-gray-100">
                   <td className="px-4 py-3 text-gray-600">
                     {formatAdminDate(submission.createdAt)}
@@ -110,12 +133,18 @@ export default async function FormSubmissionsPage({ params }: Props) {
                     </div>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              ))
+            )}
+          </tbody>
+        </table>
 
-          <ul className="divide-y divide-gray-100 md:hidden">
-            {submissions.map((submission) => (
+        <ul className="divide-y divide-gray-100 md:hidden">
+          {submissions.length === 0 ? (
+            <li className="px-4 py-10 text-center text-sm text-gray-600">
+              No submissions yet.
+            </li>
+          ) : (
+            submissions.map((submission) => (
               <li key={submission.id} className="space-y-2 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -153,10 +182,20 @@ export default async function FormSubmissionsPage({ params }: Props) {
                   />
                 </div>
               </li>
-            ))}
-          </ul>
-        </div>
-      )}
+            ))
+          )}
+        </ul>
+
+        <Suspense fallback={null}>
+          <AdminListPagination
+            page={listPage.page}
+            pageSize={listPage.pageSize}
+            total={listPage.total}
+            totalPages={listPage.totalPages}
+            label="Submissions"
+          />
+        </Suspense>
+      </div>
     </div>
   );
 }

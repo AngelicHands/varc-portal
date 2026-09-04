@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { AdminJobsPagination } from "@/components/admin/admin-jobs-pagination";
 import { notifyAction } from "@/components/admin/admin-toast";
 import { AlertIcon, TrashIcon } from "@/components/admin/admin-action-icons";
 import { IconActionButton } from "@/components/admin/icon-action-button";
@@ -11,7 +12,6 @@ import { useConfirm } from "@/components/admin/use-confirm";
 import type { AdminImportExportJob } from "@/lib/import-export/jobs-shared";
 import {
   IMPORT_EXPORT_JOBS_DEFAULT_PAGE_SIZE,
-  IMPORT_EXPORT_JOBS_PAGE_SIZES,
   type ImportExportJobsPage,
   type ImportExportJobsPageSize,
 } from "@/lib/import-export/jobs-shared";
@@ -53,20 +53,13 @@ async function readPayload(
 ): Promise<{ error?: string; job?: AdminImportExportJob }> {
   const contentType = response.headers.get("content-type") || "";
   if (contentType.includes("application/json")) {
-    return (await response.json()) as { error?: string; job?: AdminImportExportJob };
+    return (await response.json()) as {
+      error?: string;
+      job?: AdminImportExportJob;
+    };
   }
   const text = (await response.text()).trim();
   return { error: text || undefined };
-}
-
-function pageNumbers(current: number, total: number): number[] {
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, index) => index + 1);
-  }
-  const pages = new Set<number>([1, total, current - 1, current, current + 1]);
-  return [...pages]
-    .filter((page) => page >= 1 && page <= total)
-    .sort((a, b) => a - b);
 }
 
 export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
@@ -94,9 +87,6 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
     () => jobs.some((job) => job.status === "queued" || job.status === "running"),
     [jobs],
   );
-
-  const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const rangeEnd = Math.min(page * pageSize, total);
 
   async function onRunJob() {
     setError(null);
@@ -400,87 +390,18 @@ export function ImportExportJobsPanel({ kind, settings, initialPage }: Props) {
           </div>
         )}
 
-        {total > 0 ? (
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-gray-200 px-5 py-4">
-            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
-              <span>
-                Showing {rangeStart}–{rangeEnd} of {total}
-              </span>
-              <label className="flex items-center gap-2">
-                <span>Rows</span>
-                <select
-                  value={pageSize}
-                  onChange={(event) => {
-                    setPageSize(Number(event.target.value) as ImportExportJobsPageSize);
-                    setPage(1);
-                  }}
-                  className="rounded border border-gray-300 bg-white px-2 py-1 text-sm"
-                >
-                  {IMPORT_EXPORT_JOBS_PAGE_SIZES.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            {totalPages > 1 ? (
-              <nav
-                className="flex flex-wrap items-center gap-1"
-                aria-label={`${title} pagination`}
-              >
-                <button
-                  type="button"
-                  disabled={page <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  className="rounded border border-gray-300 px-3 py-1.5 text-sm disabled:pointer-events-none disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                {pageNumbers(page, totalPages)
-                  .reduce<Array<number | "gap">>((acc, pageNumber, index, list) => {
-                    if (index > 0 && pageNumber - list[index - 1]! > 1) {
-                      acc.push("gap");
-                    }
-                    acc.push(pageNumber);
-                    return acc;
-                  }, [])
-                  .map((item, index) =>
-                    item === "gap" ? (
-                      <span key={`gap-${index}`} className="px-1 text-sm text-gray-400">
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={item}
-                        type="button"
-                        aria-current={item === page ? "page" : undefined}
-                        onClick={() => setPage(item)}
-                        className={`rounded border px-3 py-1.5 text-sm ${
-                          item === page
-                            ? "border-gray-900 bg-gray-900 text-white"
-                            : "border-gray-300 hover:bg-gray-50"
-                        }`}
-                      >
-                        {item}
-                      </button>
-                    ),
-                  )}
-                <button
-                  type="button"
-                  disabled={page >= totalPages}
-                  onClick={() =>
-                    setPage((current) => Math.min(totalPages, current + 1))
-                  }
-                  className="rounded border border-gray-300 px-3 py-1.5 text-sm disabled:pointer-events-none disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </nav>
-            ) : null}
-          </div>
-        ) : null}
+        <AdminJobsPagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          totalPages={totalPages}
+          label={title}
+          onPageChange={setPage}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+          }}
+        />
       </section>
       </div>
       <JobErrorModal

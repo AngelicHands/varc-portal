@@ -1,6 +1,12 @@
 import mongoose from "mongoose";
+import { unstable_noStore as noStore } from "next/cache";
 import { connectDb } from "@/lib/db";
 import { deleteBackupArtifact, getBackupArtifactRetention } from "@/lib/backup/artifact-storage";
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  ADMIN_JOBS_PAGE_SIZES,
+  normalizeAdminJobsPage,
+} from "@/lib/admin-jobs-pagination";
 import {
   BackupJob,
   type BackupJobDocument,
@@ -95,13 +101,40 @@ export async function createBackupJob(params: {
   return toAdminJob(created);
 }
 
-export async function listBackupJobs(limit = 20): Promise<AdminBackupJob[]> {
+export type BackupJobsPage = {
+  jobs: AdminBackupJob[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listBackupJobsPage(
+  page = 1,
+  pageSize: number = ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+): Promise<BackupJobsPage> {
+  noStore();
   await connectDb();
+
+  const total = await BackupJob.countDocuments({});
+  const meta = normalizeAdminJobsPage(page, pageSize, total);
   const docs = await BackupJob.find({})
     .sort({ createdAt: -1 })
-    .limit(Math.max(1, Math.min(limit, 100)))
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
     .lean();
-  return docs.map((doc) => toAdminJob(doc as BackupJobDocument));
+
+  return {
+    jobs: docs.map((doc) => toAdminJob(doc as BackupJobDocument)),
+    ...meta,
+  };
+}
+
+export async function listBackupJobs(limit = 20): Promise<AdminBackupJob[]> {
+  const max = Math.max(...ADMIN_JOBS_PAGE_SIZES);
+  return listBackupJobsPage(1, Math.max(1, Math.min(limit, max))).then(
+    (result) => result.jobs,
+  );
 }
 
 export async function getBackupJob(id: string): Promise<AdminBackupJob | null> {

@@ -1,6 +1,12 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import mongoose from "mongoose";
-import { listAllArticles, getLocaleContent, hasLocaleContent } from "@/lib/articles";
+import {
+  countArticles,
+  getLocaleContent,
+  hasLocaleContent,
+  listArticlesAdminPage,
+} from "@/lib/articles";
 import { listCategories, getCategoryLocale } from "@/lib/cms";
 import {
   deleteArticleAction,
@@ -9,6 +15,7 @@ import {
   emptyArticlesTrashAction,
   cloneArticleAction,
 } from "@/lib/actions";
+import { AdminListPagination } from "@/components/admin/admin-list-pagination";
 import { AdminListTabs } from "@/components/admin/admin-list-tabs";
 import { AdminLocaleStatus } from "@/components/admin/admin-locale-status";
 import { ActiveRowActions } from "@/components/admin/active-row-actions";
@@ -16,6 +23,10 @@ import { TrashRowActions } from "@/components/admin/trash-row-actions";
 import { EmptyTrashButton } from "@/components/admin/empty-trash-button";
 import { AdminAuthorAvatar } from "@/components/admin/admin-author-avatar";
 import { requireEditorialPage } from "@/lib/admin-access";
+import {
+  parseAdminJobsPage,
+  parseAdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
 import { PORTAL_TIMEZONE, isFuturePublishAt } from "@/lib/datetime-local";
 import { connectDb } from "@/lib/db";
 import { profileAvatarUrl } from "@/lib/gravatar";
@@ -24,7 +35,7 @@ import { User } from "@/models/User";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; page?: string; pageSize?: string }>;
 };
 
 function clipWords(text: string, maxWords: number): string {
@@ -127,16 +138,20 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
   await requireEditorialPage();
   const now = new Date();
 
-  const { tab } = await searchParams;
-  const trash = tab === "trash";
-  const [activeItems, trashItems, activeCategories, trashCategories] =
+  const params = await searchParams;
+  const trash = params.tab === "trash";
+  const page = parseAdminJobsPage(params.page);
+  const pageSize = parseAdminJobsPageSize(params.pageSize);
+
+  const [activeCount, trashCount, listPage, activeCategories, trashCategories] =
     await Promise.all([
-      listAllArticles(),
-      listAllArticles({ trash: true }),
+      countArticles(),
+      countArticles({ trash: true }),
+      listArticlesAdminPage({ trash, page, pageSize }),
       listCategories(),
       listCategories({ trash: true }),
     ]);
-  const articles = trash ? trashItems : activeItems;
+  const articles = listPage.items;
 
   const categoryNameById = new Map<string, string>();
   for (const category of [...activeCategories, ...trashCategories]) {
@@ -148,7 +163,7 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
 
   const authorIds = [
     ...new Set(
-      [...activeItems, ...trashItems]
+      articles
         .map((article) => String(article.authorId ?? ""))
         .filter((id) => mongoose.isValidObjectId(id)),
     ),
@@ -185,7 +200,7 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
         <h1 className="text-2xl font-semibold">Articles</h1>
         {trash ? (
           <EmptyTrashButton
-            count={trashItems.length}
+            count={trashCount}
             itemLabel="articles"
             emptyAction={emptyArticlesTrashAction}
           />
@@ -202,11 +217,11 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
       <AdminListTabs
         basePath="/admin/articles"
         active={trash ? "trash" : "active"}
-        activeCount={activeItems.length}
-        trashCount={trashItems.length}
+        activeCount={activeCount}
+        trashCount={trashCount}
       />
 
-      {articles.length === 0 ? (
+      {listPage.total === 0 ? (
         <p className="mt-8 text-gray-600">
           {trash ? "Trash is empty." : "No articles yet."}
         </p>
@@ -409,6 +424,27 @@ export default async function AdminArticlesPage({ searchParams }: Props) {
                 })}
               </tbody>
             </table>
+            <Suspense fallback={null}>
+              <AdminListPagination
+                page={listPage.page}
+                pageSize={listPage.pageSize}
+                total={listPage.total}
+                totalPages={listPage.totalPages}
+                label="Articles"
+              />
+            </Suspense>
+          </div>
+
+          <div className="md:hidden">
+            <Suspense fallback={null}>
+              <AdminListPagination
+                page={listPage.page}
+                pageSize={listPage.pageSize}
+                total={listPage.total}
+                totalPages={listPage.totalPages}
+                label="Articles"
+              />
+            </Suspense>
           </div>
         </>
       )}

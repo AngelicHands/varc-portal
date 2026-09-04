@@ -1,23 +1,29 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { listPages, getPageLocale } from "@/lib/cms";
+import { countPages, getPageLocale, listPagesAdminPage } from "@/lib/cms";
 import {
   deletePageAction,
   restorePageAction,
   permanentlyDeletePageAction,
   emptyPagesTrashAction,
 } from "@/lib/actions";
+import { AdminListPagination } from "@/components/admin/admin-list-pagination";
 import { AdminListTabs } from "@/components/admin/admin-list-tabs";
 import { AdminLocaleStatus } from "@/components/admin/admin-locale-status";
 import { ActiveRowActions } from "@/components/admin/active-row-actions";
 import { TrashRowActions } from "@/components/admin/trash-row-actions";
 import { EmptyTrashButton } from "@/components/admin/empty-trash-button";
 import { requirePagesPage } from "@/lib/admin-access";
+import {
+  parseAdminJobsPage,
+  parseAdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
 import { PORTAL_TIMEZONE } from "@/lib/datetime-local";
 
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; page?: string; pageSize?: string }>;
 };
 
 function pageLocaleReady(locale: { title: string; slug: string }) {
@@ -41,13 +47,17 @@ function formatAdminDateShort(value: Date | string | null | undefined) {
 export default async function AdminPagesPage({ searchParams }: Props) {
   await requirePagesPage();
 
-  const { tab } = await searchParams;
-  const trash = tab === "trash";
-  const [activeItems, trashItems] = await Promise.all([
-    listPages(),
-    listPages({ trash: true }),
+  const params = await searchParams;
+  const trash = params.tab === "trash";
+  const page = parseAdminJobsPage(params.page);
+  const pageSize = parseAdminJobsPageSize(params.pageSize);
+
+  const [activeCount, trashCount, listPage] = await Promise.all([
+    countPages(),
+    countPages({ trash: true }),
+    listPagesAdminPage({ trash, page, pageSize }),
   ]);
-  const pages = trash ? trashItems : activeItems;
+  const pages = listPage.items;
 
   return (
     <div>
@@ -55,7 +65,7 @@ export default async function AdminPagesPage({ searchParams }: Props) {
         <h1 className="text-2xl font-semibold">Pages</h1>
         {trash ? (
           <EmptyTrashButton
-            count={trashItems.length}
+            count={trashCount}
             itemLabel="pages"
             emptyAction={emptyPagesTrashAction}
           />
@@ -72,11 +82,11 @@ export default async function AdminPagesPage({ searchParams }: Props) {
       <AdminListTabs
         basePath="/admin/pages"
         active={trash ? "trash" : "active"}
-        activeCount={activeItems.length}
-        trashCount={trashItems.length}
+        activeCount={activeCount}
+        trashCount={trashCount}
       />
 
-      {pages.length === 0 ? (
+      {listPage.total === 0 ? (
         <p className="mt-8 text-gray-600">
           {trash ? "Trash is empty." : "No pages yet."}
         </p>
@@ -84,14 +94,14 @@ export default async function AdminPagesPage({ searchParams }: Props) {
         <>
           {/* Mobile: stacked cards */}
           <ul className="mt-6 space-y-3 md:hidden">
-            {pages.map((page) => {
-              const vi = getPageLocale(page, "vi");
-              const en = getPageLocale(page, "en");
-              const id = String(page._id);
-              const dateValue = trash ? page.deletedAt : page.updatedAt;
+            {pages.map((pageItem) => {
+              const vi = getPageLocale(pageItem, "vi");
+              const en = getPageLocale(pageItem, "en");
+              const id = String(pageItem._id);
+              const dateValue = trash ? pageItem.deletedAt : pageItem.updatedAt;
               const templateLabel =
-                page.templateKey ||
-                (page.template === "gallery" ? "gallery" : "custom");
+                pageItem.templateKey ||
+                (pageItem.template === "gallery" ? "gallery" : "custom");
 
               return (
                 <li
@@ -139,12 +149,12 @@ export default async function AdminPagesPage({ searchParams }: Props) {
                   <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-gray-600">
                     <span
                       className={`font-medium capitalize ${
-                        page.status === "published"
+                        pageItem.status === "published"
                           ? "text-green-700"
                           : "text-amber-700"
                       }`}
                     >
-                      {page.status}
+                      {pageItem.status}
                     </span>
                     <span>{templateLabel}</span>
                     <AdminLocaleStatus
@@ -178,10 +188,10 @@ export default async function AdminPagesPage({ searchParams }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {pages.map((page) => {
-                  const vi = getPageLocale(page, "vi");
-                  const en = getPageLocale(page, "en");
-                  const id = String(page._id);
+                {pages.map((pageItem) => {
+                  const vi = getPageLocale(pageItem, "vi");
+                  const en = getPageLocale(pageItem, "en");
+                  const id = String(pageItem._id);
                   return (
                     <tr key={id} className="border-b border-gray-100">
                       <td className="px-4 py-3 font-medium">
@@ -200,8 +210,8 @@ export default async function AdminPagesPage({ searchParams }: Props) {
                         {vi.slug || "—"}
                       </td>
                       <td className="px-4 py-3 capitalize text-gray-600">
-                        {page.templateKey ||
-                          (page.template === "gallery" ? "gallery" : "custom")}
+                        {pageItem.templateKey ||
+                          (pageItem.template === "gallery" ? "gallery" : "custom")}
                       </td>
                       <td className="px-4 py-3">
                         <AdminLocaleStatus
@@ -212,17 +222,17 @@ export default async function AdminPagesPage({ searchParams }: Props) {
                       <td className="px-4 py-3">
                         <span
                           className={
-                            page.status === "published"
+                            pageItem.status === "published"
                               ? "text-green-700"
                               : "text-amber-700"
                           }
                         >
-                          {page.status}
+                          {pageItem.status}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-gray-500">
                         {formatAdminDate(
-                          trash ? page.deletedAt : page.updatedAt,
+                          trash ? pageItem.deletedAt : pageItem.updatedAt,
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -248,6 +258,27 @@ export default async function AdminPagesPage({ searchParams }: Props) {
                 })}
               </tbody>
             </table>
+            <Suspense fallback={null}>
+              <AdminListPagination
+                page={listPage.page}
+                pageSize={listPage.pageSize}
+                total={listPage.total}
+                totalPages={listPage.totalPages}
+                label="Pages"
+              />
+            </Suspense>
+          </div>
+
+          <div className="md:hidden">
+            <Suspense fallback={null}>
+              <AdminListPagination
+                page={listPage.page}
+                pageSize={listPage.pageSize}
+                total={listPage.total}
+                totalPages={listPage.totalPages}
+                label="Pages"
+              />
+            </Suspense>
           </div>
         </>
       )}

@@ -1,24 +1,34 @@
 import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { requireSiteAdminApi } from "@/lib/admin-api";
+import {
+  parseAdminJobsPage,
+  parseAdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
 import { buildBackupArtifactKey, putBackupArtifactStream } from "@/lib/backup/artifact-storage";
 import {
   createBackupJob,
   hasActiveBackupJob,
-  listBackupJobs,
+  listBackupJobsPage,
 } from "@/lib/backup/jobs";
 import { publicErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await requireSiteAdminApi();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const jobs = await listBackupJobs();
-  return NextResponse.json({ jobs });
+  const url = new URL(request.url);
+  const page = parseAdminJobsPage(url.searchParams.get("page"));
+  const pageSize = parseAdminJobsPageSize(url.searchParams.get("pageSize"));
+  const [jobsPage, hasActive] = await Promise.all([
+    listBackupJobsPage(page, pageSize),
+    hasActiveBackupJob(),
+  ]);
+  return NextResponse.json({ ...jobsPage, hasActive });
 }
 
 export async function POST(request: Request) {

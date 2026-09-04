@@ -1,18 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { AdminJobsPagination } from "@/components/admin/admin-jobs-pagination";
 import { notifyAction } from "@/components/admin/admin-toast";
 import { useConfirm } from "@/components/admin/use-confirm";
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  type AdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
 import {
   emailJobKindLabel,
   type AdminEmailJob,
 } from "@/lib/mail/job-types";
+import type { EmailJobsPage } from "@/lib/mail/jobs";
+import type { MailMessagesPage } from "@/lib/mail/mailbox";
 import type { AdminMailMessageListItem } from "@/lib/mail/mailbox-types";
 
+type MailboxCounts = {
+  queued: number;
+  running: number;
+  failed: number;
+};
+
 type Props = {
-  initialJobs: AdminEmailJob[];
-  initialMessages: AdminMailMessageListItem[];
+  initialJobsPage: EmailJobsPage;
+  initialMessagesPage: MailMessagesPage;
+  initialCounts: MailboxCounts;
+};
+
+type MailboxPayload = {
+  jobs?: EmailJobsPage;
+  messages?: MailMessagesPage;
+  counts?: MailboxCounts;
+  error?: string;
 };
 
 function formatDate(value: string | null) {
@@ -47,47 +68,110 @@ async function readJson(response: Response) {
   return { error: text || undefined };
 }
 
-export function MailboxManager({ initialJobs, initialMessages }: Props) {
+function mailboxQuery(params: {
+  jobsPage: number;
+  jobsPageSize: number;
+  messagesPage: number;
+  messagesPageSize: number;
+}) {
+  const search = new URLSearchParams({
+    jobsPage: String(params.jobsPage),
+    jobsPageSize: String(params.jobsPageSize),
+    messagesPage: String(params.messagesPage),
+    messagesPageSize: String(params.messagesPageSize),
+  });
+  return `/api/admin/mailbox?${search.toString()}`;
+}
+
+export function MailboxManager({
+  initialJobsPage,
+  initialMessagesPage,
+  initialCounts,
+}: Props) {
   const { ask, modal } = useConfirm();
-  const [jobs, setJobs] = useState(initialJobs);
-  const [messages, setMessages] = useState(initialMessages);
+
+  const [jobsPage, setJobsPage] = useState(initialJobsPage.page);
+  const [jobsPageSize, setJobsPageSize] = useState<AdminJobsPageSize>(
+    (initialJobsPage.pageSize as AdminJobsPageSize) ||
+      ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  );
+  const [jobs, setJobs] = useState(initialJobsPage.jobs);
+  const [jobsTotal, setJobsTotal] = useState(initialJobsPage.total);
+  const [jobsTotalPages, setJobsTotalPages] = useState(
+    initialJobsPage.totalPages,
+  );
+
+  const [messagesPage, setMessagesPage] = useState(initialMessagesPage.page);
+  const [messagesPageSize, setMessagesPageSize] = useState<AdminJobsPageSize>(
+    (initialMessagesPage.pageSize as AdminJobsPageSize) ||
+      ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  );
+  const [messages, setMessages] = useState(initialMessagesPage.messages);
+  const [messagesTotal, setMessagesTotal] = useState(initialMessagesPage.total);
+  const [messagesTotalPages, setMessagesTotalPages] = useState(
+    initialMessagesPage.totalPages,
+  );
+
+  const [counts, setCounts] = useState(initialCounts);
   const [pendingKey, setPendingKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    const timer = window.setInterval(async () => {
-      try {
-        const response = await fetch("/api/admin/mailbox", {
-          cache: "no-store",
-        });
-        if (!response.ok) return;
-        const payload = (await response.json()) as {
-          jobs?: AdminEmailJob[];
-          messages?: AdminMailMessageListItem[];
-        };
-        if (payload.jobs) setJobs(payload.jobs);
-        if (payload.messages) setMessages(payload.messages);
-      } catch {
-        // Ignore polling failures.
-      }
-    }, 5000);
-    return () => window.clearInterval(timer);
+  const applyPayload = useCallback((payload: MailboxPayload) => {
+    if (payload.jobs) {
+      setJobs(payload.jobs.jobs);
+      setJobsTotal(payload.jobs.total);
+      setJobsPage(payload.jobs.page);
+      setJobsPageSize(
+        (payload.jobs.pageSize as AdminJobsPageSize) ||
+          ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+      );
+      setJobsTotalPages(payload.jobs.totalPages);
+    }
+    if (payload.messages) {
+      setMessages(payload.messages.messages);
+      setMessagesTotal(payload.messages.total);
+      setMessagesPage(payload.messages.page);
+      setMessagesPageSize(
+        (payload.messages.pageSize as AdminJobsPageSize) ||
+          ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+      );
+      setMessagesTotalPages(payload.messages.totalPages);
+    }
+    if (payload.counts) setCounts(payload.counts);
   }, []);
 
-  const queueCounts = useMemo(
-    () => ({
-      queued: jobs.filter((job) => job.status === "queued").length,
-      running: jobs.filter((job) => job.status === "running").length,
-      failed:
-        jobs.filter((job) => job.status === "failed").length +
-        messages.filter((message) => message.status === "failed").length,
-    }),
-    [jobs, messages],
+  const refresh = useCallback(
+    async (opts?: {
+      jobsPage?: number;
+      jobsPageSize?: number;
+      messagesPage?: number;
+      messagesPageSize?: number;
+    }) => {
+      const nextJobsPage = opts?.jobsPage ?? jobsPage;
+      const nextJobsPageSize = opts?.jobsPageSize ?? jobsPageSize;
+      const nextMessagesPage = opts?.messagesPage ?? messagesPage;
+      const nextMessagesPageSize = opts?.messagesPageSize ?? messagesPageSize;
+      const response = await fetch(
+        mailboxQuery({
+          jobsPage: nextJobsPage,
+          jobsPageSize: nextJobsPageSize,
+          messagesPage: nextMessagesPage,
+          messagesPageSize: nextMessagesPageSize,
+        }),
+        { cache: "no-store" },
+      );
+      if (!response.ok) return;
+      const payload = (await response.json()) as MailboxPayload;
+      applyPayload(payload);
+    },
+    [applyPayload, jobsPage, jobsPageSize, messagesPage, messagesPageSize],
   );
 
-  const activeJobs = useMemo(
-    () => jobs.filter((job) => job.status !== "succeeded"),
-    [jobs],
-  );
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
 
   function replaceJob(nextJob: AdminEmailJob) {
     setJobs((current) =>
@@ -113,8 +197,12 @@ export function MailboxManager({ initialJobs, initialMessages }: Props) {
           );
           return;
         }
-        setJobs((current) => current.filter((job) => job.id !== id));
         notifyAction({ ok: true }, "Email job deleted");
+        const nextPage =
+          jobs.length <= 1 && jobsPage > 1
+            ? Math.max(1, jobsPage - 1)
+            : jobsPage;
+        await refresh({ jobsPage: nextPage });
         return;
       }
 
@@ -138,6 +226,7 @@ export function MailboxManager({ initialJobs, initialMessages }: Props) {
           ? "Email job requeued for sending"
           : "Email job cancelled",
       );
+      await refresh();
     } finally {
       setPendingKey(null);
     }
@@ -161,10 +250,12 @@ export function MailboxManager({ initialJobs, initialMessages }: Props) {
           );
           return;
         }
-        setMessages((current) =>
-          current.filter((message) => message.id !== id),
-        );
         notifyAction({ ok: true }, "Outbox message deleted");
+        const nextPage =
+          messages.length <= 1 && messagesPage > 1
+            ? Math.max(1, messagesPage - 1)
+            : messagesPage;
+        await refresh({ messagesPage: nextPage });
         return;
       }
 
@@ -181,8 +272,8 @@ export function MailboxManager({ initialJobs, initialMessages }: Props) {
         );
         return;
       }
-      setJobs((current) => [payload.job!, ...current]);
       notifyAction({ ok: true }, "Failed message requeued for sending");
+      await refresh({ jobsPage: 1 });
     } finally {
       setPendingKey(null);
     }
@@ -220,19 +311,19 @@ export function MailboxManager({ initialJobs, initialMessages }: Props) {
         <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-gray-500">Queued</p>
           <p className="mt-1 text-2xl font-semibold text-gray-900">
-            {queueCounts.queued}
+            {counts.queued}
           </p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-gray-500">Running</p>
           <p className="mt-1 text-2xl font-semibold text-amber-700">
-            {queueCounts.running}
+            {counts.running}
           </p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-gray-500">Failed</p>
           <p className="mt-1 text-2xl font-semibold text-red-700">
-            {queueCounts.failed}
+            {counts.failed}
           </p>
         </div>
       </div>
@@ -245,24 +336,31 @@ export function MailboxManager({ initialJobs, initialMessages }: Props) {
           </p>
         </div>
 
-        {activeJobs.length === 0 ? (
-          <p className="text-gray-600">No pending email jobs.</p>
-        ) : (
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3 font-medium">Created</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Kind</th>
+                <th className="px-4 py-3 font-medium">To</th>
+                <th className="px-4 py-3 font-medium">Subject</th>
+                <th className="px-4 py-3 font-medium">Attempts</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-3 font-medium">Created</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Kind</th>
-                  <th className="px-4 py-3 font-medium">To</th>
-                  <th className="px-4 py-3 font-medium">Subject</th>
-                  <th className="px-4 py-3 font-medium">Attempts</th>
-                  <th className="px-4 py-3 font-medium text-right">Actions</th>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-8 text-center text-gray-600"
+                  >
+                    No pending email jobs.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {activeJobs.map((job) => (
+              ) : (
+                jobs.map((job) => (
                   <tr key={job.id} className="border-b border-gray-100">
                     <td className="px-4 py-3 text-gray-600">
                       {formatDate(job.createdAt)}
@@ -320,11 +418,27 @@ export function MailboxManager({ initialJobs, initialMessages }: Props) {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+          <AdminJobsPagination
+            page={jobsPage}
+            pageSize={jobsPageSize}
+            total={jobsTotal}
+            totalPages={jobsTotalPages}
+            label="Email queue"
+            onPageChange={(next) => {
+              setJobsPage(next);
+              void refresh({ jobsPage: next });
+            }}
+            onPageSizeChange={(nextSize) => {
+              setJobsPageSize(nextSize);
+              setJobsPage(1);
+              void refresh({ jobsPage: 1, jobsPageSize: nextSize });
+            }}
+          />
+        </div>
       </section>
 
       <section className="space-y-4">
@@ -335,23 +449,30 @@ export function MailboxManager({ initialJobs, initialMessages }: Props) {
           </p>
         </div>
 
-        {messages.length === 0 ? (
-          <p className="text-gray-600">No messages sent yet.</p>
-        ) : (
-          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
+        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
+              <tr>
+                <th className="px-4 py-3 font-medium">Sent</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Kind</th>
+                <th className="px-4 py-3 font-medium">To</th>
+                <th className="px-4 py-3 font-medium">Subject</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {messages.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-3 font-medium">Sent</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Kind</th>
-                  <th className="px-4 py-3 font-medium">To</th>
-                  <th className="px-4 py-3 font-medium">Subject</th>
-                  <th className="px-4 py-3 font-medium text-right">Actions</th>
+                  <td
+                    colSpan={6}
+                    className="px-4 py-8 text-center text-gray-600"
+                  >
+                    No messages sent yet.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {messages.map((message) => (
+              ) : (
+                messages.map((message: AdminMailMessageListItem) => (
                   <tr key={message.id} className="border-b border-gray-100">
                     <td className="px-4 py-3 text-gray-600">
                       {formatDate(message.createdAt)}
@@ -401,11 +522,30 @@ export function MailboxManager({ initialJobs, initialMessages }: Props) {
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+          <AdminJobsPagination
+            page={messagesPage}
+            pageSize={messagesPageSize}
+            total={messagesTotal}
+            totalPages={messagesTotalPages}
+            label="Outbox"
+            onPageChange={(next) => {
+              setMessagesPage(next);
+              void refresh({ messagesPage: next });
+            }}
+            onPageSizeChange={(nextSize) => {
+              setMessagesPageSize(nextSize);
+              setMessagesPage(1);
+              void refresh({
+                messagesPage: 1,
+                messagesPageSize: nextSize,
+              });
+            }}
+          />
+        </div>
       </section>
 
       {modal}

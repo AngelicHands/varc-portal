@@ -1,7 +1,12 @@
-export const IMPORT_EXPORT_JOBS_DEFAULT_PAGE_SIZE = 10;
-export const IMPORT_EXPORT_JOBS_PAGE_SIZES = [10, 20, 50] as const;
-export type ImportExportJobsPageSize =
-  (typeof IMPORT_EXPORT_JOBS_PAGE_SIZES)[number];
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  ADMIN_JOBS_PAGE_SIZES,
+  type AdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
+
+export const IMPORT_EXPORT_JOBS_DEFAULT_PAGE_SIZE = ADMIN_JOBS_DEFAULT_PAGE_SIZE;
+export const IMPORT_EXPORT_JOBS_PAGE_SIZES = ADMIN_JOBS_PAGE_SIZES;
+export type ImportExportJobsPageSize = AdminJobsPageSize;
 
 export type ImportExportJobKind = "import" | "export";
 export type ImportExportJobStatus =

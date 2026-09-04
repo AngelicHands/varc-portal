@@ -1,5 +1,9 @@
 import { cacheAside, CmsCacheTags } from "@/lib/cache/cms-cache";
 import { connectDb } from "@/lib/db";
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  normalizeAdminJobsPage,
+} from "@/lib/admin-jobs-pagination";
 import { makeSlug, uniqueSlugFromTitle } from "@/lib/slug";
 import { notDeletedFilter } from "@/lib/soft-delete";
 import type { AppLocale } from "@/i18n/routing";
@@ -305,6 +309,44 @@ export async function listForms(options?: { trash?: boolean }) {
   return docs.map(toAdminFormListItem);
 }
 
+export type FormsAdminPage = {
+  items: Awaited<ReturnType<typeof listForms>>;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listFormsAdminPage(options?: {
+  trash?: boolean;
+  page?: number;
+  pageSize?: number;
+}): Promise<FormsAdminPage> {
+  await connectDb();
+  const filter = options?.trash ? { deletedAt: { $ne: null } } : notDeletedFilter;
+  const total = await FormDefinition.countDocuments(filter);
+  const meta = normalizeAdminJobsPage(
+    options?.page ?? 1,
+    options?.pageSize ?? ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+    total,
+  );
+  const docs = await FormDefinition.find(filter)
+    .sort(options?.trash ? { deletedAt: -1 } : { updatedAt: -1, createdAt: -1 })
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
+    .lean<FormDefinitionDocument[]>();
+  return {
+    items: docs.map(toAdminFormListItem),
+    ...meta,
+  };
+}
+
+export async function countForms(options?: { trash?: boolean }): Promise<number> {
+  await connectDb();
+  const filter = options?.trash ? { deletedAt: { $ne: null } } : notDeletedFilter;
+  return FormDefinition.countDocuments(filter);
+}
+
 export async function listFormOptions(): Promise<AdminFormOption[]> {
   await connectDb();
   const docs = await FormDefinition.find(notDeletedFilter)
@@ -356,6 +398,37 @@ export async function listFormSubmissions(formId: string) {
     .sort({ createdAt: -1 })
     .lean<FormSubmissionDocument[]>();
   return docs.map(toSubmissionItem);
+}
+
+export type FormSubmissionsAdminPage = {
+  items: Awaited<ReturnType<typeof listFormSubmissions>>;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listFormSubmissionsPage(
+  formId: string,
+  options?: { page?: number; pageSize?: number },
+): Promise<FormSubmissionsAdminPage> {
+  await connectDb();
+  const filter = { formId };
+  const total = await FormSubmission.countDocuments(filter);
+  const meta = normalizeAdminJobsPage(
+    options?.page ?? 1,
+    options?.pageSize ?? ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+    total,
+  );
+  const docs = await FormSubmission.find(filter)
+    .sort({ createdAt: -1 })
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
+    .lean<FormSubmissionDocument[]>();
+  return {
+    items: docs.map(toSubmissionItem),
+    ...meta,
+  };
 }
 
 export async function getFormSubmissionById(id: string) {

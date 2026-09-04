@@ -9,6 +9,7 @@ import {
   XIcon,
 } from "@/components/admin/admin-action-icons";
 import { AdminCheckbox } from "@/components/admin/admin-checkbox";
+import { AdminListPagination } from "@/components/admin/admin-list-pagination";
 import {
   IconActionButton,
   RowActionsGroup,
@@ -33,6 +34,10 @@ type CommentAction = "approve" | "reject" | "delete";
 type Props = {
   comments: AdminCommentRow[];
   statusFilter: StatusFilter;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 const STATUS_OPTIONS: { id: StatusFilter; label: string }[] = [
@@ -89,7 +94,14 @@ function confirmCopy(action: CommentAction, count = 1) {
   };
 }
 
-export function AdminCommentsManager({ comments, statusFilter }: Props) {
+export function AdminCommentsManager({
+  comments,
+  statusFilter,
+  page,
+  pageSize,
+  total,
+  totalPages,
+}: Props) {
   const router = useRouter();
   const { ask, modal } = useConfirm();
   const [pending, startTransition] = useTransition();
@@ -309,34 +321,40 @@ export function AdminCommentsManager({ comments, statusFilter }: Props) {
           </div>
         ) : null}
 
-        {filtered.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-10 text-center text-sm text-gray-600">
-            {comments.length === 0
-              ? "No comments in this filter."
-              : "No comments match your search."}
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-            <table className="min-w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-gray-50 text-gray-600">
+              <tr>
+                <th className="w-10 px-4 py-3">
+                  <AdminCheckbox
+                    checked={allFilteredSelected}
+                    aria-label="Select all comments"
+                    onChange={toggleAllFiltered}
+                    disabled={filtered.length === 0}
+                  />
+                </th>
+                <th className="px-4 py-3 font-medium">When</th>
+                <th className="px-4 py-3 font-medium">Article</th>
+                <th className="px-4 py-3 font-medium">Commented by</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Comment</th>
+                <th className="px-4 py-3 text-right font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
                 <tr>
-                  <th className="w-10 px-4 py-3">
-                    <AdminCheckbox
-                      checked={allFilteredSelected}
-                      aria-label="Select all comments"
-                      onChange={toggleAllFiltered}
-                    />
-                  </th>
-                  <th className="px-4 py-3 font-medium">When</th>
-                  <th className="px-4 py-3 font-medium">Article</th>
-                  <th className="px-4 py-3 font-medium">Commented by</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Comment</th>
-                  <th className="px-4 py-3 text-right font-medium">Actions</th>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-10 text-center text-sm text-gray-600"
+                  >
+                    {comments.length === 0
+                      ? "No comments in this filter."
+                      : "No comments match your search."}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((comment) => {
+              ) : (
+                filtered.map((comment) => {
                   const checked = selectedIds.has(comment.id);
                   return (
                     <tr
@@ -429,11 +447,18 @@ export function AdminCommentsManager({ comments, statusFilter }: Props) {
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+          <AdminListPagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            totalPages={totalPages}
+            label="Comments"
+          />
+        </div>
       </div>
       {modal}
     </>

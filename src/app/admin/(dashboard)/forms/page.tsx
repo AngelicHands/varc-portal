@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import {
   deleteFormDefinitionAction,
@@ -7,19 +8,25 @@ import {
 } from "@/lib/actions";
 import { requireSitePage } from "@/lib/admin-access";
 import {
+  countForms,
   countNewFormSubmissions,
-  listForms,
+  listFormsAdminPage,
 } from "@/lib/forms";
+import { AdminListPagination } from "@/components/admin/admin-list-pagination";
 import { AdminListTabs } from "@/components/admin/admin-list-tabs";
 import { ActiveRowActions } from "@/components/admin/active-row-actions";
 import { EmptyTrashButton } from "@/components/admin/empty-trash-button";
 import { TrashRowActions } from "@/components/admin/trash-row-actions";
+import {
+  parseAdminJobsPage,
+  parseAdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
 import { PORTAL_TIMEZONE } from "@/lib/datetime-local";
 
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; page?: string; pageSize?: string }>;
 };
 
 function formatAdminDate(value: string | null | undefined) {
@@ -31,19 +38,22 @@ function formatAdminDate(value: string | null | undefined) {
 
 export default async function AdminFormsPage({ searchParams }: Props) {
   await requireSitePage();
-  const { tab } = await searchParams;
-  const trash = tab === "trash";
+  const params = await searchParams;
+  const trash = params.tab === "trash";
+  const page = parseAdminJobsPage(params.page);
+  const pageSize = parseAdminJobsPageSize(params.pageSize);
 
-  const [activeForms, trashForms] = await Promise.all([
-    listForms(),
-    listForms({ trash: true }),
+  const [activeCount, trashCount, listPage] = await Promise.all([
+    countForms(),
+    countForms({ trash: true }),
+    listFormsAdminPage({ trash, page, pageSize }),
   ]);
-  const items = trash ? trashForms : activeForms;
+  const items = listPage.items;
   const unreadCounts = trash
     ? new Map<string, number>()
     : new Map<string, number>(
         await Promise.all(
-          activeForms.map(
+          items.map(
             async (form): Promise<[string, number]> => [
               form.id,
               await countNewFormSubmissions(form.id),
@@ -63,7 +73,7 @@ export default async function AdminFormsPage({ searchParams }: Props) {
         </div>
         {trash ? (
           <EmptyTrashButton
-            count={trashForms.length}
+            count={trashCount}
             itemLabel="forms"
             emptyAction={emptyFormsTrashAction}
           />
@@ -80,11 +90,11 @@ export default async function AdminFormsPage({ searchParams }: Props) {
       <AdminListTabs
         basePath="/admin/forms"
         active={trash ? "trash" : "active"}
-        activeCount={activeForms.length}
-        trashCount={trashForms.length}
+        activeCount={activeCount}
+        trashCount={trashCount}
       />
 
-      {items.length === 0 ? (
+      {listPage.total === 0 ? (
         <p className="mt-8 text-gray-600">
           {trash ? "Trash is empty." : "No forms yet."}
         </p>
@@ -229,6 +239,16 @@ export default async function AdminFormsPage({ searchParams }: Props) {
               </li>
             ))}
           </ul>
+
+          <Suspense fallback={null}>
+            <AdminListPagination
+              page={listPage.page}
+              pageSize={listPage.pageSize}
+              total={listPage.total}
+              totalPages={listPage.totalPages}
+              label="Forms"
+            />
+          </Suspense>
         </div>
       )}
     </div>

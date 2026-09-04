@@ -1,4 +1,10 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { connectDb } from "@/lib/db";
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  ADMIN_JOBS_PAGE_SIZES,
+  normalizeAdminJobsPage,
+} from "@/lib/admin-jobs-pagination";
 import type { AdminMailMessageListItem } from "@/lib/mail/mailbox-types";
 import { logServerError } from "@/lib/safe-error";
 import {
@@ -11,6 +17,14 @@ import { createEmailJob } from "@/lib/mail/jobs";
 import type { AdminEmailJob } from "@/lib/mail/job-types";
 
 export type { AdminMailMessageListItem } from "@/lib/mail/mailbox-types";
+
+export type MailMessagesPage = {
+  messages: AdminMailMessageListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
 
 export type AdminMailMessageDetail = AdminMailMessageListItem & {
   text: string;
@@ -81,13 +95,39 @@ export async function recordMailMessage(
   }
 }
 
-export async function listMailMessages(limit = 200): Promise<AdminMailMessageListItem[]> {
+export async function listMailMessagesPage(
+  page = 1,
+  pageSize: number = ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+): Promise<MailMessagesPage> {
+  noStore();
   await connectDb();
+
+  const total = await MailMessage.countDocuments({});
+  const meta = normalizeAdminJobsPage(page, pageSize, total);
   const docs = await MailMessage.find({})
     .sort({ createdAt: -1 })
-    .limit(Math.max(1, Math.min(limit, 500)))
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
     .lean();
-  return docs.map((doc) => toListItem(doc as MailMessageDocument));
+
+  return {
+    messages: docs.map((doc) => toListItem(doc as MailMessageDocument)),
+    ...meta,
+  };
+}
+
+export async function listMailMessages(
+  limit = 200,
+): Promise<AdminMailMessageListItem[]> {
+  const max = Math.max(...ADMIN_JOBS_PAGE_SIZES);
+  return listMailMessagesPage(1, Math.max(1, Math.min(limit, max))).then(
+    (result) => result.messages,
+  );
+}
+
+export async function countFailedMailMessages(): Promise<number> {
+  await connectDb();
+  return MailMessage.countDocuments({ status: "failed" });
 }
 
 export async function getMailMessageById(

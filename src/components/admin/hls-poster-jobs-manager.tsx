@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { AdminJobsPagination } from "@/components/admin/admin-jobs-pagination";
 import { notifyAction } from "@/components/admin/admin-toast";
 import {
   AlertIcon,
@@ -14,11 +15,21 @@ import {
 } from "@/components/admin/icon-action-button";
 import { JobErrorModal } from "@/components/admin/job-error-modal";
 import { useConfirm } from "@/components/admin/use-confirm";
-import type { AdminHlsPosterJob } from "@/lib/hls-poster/jobs";
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  type AdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
+import type {
+  AdminHlsPosterJob,
+  HlsPosterJobsPage,
+} from "@/lib/hls-poster/jobs";
 
 type Props = {
-  initialJobs: AdminHlsPosterJob[];
+  initialJobsPage: HlsPosterJobsPage;
+  initialHasActive?: boolean;
 };
+
+type JobsListPayload = HlsPosterJobsPage & { hasActive?: boolean };
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -33,42 +44,79 @@ function statusClass(status: string) {
   return "text-gray-600";
 }
 
-export function HlsPosterJobsManager({ initialJobs }: Props) {
-  const [jobs, setJobs] = useState(initialJobs);
+function jobsQuery(page: number, pageSize: number) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  return `/api/admin/hls-poster/jobs?${params.toString()}`;
+}
+
+export function HlsPosterJobsManager({
+  initialJobsPage,
+  initialHasActive = false,
+}: Props) {
+  const [page, setPage] = useState(initialJobsPage.page);
+  const [pageSize, setPageSize] = useState<AdminJobsPageSize>(
+    (initialJobsPage.pageSize as AdminJobsPageSize) ||
+      ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  );
+  const [jobs, setJobs] = useState(initialJobsPage.jobs);
+  const [total, setTotal] = useState(initialJobsPage.total);
+  const [totalPages, setTotalPages] = useState(initialJobsPage.totalPages);
+  const [hasActive, setHasActive] = useState(initialHasActive);
   const [pending, setPending] = useState(false);
   const [actionJobId, setActionJobId] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const { ask, modal } = useConfirm();
 
-  useEffect(() => {
-    const timer = window.setInterval(async () => {
-      try {
-        const response = await fetch("/api/admin/hls-poster/jobs", {
-          cache: "no-store",
-        });
-        if (!response.ok) return;
-        const payload = (await response.json()) as {
-          jobs?: AdminHlsPosterJob[];
-        };
-        if (payload.jobs) setJobs(payload.jobs);
-      } catch {
-        // Ignore polling failures.
-      }
-    }, 4000);
-    return () => window.clearInterval(timer);
+  const applyPage = useCallback((payload: JobsListPayload) => {
+    setJobs(payload.jobs);
+    setTotal(payload.total);
+    setPage(payload.page);
+    setPageSize(
+      (payload.pageSize as AdminJobsPageSize) || ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+    );
+    setTotalPages(payload.totalPages);
+    if (typeof payload.hasActive === "boolean") {
+      setHasActive(payload.hasActive);
+    } else {
+      setHasActive(
+        payload.jobs.some(
+          (job) => job.status === "queued" || job.status === "running",
+        ),
+      );
+    }
   }, []);
 
-  const hasActive = useMemo(
-    () => jobs.some((job) => job.status === "queued" || job.status === "running"),
-    [jobs],
+  const refreshPage = useCallback(
+    async (nextPage = page, nextPageSize = pageSize) => {
+      const response = await fetch(jobsQuery(nextPage, nextPageSize), {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const payload = (await response.json()) as JobsListPayload;
+      applyPage(payload);
+    },
+    [applyPage, page, pageSize],
   );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refreshPage();
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [refreshPage]);
 
   function replaceJob(nextJob: AdminHlsPosterJob) {
     setJobs((current) => {
       const exists = current.some((job) => job.id === nextJob.id);
-      if (!exists) return [nextJob, ...current];
+      if (!exists) return [nextJob, ...current].slice(0, pageSize);
       return current.map((job) => (job.id === nextJob.id ? nextJob : job));
     });
+    if (nextJob.status === "queued" || nextJob.status === "running") {
+      setHasActive(true);
+    }
   }
 
   async function startJob() {
@@ -91,7 +139,9 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
         return;
       }
       notifyAction({ ok: true }, "HLS poster job queued");
-      setJobs((current) => [payload.job!, ...current]);
+      setHasActive(true);
+      setPage(1);
+      await refreshPage(1, pageSize);
     } finally {
       setPending(false);
     }
@@ -103,11 +153,14 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
       const response = await fetch("/api/admin/hls-poster/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "stop" }),
+        body: JSON.stringify({
+          action: "stop",
+          page,
+          pageSize,
+        }),
       });
-      const payload = (await response.json()) as {
+      const payload = (await response.json()) as JobsListPayload & {
         error?: string;
-        jobs?: AdminHlsPosterJob[];
         stopped?: number;
       };
       if (!response.ok) {
@@ -117,7 +170,7 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
         );
         return;
       }
-      if (payload.jobs) setJobs(payload.jobs);
+      if (payload.jobs) applyPage(payload);
       notifyAction(
         { ok: true },
         payload.stopped
@@ -150,6 +203,7 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
       }
       replaceJob(payload.job);
       notifyAction({ ok: true }, "Job cancelled");
+      await refreshPage();
     } finally {
       setActionJobId(null);
     }
@@ -176,6 +230,8 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
       }
       replaceJob(payload.job);
       notifyAction({ ok: true }, "Job re-queued");
+      setPage(1);
+      await refreshPage(1, pageSize);
     } finally {
       setActionJobId(null);
     }
@@ -205,8 +261,11 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
         );
         return;
       }
-      setJobs((current) => current.filter((item) => item.id !== job.id));
       notifyAction({ ok: true }, "Job deleted");
+      const nextPage =
+        jobs.length <= 1 && page > 1 ? Math.max(1, page - 1) : page;
+      setPage(nextPage);
+      await refreshPage(nextPage, pageSize);
     } finally {
       setActionJobId(null);
     }
@@ -381,6 +440,22 @@ export function HlsPosterJobsManager({ initialJobs }: Props) {
               </table>
             </div>
           )}
+          <AdminJobsPagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            totalPages={totalPages}
+            label="HLS poster jobs"
+            onPageChange={(next) => {
+              setPage(next);
+              void refreshPage(next, pageSize);
+            }}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+              void refreshPage(1, nextSize);
+            }}
+          />
         </section>
       </div>
 

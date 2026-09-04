@@ -2,9 +2,15 @@
 
 import { useMemo, useState } from "react";
 import NextLink from "next/link";
+import { AdminJobsPagination } from "@/components/admin/admin-jobs-pagination";
 import { CreateUserModal } from "@/components/admin/create-user-form";
 import { UserRoleControls } from "@/components/admin/user-role-controls";
 import type { PublicRole } from "@/lib/app-roles";
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  normalizeAdminJobsPage,
+  type AdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
 
 export type AdminUserListItem = {
   id: string;
@@ -78,6 +84,10 @@ export function UsersManager({
   const [roleFilter, setRoleFilter] = useState("all");
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<AdminJobsPageSize>(
+    ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  );
   const [createOpen, setCreateOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUserListItem | null>(
     null,
@@ -89,6 +99,7 @@ export function UsersManager({
   );
 
   function toggleSort(key: SortKey) {
+    setPage(1);
     if (sortKey === key) {
       setSortDir((current) => (current === "asc" ? "desc" : "asc"));
       return;
@@ -132,19 +143,31 @@ export function UsersManager({
     });
   }, [initialUsers, roleFilter, search, sortDir, sortKey, roleLabelByKey]);
 
+  const pageMeta = normalizeAdminJobsPage(page, pageSize, filteredSorted.length);
+  const pageItems = filteredSorted.slice(
+    (pageMeta.page - 1) * pageMeta.pageSize,
+    pageMeta.page * pageMeta.pageSize,
+  );
+
   return (
     <div className="mt-6 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search name, email, callsign…"
             className="min-w-[16rem] flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
           />
           <select
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
+            onChange={(e) => {
+              setRoleFilter(e.target.value);
+              setPage(1);
+            }}
             className="rounded border border-gray-300 px-3 py-2 text-sm"
             aria-label="Filter by role"
           >
@@ -183,56 +206,61 @@ export function UsersManager({
         {initialUsers.length === 1 ? "" : "s"}
       </p>
 
-      {filteredSorted.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-600">
-          {initialUsers.length === 0
-            ? "No users yet."
-            : "No users match this search or filter."}
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <table className="min-w-full text-left text-sm">
+          <thead className="border-b border-gray-200 bg-gray-50 text-gray-600">
+            <tr>
+              <SortHeader
+                column="name"
+                label="Name"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={toggleSort}
+              />
+              <SortHeader
+                column="email"
+                label="Email"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={toggleSort}
+              />
+              <SortHeader
+                column="callsign"
+                label="Callsign"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={toggleSort}
+              />
+              <SortHeader
+                column="role"
+                label="Role"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={toggleSort}
+              />
+              <SortHeader
+                column="createdAt"
+                label="Created"
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSort={toggleSort}
+              />
+            </tr>
+          </thead>
+          <tbody>
+            {pageItems.length === 0 ? (
               <tr>
-                <SortHeader
-                  column="name"
-                  label="Name"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortHeader
-                  column="email"
-                  label="Email"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortHeader
-                  column="callsign"
-                  label="Callsign"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortHeader
-                  column="role"
-                  label="Role"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortHeader
-                  column="createdAt"
-                  label="Created"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
+                <td
+                  colSpan={5}
+                  className="px-4 py-10 text-center text-sm text-gray-600"
+                >
+                  {initialUsers.length === 0
+                    ? "No users yet."
+                    : "No users match this search or filter."}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filteredSorted.map((user) => (
+            ) : (
+              pageItems.map((user) => (
                 <tr key={user.id} className="border-b border-gray-100">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -291,11 +319,23 @@ export function UsersManager({
                     {formatDate(user.createdAt)}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              ))
+            )}
+          </tbody>
+        </table>
+        <AdminJobsPagination
+          page={pageMeta.page}
+          pageSize={pageMeta.pageSize as AdminJobsPageSize}
+          total={pageMeta.total}
+          totalPages={pageMeta.totalPages}
+          label="Users"
+          onPageChange={setPage}
+          onPageSizeChange={(nextSize) => {
+            setPageSize(nextSize);
+            setPage(1);
+          }}
+        />
+      </div>
 
       {canCreate && createOpen ? (
         <CreateUserModal

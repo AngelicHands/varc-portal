@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 import { connectDb } from "@/lib/db";
 import { CmsCacheTags, invalidateCmsTags } from "@/lib/cache/cms-cache";
+import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  normalizeAdminJobsPage,
+} from "@/lib/admin-jobs-pagination";
 import { escapeRegex, foldSearchText } from "@/lib/callsigns-normalize";
 import {
   type OperatorKindFilter,
@@ -290,6 +294,8 @@ export type CallsignListFilters = {
   permitMatch?: "latest" | "any";
   signs?: string[];
   limit?: number;
+  page?: number;
+  pageSize?: number;
 };
 
 export type AdminCallsignListItem = {
@@ -387,6 +393,45 @@ export async function queryAdminCallsigns(
     eventCount: doc.eventCount,
     prefixFamily: doc.prefixFamily,
   }));
+}
+
+export type CallsignsAdminPage = {
+  items: AdminCallsignListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listAdminCallsignsPage(
+  filters: CallsignListFilters = {},
+): Promise<CallsignsAdminPage> {
+  await connectDb();
+  const mongoFilter = await callsignMongoFilter(filters);
+  const total = await Callsign.countDocuments(mongoFilter);
+  const meta = normalizeAdminJobsPage(
+    filters.page ?? 1,
+    filters.pageSize ?? ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+    total,
+  );
+  const docs = await Callsign.find(mongoFilter)
+    .sort({ sign: 1 })
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
+    .lean<CallsignDocument[]>();
+  return {
+    items: docs.map((doc) => ({
+      sign: doc.sign,
+      operatorName: doc.latestOperatorName,
+      permitRaw: doc.latestPermitRaw,
+      issuedAt: dayIso(doc.latestIssuedAt),
+      expiresAt: dayIso(doc.latestExpiresAt),
+      status: licenseStatusFromExpiry(dayIso(doc.latestExpiresAt)),
+      eventCount: doc.eventCount,
+      prefixFamily: doc.prefixFamily,
+    })),
+    ...meta,
+  };
 }
 
 export async function listAdminCallsigns(filters: CallsignListFilters = {}) {

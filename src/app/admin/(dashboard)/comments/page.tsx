@@ -1,11 +1,19 @@
 import { AdminCommentsManager } from "@/components/admin/admin-comments-manager";
 import { requireEditorialPage } from "@/lib/admin-access";
-import { listAdminArticleComments } from "@/lib/article-comments";
+import {
+  parseAdminJobsPage,
+  parseAdminJobsPageSize,
+} from "@/lib/admin-jobs-pagination";
+import { listAdminArticleCommentsPage } from "@/lib/article-comments";
 
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    page?: string;
+    pageSize?: string;
+  }>;
 };
 
 export default async function AdminCommentsPage({ searchParams }: Props) {
@@ -20,7 +28,13 @@ export default async function AdminCommentsPage({ searchParams }: Props) {
       ? statusRaw
       : "pending";
 
-  const comments = await listAdminArticleComments({ status });
+  const page = parseAdminJobsPage(params.page);
+  const pageSize = parseAdminJobsPageSize(params.pageSize);
+  const listPage = await listAdminArticleCommentsPage({
+    status,
+    page,
+    pageSize,
+  });
 
   return (
     <div>
@@ -30,7 +44,14 @@ export default async function AdminCommentsPage({ searchParams }: Props) {
         article uses Moderated mode.
       </p>
       <div className="mt-6">
-        <AdminCommentsManager comments={comments} statusFilter={status} />
+        <AdminCommentsManager
+          comments={listPage.items}
+          statusFilter={status}
+          page={listPage.page}
+          pageSize={listPage.pageSize}
+          total={listPage.total}
+          totalPages={listPage.totalPages}
+        />
       </div>
     </div>
   );

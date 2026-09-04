@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 import { connectDb } from "@/lib/db";
 import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  normalizeAdminJobsPage,
+} from "@/lib/admin-jobs-pagination";
+import {
   canViewPublishedContent,
   contentViewerFromSession,
   type ContentViewer,
@@ -150,14 +154,43 @@ export async function listAdminArticleComments(params?: {
   status?: ArticleCommentStatus | "all";
   limit?: number;
 }): Promise<AdminCommentRow[]> {
+  const page = await listAdminArticleCommentsPage({
+    status: params?.status,
+    page: 1,
+    pageSize: Math.min(Math.max(params?.limit ?? 100, 1), 300),
+  });
+  return page.items;
+}
+
+export type CommentsAdminPage = {
+  items: AdminCommentRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listAdminArticleCommentsPage(params?: {
+  status?: ArticleCommentStatus | "all";
+  page?: number;
+  pageSize?: number;
+}): Promise<CommentsAdminPage> {
   await connectDb();
   const status = params?.status ?? "pending";
   const filter: Record<string, unknown> = { deletedAt: null };
   if (status !== "all") filter.status = status;
 
+  const total = await ArticleComment.countDocuments(filter);
+  const meta = normalizeAdminJobsPage(
+    params?.page ?? 1,
+    params?.pageSize ?? ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+    total,
+  );
+
   const docs = await ArticleComment.find(filter)
     .sort({ createdAt: -1 })
-    .limit(Math.min(Math.max(params?.limit ?? 100, 1), 300))
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
     .lean();
 
   const articleIds = [
@@ -206,23 +239,26 @@ export async function listAdminArticleComments(params?: {
     ]),
   );
 
-  return docs.map((doc) => {
-    const article = articleById.get(String(doc.articleId));
-    const author = authorById.get(String(doc.authorUserId));
-    return {
-      id: String(doc._id),
-      body: doc.body ?? "",
-      status: (doc.status as ArticleCommentStatus) || "pending",
-      createdAt: doc.createdAt
-        ? new Date(doc.createdAt).toISOString()
-        : new Date().toISOString(),
-      articleId: String(doc.articleId),
-      articleTitle: article?.title ?? "Article",
-      articleSlug: article?.slug ?? null,
-      authorName: author?.name ?? "Member",
-      authorEmail: author?.email ?? "",
-    };
-  });
+  return {
+    items: docs.map((doc) => {
+      const article = articleById.get(String(doc.articleId));
+      const author = authorById.get(String(doc.authorUserId));
+      return {
+        id: String(doc._id),
+        body: doc.body ?? "",
+        status: (doc.status as ArticleCommentStatus) || "pending",
+        createdAt: doc.createdAt
+          ? new Date(doc.createdAt).toISOString()
+          : new Date().toISOString(),
+        articleId: String(doc.articleId),
+        articleTitle: article?.title ?? "Article",
+        articleSlug: article?.slug ?? null,
+        authorName: author?.name ?? "Member",
+        authorEmail: author?.email ?? "",
+      };
+    }),
+    ...meta,
+  };
 }
 
 export function viewerCanPostComments(params: {

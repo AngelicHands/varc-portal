@@ -5,6 +5,10 @@ import {
   CmsCacheTags,
 } from "@/lib/cache/cms-cache";
 import {
+  ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+  normalizeAdminJobsPage,
+} from "@/lib/admin-jobs-pagination";
+import {
   canViewPublishedContent,
   type ContentViewAccess,
   type ContentViewer,
@@ -183,6 +187,45 @@ export async function listPages(options?: { trash?: boolean }) {
         : { sortOrder: 1, updatedAt: -1 },
     )
     .lean<PageDocument[]>();
+}
+
+export type PagesAdminPage = {
+  items: PageDocument[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export async function listPagesAdminPage(options?: {
+  trash?: boolean;
+  page?: number;
+  pageSize?: number;
+}): Promise<PagesAdminPage> {
+  await connectDb();
+  const filter = options?.trash ? { deletedAt: { $ne: null } } : notDeletedFilter;
+  const total = await Page.countDocuments(filter);
+  const meta = normalizeAdminJobsPage(
+    options?.page ?? 1,
+    options?.pageSize ?? ADMIN_JOBS_DEFAULT_PAGE_SIZE,
+    total,
+  );
+  const items = await Page.find(filter)
+    .sort(
+      options?.trash
+        ? { deletedAt: -1 }
+        : { sortOrder: 1, updatedAt: -1 },
+    )
+    .skip((meta.page - 1) * meta.pageSize)
+    .limit(meta.pageSize)
+    .lean<PageDocument[]>();
+  return { items, ...meta };
+}
+
+export async function countPages(options?: { trash?: boolean }): Promise<number> {
+  await connectDb();
+  const filter = options?.trash ? { deletedAt: { $ne: null } } : notDeletedFilter;
+  return Page.countDocuments(filter);
 }
 
 export function getPageLocale(
